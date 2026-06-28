@@ -272,7 +272,7 @@ table.tbl tbody tr:hover { background: var(--bg-app); }
 /* =====================================================================
    FOOTER
    ===================================================================== */
-.site-footer { background: var(--secondary-soft); color: #cdd6e4; padding-block: var(--s6) var(--s3); }
+.site-footer { background: linear-gradient(160deg, #134a92 0%, #0e3a73 60%, #0b2f5e 100%); color: #d7e2f4; padding-block: var(--s6) var(--s3); }
 .footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1.2fr; gap: var(--s4); }
 .site-footer .footer-brand .brand { position: relative; display: inline-flex; align-items: center; padding: 14px 20px; }
 .site-footer .footer-brand .brand::before { content: ""; position: absolute; inset: -4px 0; z-index: 0; background: radial-gradient(ellipse 70% 130% at 38% 50%, rgba(150,215,255,.45), rgba(3,191,255,.18) 45%, transparent 72%); filter: blur(12px); }
