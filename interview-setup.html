@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thiết lập phỏng vấn — HireMate</title>
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ============ HEADER (logged-in) ============ -->
+  <header class="site-header">
+    <nav class="nav">
+      <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
+      <div class="nav-links">
+        <a href="index.html">Trang chủ</a>
+        <a href="pricing.html">Bảng giá</a>
+        <a href="interview-setup.html" class="active">Phỏng vấn</a>
+      </div>
+      <div class="nav-right">
+        <div class="account desktop-only">
+          <button class="account-btn">
+            <span class="avatar">PL</span>
+            <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dropdown">
+            <a href="dashboard.html">Dashboard</a>
+            <a href="pricing.html">Bảng giá</a>
+            <hr>
+            <a href="index.html">Đăng xuất</a>
+          </div>
+        </div>
+        <button class="hamburger" aria-label="Mở menu">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+  <div class="mobile-menu">
+    <div class="panel">
+      <a href="index.html">Trang chủ</a>
+      <a href="pricing.html">Bảng giá</a>
+      <a href="interview-setup.html" class="active">Phỏng vấn</a>
+      <a href="dashboard.html">Dashboard</a>
+      <div class="mm-actions"><a class="btn btn-ghost btn-block" href="index.html">Đăng xuất</a></div>
+    </div>
+  </div>
+
+  <!-- ============ SETUP ============ -->
+  <main class="app-bg">
+    <div class="container section--tight">
+      <div class="form-card">
+        <div class="text-center" style="margin-bottom:var(--s4)">
+          <h1 style="font-size:1.7rem;margin-bottom:6px">Thiết lập phỏng vấn</h1>
+          <p class="muted">Tùy chỉnh buổi luyện tập để phù hợp với mục tiêu của bạn.</p>
+        </div>
+
+        <div class="card card-pad-lg reveal">
+          <form onsubmit="window.location.href='interview-room.html';return false;">
+            <div class="field">
+              <label class="label" for="field">Ngành nghề</label>
+              <select class="select" id="field">
+                <option>Công nghệ thông tin</option>
+                <option>Marketing</option>
+                <option>Tài chính - Kế toán</option>
+                <option>Kinh doanh / Bán hàng</option>
+                <option>Nhân sự</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label" for="pos">Vị trí ứng tuyển</label>
+              <select class="select" id="pos">
+                <option>Lập trình viên Frontend</option>
+                <option>Lập trình viên Backend</option>
+                <option>Data Analyst</option>
+                <option>Product Manager</option>
+                <option>UI/UX Designer</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="label">Độ khó</label>
+              <div class="segmented" role="group">
+                <button type="button" data-value="Dễ">Dễ</button>
+                <button type="button" class="active" data-value="Trung bình">Trung bình</button>
+                <button type="button" data-value="Khó">Khó</button>
+              </div>
+              <input type="hidden" name="difficulty" value="Trung bình">
+            </div>
+
+            <div class="field">
+              <label class="label">Hình thức</label>
+              <div class="segmented" role="group">
+                <button type="button" class="active" data-value="Text">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  Văn bản (Text)
+                </button>
+                <button type="button" data-value="Voice">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+                  Giọng nói (Voice)
+                </button>
+              </div>
+              <input type="hidden" name="mode" value="Text">
+            </div>
+
+            <button class="btn btn-primary btn-block btn-lg" type="submit" style="margin-top:var(--s2)">Bắt đầu phỏng vấn</button>
+          </form>
+        </div>
+
+        <p class="muted text-center" style="font-size:var(--fs-sm);margin-top:var(--s3)">Buổi phỏng vấn gồm 5 câu hỏi. Bạn sẽ nhận phản hồi STAR sau khi hoàn tất.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
+          <p class="footer-tag">AI Interview Coach hỗ trợ luyện tập phỏng vấn.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Sản phẩm</h4>
+          <a href="index.html">Trang chủ</a>
+          <a href="pricing.html">Bảng giá</a>
+          <a href="interview-setup.html">Phỏng vấn</a>
+        </div>
+        <div class="footer-col">
+          <h4>Pháp lý</h4>
+          <a href="#">Chính sách bảo mật</a>
+          <a href="#">Điều khoản sử dụng</a>
+        </div>
+        <div class="footer-col">
+          <h4>Liên hệ</h4>
+          <a href="tel:0918306884">0918306884</a>
+          <a href="mailto:hirematecompany@gmail.com">hirematecompany@gmail.com</a>
+          <div class="social">
+            <a href="#" aria-label="Facebook"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">© 2026 HireMate. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

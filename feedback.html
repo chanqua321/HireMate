@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phản hồi STAR — HireMate</title>
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ============ HEADER (logged-in) ============ -->
+  <header class="site-header">
+    <nav class="nav">
+      <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
+      <div class="nav-links">
+        <a href="index.html">Trang chủ</a>
+        <a href="pricing.html">Bảng giá</a>
+        <a href="interview-setup.html" class="active">Phỏng vấn</a>
+      </div>
+      <div class="nav-right">
+        <div class="account desktop-only">
+          <button class="account-btn">
+            <span class="avatar">PL</span>
+            <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dropdown">
+            <a href="dashboard.html">Dashboard</a>
+            <a href="pricing.html">Bảng giá</a>
+            <hr>
+            <a href="index.html">Đăng xuất</a>
+          </div>
+        </div>
+        <button class="hamburger" aria-label="Mở menu">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+  <div class="mobile-menu">
+    <div class="panel">
+      <a href="index.html">Trang chủ</a>
+      <a href="pricing.html">Bảng giá</a>
+      <a href="interview-setup.html" class="active">Phỏng vấn</a>
+      <a href="dashboard.html">Dashboard</a>
+      <div class="mm-actions"><a class="btn btn-ghost btn-block" href="index.html">Đăng xuất</a></div>
+    </div>
+  </div>
+
+  <!-- ============ FEEDBACK ============ -->
+  <main class="app-bg">
+    <div class="container section--tight">
+      <div class="form-card" style="max-width:780px">
+        <div class="text-center" style="margin-bottom:var(--s4)">
+          <span class="badge badge--success" style="margin-bottom:var(--s2)">Hoàn thành buổi phỏng vấn</span>
+          <h1 style="font-size:1.7rem">Phản hồi STAR của bạn</h1>
+        </div>
+
+        <!-- Score -->
+        <div class="card card-pad-lg text-center reveal" style="margin-bottom:var(--s3)">
+          <div class="score-ring" style="--p:85">
+            <div class="score-inner"><b>85</b><span>/ 100 điểm</span></div>
+          </div>
+          <p class="muted" style="margin-top:var(--s2)">Kết quả tốt! Bạn đang tiến bộ rõ rệt so với buổi trước.</p>
+        </div>
+
+        <!-- STAR breakdown -->
+        <div class="card card-pad-lg reveal d1" style="margin-bottom:var(--s3)">
+          <h3 style="margin-bottom:var(--s3)">Đánh giá theo mô hình STAR</h3>
+          <div class="star-list">
+            <div class="star-item good">
+              <span class="st-icon">S</span>
+              <div><h4>Situation — Bối cảnh <span class="badge badge--success">Tốt</span></h4><p>Đã mô tả bối cảnh rõ ràng.</p></div>
+            </div>
+            <div class="star-item good">
+              <span class="st-icon">T</span>
+              <div><h4>Task — Nhiệm vụ <span class="badge badge--success">Tốt</span></h4><p>Đã nêu đúng nhiệm vụ.</p></div>
+            </div>
+            <div class="star-item warn">
+              <span class="st-icon">A</span>
+              <div><h4>Action — Hành động <span class="badge badge--warning">Cần cải thiện</span></h4><p>Cần trình bày chi tiết hơn.</p></div>
+            </div>
+            <div class="star-item warn">
+              <span class="st-icon">R</span>
+              <div><h4>Result — Kết quả <span class="badge badge--warning">Cần cải thiện</span></h4><p>Nên bổ sung kết quả cụ thể.</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Suggestions -->
+        <div class="card card-pad-lg reveal d2" style="margin-bottom:var(--s3)">
+          <h3 style="margin-bottom:var(--s2)">Gợi ý cải thiện</h3>
+          <ul class="price-feats" style="margin:0">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary-strong)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary-strong)"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Thêm ví dụ thực tế.</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary-strong)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary-strong)"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Làm rõ phần Action.</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary-strong)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary-strong)"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Bổ sung kết quả có số liệu nếu có.</li>
+          </ul>
+        </div>
+
+        <!-- Rating widget -->
+        <div class="card card-pad-lg reveal d3" style="margin-bottom:var(--s4)">
+          <h3 style="margin-bottom:6px">Bạn đánh giá buổi phỏng vấn này thế nào?</h3>
+          <p class="muted" style="font-size:var(--fs-sm);margin-bottom:var(--s2)">Đánh giá của bạn giúp HireMate cải thiện trải nghiệm.</p>
+          <div class="star-row" data-value="0" style="margin-bottom:var(--s3)">
+            <button type="button" aria-label="1 sao"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg></button>
+            <button type="button" aria-label="2 sao"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg></button>
+            <button type="button" aria-label="3 sao"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg></button>
+            <button type="button" aria-label="4 sao"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg></button>
+            <button type="button" aria-label="5 sao"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg></button>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label class="label" for="cmt">Đóng góp ý kiến</label>
+            <textarea class="textarea" id="cmt" placeholder="Chia sẻ cảm nhận của bạn về buổi phỏng vấn..."></textarea>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <a class="btn btn-ghost" href="interview-room.html">Luyện tập lại</a>
+          <a class="btn btn-primary" href="dashboard.html">Về Dashboard</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
+          <p class="footer-tag">AI Interview Coach hỗ trợ luyện tập phỏng vấn.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Sản phẩm</h4>
+          <a href="index.html">Trang chủ</a>
+          <a href="pricing.html">Bảng giá</a>
+          <a href="interview-setup.html">Phỏng vấn</a>
+        </div>
+        <div class="footer-col">
+          <h4>Pháp lý</h4>
+          <a href="#">Chính sách bảo mật</a>
+          <a href="#">Điều khoản sử dụng</a>
+        </div>
+        <div class="footer-col">
+          <h4>Liên hệ</h4>
+          <a href="tel:0918306884">0918306884</a>
+          <a href="mailto:hirematecompany@gmail.com">hirematecompany@gmail.com</a>
+          <div class="social">
+            <a href="#" aria-label="Facebook"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">© 2026 HireMate. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

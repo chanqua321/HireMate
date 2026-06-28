@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HireMate — Luyện phỏng vấn thông minh cùng AI</title>
+  <meta name="description" content="HireMate là trợ lý AI giúp bạn luyện phỏng vấn, nhận phản hồi theo phương pháp STAR và cải thiện kỹ năng để sẵn sàng cho các cơ hội nghề nghiệp.">
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ============ HEADER (logged-out) ============ -->
+  <header class="site-header">
+    <nav class="nav">
+      <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
+      <div class="nav-links">
+        <a href="index.html" class="active">Trang chủ</a>
+        <a href="pricing.html">Bảng giá</a>
+        <a href="interview-setup.html">Phỏng vấn</a>
+      </div>
+      <div class="nav-right">
+        <a class="btn btn-ghost desktop-only" href="login.html">Đăng nhập</a>
+        <a class="btn btn-primary desktop-only" href="register.html">Đăng ký</a>
+        <button class="hamburger" aria-label="Mở menu">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+  <div class="mobile-menu">
+    <div class="panel">
+      <a href="index.html" class="active">Trang chủ</a>
+      <a href="pricing.html">Bảng giá</a>
+      <a href="interview-setup.html">Phỏng vấn</a>
+      <div class="mm-actions">
+        <a class="btn btn-ghost" href="login.html">Đăng nhập</a>
+        <a class="btn btn-primary" href="register.html">Đăng ký</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <span class="eyebrow reveal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.6 5.7 21l2.3-7.2-6-4.4h7.6z"/></svg>
+          AI Career Coach 24/7
+        </span>
+        <h1 class="reveal d1">Luyện phỏng vấn thông minh cùng AI – Tự tin chinh phục công việc mơ ước.</h1>
+        <p class="lead reveal d2">HireMate là trợ lý AI giúp bạn luyện phỏng vấn, nhận phản hồi theo phương pháp STAR và cải thiện kỹ năng để sẵn sàng cho các cơ hội nghề nghiệp.</p>
+        <div class="hero-cta reveal d3">
+          <a class="btn btn-primary btn-lg" href="register.html">Bắt đầu miễn phí
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+          <a class="btn btn-ghost btn-lg" href="pricing.html">Xem bảng giá</a>
+        </div>
+        <div class="hero-stats reveal d4">
+          <div class="stat"><strong>10K+</strong><span>Buổi luyện tập</span></div>
+          <div class="stat"><strong>STAR</strong><span>Phản hồi chuẩn</span></div>
+          <div class="stat"><strong>24/7</strong><span>AI luôn sẵn sàng</span></div>
+        </div>
+      </div>
+
+      <!-- Chat / interview mock visual -->
+      <div class="hero-visual reveal d2">
+        <div class="chat-mock">
+          <div class="mock-head">
+            <span class="dot" style="background:#EF4444"></span>
+            <span class="dot" style="background:#F59E0B"></span>
+            <span class="dot" style="background:#22C55E"></span>
+            <span style="margin-left:8px;font-size:.8rem;font-weight:600;color:var(--muted)">HireMate · Mock Interview</span>
+          </div>
+          <div class="bubble ai">Bạn hãy kể về một dự án bạn tự hào nhất nhé?</div>
+          <div class="bubble user">Trong dự án X, tôi phụ trách tối ưu quy trình và giảm 30% thời gian xử lý...</div>
+          <div class="bubble ai">Rất tốt! Bạn đã nêu rõ bối cảnh và hành động. Hãy bổ sung kết quả cụ thể.</div>
+          <div class="score-pill">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#03BFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Điểm STAR <b>85</b><span style="color:#93a1bd;font-size:.85rem">/100</span>
+          </div>
+          <div class="float-card tl">
+            <span class="icon-chip" style="width:34px;height:34px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+            Phản hồi tức thì
+          </div>
+          <div class="float-card br">
+            <span class="icon-chip icon-chip--navy" style="width:34px;height:34px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+            Tiến bộ rõ rệt
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-head">
+        <h2>Mọi thứ bạn cần để sẵn sàng phỏng vấn</h2>
+        <p>Công cụ AI toàn diện giúp bạn luyện tập, nhận phản hồi và tối ưu hồ sơ.</p>
+      </div>
+      <div class="grid features-grid">
+        <div class="feature-card reveal">
+          <span class="icon-chip"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg></span>
+          <h3>AI Interview Coach</h3>
+          <p>Luyện phỏng vấn với AI theo nhiều vị trí và cấp độ khác nhau.</p>
+        </div>
+        <div class="feature-card reveal d1">
+          <span class="icon-chip"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.6 5.7 21l2.3-7.2-6-4.4h7.6z"/></svg></span>
+          <h3>Feedback STAR</h3>
+          <p>Nhận phản hồi dựa trên mô hình STAR với điểm số và gợi ý cải thiện sau mỗi buổi phỏng vấn.</p>
+        </div>
+        <div class="feature-card reveal d2">
+          <span class="icon-chip"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
+          <h3>CV ATS Analysis</h3>
+          <p>Phân tích và tối ưu CV theo chuẩn ATS để tăng khả năng vượt qua vòng sàng lọc hồ sơ.</p>
+        </div>
+        <div class="feature-card reveal d3">
+          <span class="icon-chip"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span>
+          <h3>Practice Anytime</h3>
+          <p>Luyện tập mọi lúc, mọi nơi với AI hoạt động 24/7.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PROCESS ============ -->
+  <section class="section" style="background:var(--bg-app)">
+    <div class="container">
+      <div class="section-head">
+        <h2>Quy trình hoạt động</h2>
+        <p>Chỉ 5 bước đơn giản để bắt đầu hành trình luyện phỏng vấn cùng AI.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal"><div class="step-num">1</div><h4>Đăng ký tài khoản</h4></div>
+        <div class="step reveal d1"><div class="step-num">2</div><h4>Hoàn thiện hồ sơ và mục tiêu nghề nghiệp</h4></div>
+        <div class="step reveal d2"><div class="step-num">3</div><h4>Thiết lập buổi phỏng vấn</h4></div>
+        <div class="step reveal d3"><div class="step-num">4</div><h4>Luyện phỏng vấn với AI</h4></div>
+        <div class="step reveal d4"><div class="step-num">5</div><h4>Nhận điểm số và phản hồi STAR</h4></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BENEFITS ============ -->
+  <section class="section">
+    <div class="container" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s5);align-items:center">
+      <div>
+        <span class="eyebrow">Lợi ích</span>
+        <h2 style="font-size:var(--fs-h2);margin:var(--s2) 0 var(--s3)">Tự tin hơn sau mỗi buổi luyện tập</h2>
+        <div class="grid benefits-grid">
+          <div class="benefit"><span class="tick"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><p>Chuẩn bị tốt hơn trước các buổi phỏng vấn</p></div>
+          <div class="benefit"><span class="tick"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><p>Cải thiện kỹ năng trả lời câu hỏi</p></div>
+          <div class="benefit"><span class="tick"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><p>Nhận phản hồi tức thì từ AI</p></div>
+          <div class="benefit"><span class="tick"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><p>Theo dõi kết quả qua từng buổi luyện tập</p></div>
+        </div>
+      </div>
+      <!-- Dashboard / chart illustration -->
+      <div class="card card-pad-lg reveal d2">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--s3)">
+          <strong style="color:var(--secondary)">Tiến bộ của bạn</strong>
+          <span class="badge badge--success">+18%</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:12px;height:160px">
+          <div style="flex:1;background:var(--primary-soft);border-radius:8px 8px 0 0;height:40%"></div>
+          <div style="flex:1;background:var(--primary-soft);border-radius:8px 8px 0 0;height:55%"></div>
+          <div style="flex:1;background:var(--primary-soft);border-radius:8px 8px 0 0;height:50%"></div>
+          <div style="flex:1;background:var(--primary);border-radius:8px 8px 0 0;height:72%"></div>
+          <div style="flex:1;background:var(--primary);border-radius:8px 8px 0 0;height:85%"></div>
+          <div style="flex:1;background:var(--secondary);border-radius:8px 8px 0 0;height:95%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:var(--fs-xs);color:var(--muted)">
+          <span>Buổi 1</span><span>Buổi 2</span><span>Buổi 3</span><span>Buổi 4</span><span>Buổi 5</span><span>Buổi 6</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRICING PREVIEW ============ -->
+  <section class="section" style="background:var(--bg-app)">
+    <div class="container">
+      <div class="section-head">
+        <h2>Bảng giá linh hoạt</h2>
+        <p>Chọn gói phù hợp với hành trình luyện phỏng vấn của bạn.</p>
+      </div>
+      <div class="grid pricing-grid">
+        <div class="price-card compact reveal">
+          <h3>Miễn phí</h3>
+          <div class="price-amount"><b>0đ</b><span>/tháng</span></div>
+          <ul class="price-feats">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>3 lượt phỏng vấn AI</li>
+          </ul>
+          <a class="btn btn-ghost btn-block" href="pricing.html">Chọn gói</a>
+        </div>
+        <div class="price-card compact featured reveal d1">
+          <h3>Tiêu chuẩn</h3>
+          <div class="price-amount"><b>79.000đ</b><span>/tháng</span></div>
+          <ul class="price-feats">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>15 lượt phỏng vấn AI</li>
+          </ul>
+          <a class="btn btn-primary btn-block" href="pricing.html">Chọn gói</a>
+        </div>
+        <div class="price-card compact reveal d2">
+          <h3>Cao cấp</h3>
+          <div class="price-amount"><b>149.000đ</b><span>/tháng</span></div>
+          <ul class="price-feats">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>50 lượt phỏng vấn AI</li>
+          </ul>
+          <a class="btn btn-ghost btn-block" href="pricing.html">Chọn gói</a>
+        </div>
+      </div>
+      <div class="text-center" style="margin-top:var(--s4)">
+        <a class="btn btn-secondary" href="pricing.html">Xem chi tiết bảng giá</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FINAL CTA ============ -->
+  <section class="section">
+    <div class="container">
+      <div class="cta-band">
+        <h2>Sẵn sàng chinh phục buổi phỏng vấn tiếp theo?</h2>
+        <p>Đăng ký ngay để trải nghiệm HireMate và luyện tập cùng AI.</p>
+        <a class="btn btn-primary btn-lg" href="register.html">Đăng ký miễn phí</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
+          <p class="footer-tag">AI Interview Coach hỗ trợ luyện tập phỏng vấn.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Sản phẩm</h4>
+          <a href="index.html">Trang chủ</a>
+          <a href="pricing.html">Bảng giá</a>
+          <a href="interview-setup.html">Phỏng vấn</a>
+        </div>
+        <div class="footer-col">
+          <h4>Pháp lý</h4>
+          <a href="#">Chính sách bảo mật</a>
+          <a href="#">Điều khoản sử dụng</a>
+        </div>
+        <div class="footer-col">
+          <h4>Liên hệ</h4>
+          <a href="tel:0918306884">0918306884</a>
+          <a href="mailto:hirematecompany@gmail.com">hirematecompany@gmail.com</a>
+          <div class="social">
+            <a href="#" aria-label="Facebook"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg></a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">© 2026 HireMate. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
