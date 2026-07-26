@@ -6,6 +6,7 @@
   <title>Hoàn thiện hồ sơ — HireMate</title>
   <link rel="icon" href="logo.png">
   <link rel="stylesheet" href="styles.css">
+  <script>(function(){try{var t=localStorage.getItem('hm_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}document.documentElement.classList.add('js');})();</script>
 </head>
 <body>
 
@@ -25,7 +26,7 @@
             <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="dropdown">
-            <a href="dashboard.html">Dashboard</a>
+            <a href="dashboard.html">Bảng điều khiển</a>
             <a href="pricing.html">Bảng giá</a>
             <hr>
             <a href="index.html">Đăng xuất</a>
@@ -42,7 +43,7 @@
       <a href="index.html">Trang chủ</a>
       <a href="pricing.html">Bảng giá</a>
       <a href="interview-setup.html">Phỏng vấn</a>
-      <a href="dashboard.html">Dashboard</a>
+      <a href="dashboard.html">Bảng điều khiển</a>
       <div class="mm-actions"><a class="btn btn-ghost btn-block" href="index.html">Đăng xuất</a></div>
     </div>
   </div>
@@ -63,7 +64,7 @@
         <h1 style="font-size:1.6rem;margin-bottom:6px">Hoàn thiện hồ sơ</h1>
         <p class="muted" style="margin-bottom:var(--s4)">Giới thiệu đôi nét về bản thân để AI hiểu bạn hơn.</p>
 
-        <form onsubmit="window.location.href='onboarding-goal.html';return false;">
+        <form id="obProfileForm">
           <div class="field">
             <label class="label" for="name">Họ và tên</label>
             <input class="input" id="name" type="text" placeholder="VD: Nguyễn Ngọc Phương Linh" required>
@@ -79,7 +80,7 @@
               <span class="tag">Công nghệ <button type="button" aria-label="Xóa">×</button></span>
               <span class="tag">Du lịch <button type="button" aria-label="Xóa">×</button></span>
             </div>
-            <input class="input" id="hobby" type="text" placeholder="Nhập sở thích và nhấn Enter...">
+            <input class="input" id="hobby" type="text" placeholder="Nhập sở thích rồi nhấn phím Enter...">
           </div>
           <div class="form-row" style="margin-top:var(--s4)">
             <a class="btn btn-ghost" href="register.html">Quay lại</a>
@@ -96,7 +97,7 @@
       <div class="footer-grid">
         <div class="footer-brand">
           <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
-          <p class="footer-tag">AI Interview Coach hỗ trợ luyện tập phỏng vấn.</p>
+          <p class="footer-tag">Trợ lý AI hỗ trợ luyện tập phỏng vấn.</p>
         </div>
         <div class="footer-col">
           <h4>Sản phẩm</h4>
@@ -118,7 +119,7 @@
           </div>
         </div>
       </div>
-      <div class="footer-bottom">© 2026 HireMate. All rights reserved.</div>
+      <div class="footer-bottom">© 2026 HireMate. Đã đăng ký bản quyền.</div>
     </div>
   </footer>
 

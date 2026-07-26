@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard — HireMate</title>
+  <title>Bảng điều khiển — HireMate</title>
   <link rel="icon" href="logo.png">
   <link rel="stylesheet" href="styles.css">
+  <script>(function(){try{var t=localStorage.getItem('hm_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}document.documentElement.classList.add('js');})();</script>
 </head>
 <body>
 
@@ -25,7 +26,7 @@
             <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="dropdown">
-            <a href="dashboard.html">Dashboard</a>
+            <a href="dashboard.html">Bảng điều khiển</a>
             <a href="pricing.html">Bảng giá</a>
             <hr>
             <a href="index.html">Đăng xuất</a>
@@ -42,17 +43,18 @@
       <a href="index.html">Trang chủ</a>
       <a href="pricing.html">Bảng giá</a>
       <a href="interview-setup.html">Phỏng vấn</a>
-      <a href="dashboard.html">Dashboard</a>
+      <a href="dashboard.html">Bảng điều khiển</a>
       <div class="mm-actions"><a class="btn btn-ghost btn-block" href="index.html">Đăng xuất</a></div>
     </div>
   </div>
 
   <!-- ============ DASHBOARD ============ -->
-  <main class="app-bg">
+  <main class="app-bg" id="dashboard">
     <div class="container">
       <div class="page-head">
-        <h1>Xin chào, Phương Linh</h1>
+        <h1 id="dashGreet">Xin chào, Phương Linh</h1>
         <p>Cùng luyện tập để sẵn sàng cho buổi phỏng vấn tiếp theo nhé.</p>
+        <p id="dashGoal" class="muted" style="margin-top:2px;font-weight:600;color:var(--primary-strong)"></p>
       </div>
 
       <!-- Stat widgets -->
@@ -62,7 +64,7 @@
             <span class="stat-lbl">Gói thành viên</span>
             <span class="icon-chip" style="width:40px;height:40px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2L12 16.6 5.7 21l2.3-7.2-6-4.4h7.6z"/></svg></span>
           </div>
-          <div class="stat-val">Premium</div>
+          <div class="stat-val">Cao cấp</div>
           <span class="badge badge--success">Đang hoạt động</span>
         </div>
         <div class="card stat-card">
@@ -78,13 +80,13 @@
             <span class="stat-lbl">Điểm số</span>
             <span class="icon-chip" style="width:40px;height:40px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
           </div>
-          <div class="stat-val">85<span style="font-size:1rem;color:var(--muted);font-weight:500">/100</span></div>
+          <div class="stat-val" id="statLastScore">85<span style="font-size:1rem;color:var(--muted);font-weight:500">/100</span></div>
           <span class="stat-lbl">Điểm gần nhất</span>
         </div>
       </div>
 
       <!-- Big CTA -->
-      <div class="card card-pad-lg reveal d1" style="margin-top:var(--s3);display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap;background:linear-gradient(135deg,var(--secondary),#00306e)">
+      <div class="card card-pad-lg reveal d1" style="margin-top:var(--s3);display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap;background:linear-gradient(135deg,var(--navy),#00306e)">
         <div>
           <h2 style="color:#fff;font-size:1.4rem;margin-bottom:6px">Sẵn sàng cho buổi luyện tập mới?</h2>
           <p style="color:#b9c6df">Bắt đầu một buổi phỏng vấn AI và nhận phản hồi STAR ngay lập tức.</p>
@@ -94,22 +96,60 @@
         </a>
       </div>
 
+      <!-- Charts -->
+      <div class="dash-charts reveal d2">
+        <div class="card card-pad-lg">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s2);flex-wrap:wrap;gap:8px">
+            <h2 style="font-size:1.2rem">Tiến bộ điểm số theo buổi</h2>
+            <span class="badge badge--success">STAR</span>
+          </div>
+          <div class="chart-box"><canvas id="chartProgress" aria-label="Biểu đồ tiến bộ điểm số" role="img"></canvas></div>
+        </div>
+        <div class="card card-pad-lg">
+          <h2 style="font-size:1.2rem;margin-bottom:var(--s2)">Phân tích kỹ năng</h2>
+          <div class="chart-box sm"><canvas id="chartSkills" aria-label="Biểu đồ phân tích kỹ năng" role="img"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Profile & settings -->
+      <div class="card card-pad-lg reveal d2" style="margin-top:var(--s3)" id="profileSection">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:var(--s3)">
+          <span class="icon-chip" style="width:44px;height:44px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <div>
+            <h2 style="font-size:1.2rem">Hồ sơ & Cài đặt</h2>
+            <p class="muted" style="font-size:var(--fs-sm)">Thông tin của bạn được lưu trên trình duyệt này.</p>
+          </div>
+        </div>
+        <form id="profileForm">
+          <div class="form-grid-2">
+            <div class="field" style="margin-bottom:var(--s2)"><label class="label" for="pfName">Họ và tên</label><input class="input" id="pfName" type="text" placeholder="VD: Nguyễn Ngọc Phương Linh"></div>
+            <div class="field" style="margin-bottom:var(--s2)"><label class="label" for="pfRole">Vị trí mục tiêu</label><input class="input" id="pfRole" type="text" placeholder="VD: Lập trình viên Frontend"></div>
+            <div class="field" style="margin-bottom:var(--s2)"><label class="label" for="pfField">Ngành nghề</label><input class="input" id="pfField" type="text" placeholder="VD: Công nghệ thông tin"></div>
+            <div class="field" style="margin-bottom:var(--s2)"><label class="label" for="pfBio">Giới thiệu ngắn</label><input class="input" id="pfBio" type="text" placeholder="Một dòng về bạn"></div>
+          </div>
+          <div class="form-row" style="margin-top:var(--s2)">
+            <span id="pfSaved" class="badge badge--success" style="display:none">✓ Đã lưu hồ sơ</span>
+            <button class="btn btn-primary" type="submit" style="margin-left:auto">Lưu thay đổi</button>
+          </div>
+        </form>
+      </div>
+
       <!-- History -->
       <div class="reveal d2" style="margin-top:var(--s5);padding-bottom:var(--s6)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)">
           <h2 style="font-size:1.3rem">Lịch sử phỏng vấn</h2>
           <a href="interview-setup.html" style="font-size:var(--fs-sm);font-weight:600">+ Buổi mới</a>
         </div>
-        <div class="table-wrap" style="background:#fff">
+        <div class="table-wrap" style="background:var(--surface)">
           <table class="tbl">
             <thead>
               <tr><th>Ngày</th><th>Vị trí</th><th>Điểm số</th><th>Chi tiết</th></tr>
             </thead>
-            <tbody>
+            <tbody id="dashHistory">
               <tr><td>26/06/2026</td><td>Lập trình viên Frontend</td><td><span class="badge badge--success">85/100</span></td><td><a href="feedback.html">Xem phản hồi</a></td></tr>
               <tr><td>22/06/2026</td><td>Lập trình viên Frontend</td><td><span class="badge badge--success">78/100</span></td><td><a href="feedback.html">Xem phản hồi</a></td></tr>
-              <tr><td>18/06/2026</td><td>Data Analyst</td><td><span class="badge badge--warning">64/100</span></td><td><a href="feedback.html">Xem phản hồi</a></td></tr>
-              <tr><td>14/06/2026</td><td>Product Manager</td><td><span class="badge badge--warning">59/100</span></td><td><a href="feedback.html">Xem phản hồi</a></td></tr>
+              <tr><td>18/06/2026</td><td>Chuyên viên Phân tích Dữ liệu</td><td><span class="badge badge--warning">64/100</span></td><td><a href="feedback.html">Xem phản hồi</a></td></tr>
+              <tr><td>14/06/2026</td><td>Quản lý sản phẩm</td><td><span class="badge badge--warning">59/100</span></td><td><a href="feedback.html">Xem phản hồi</a></td></tr>
               <tr><td>10/06/2026</td><td>Lập trình viên Frontend</td><td><span class="badge badge--success">72/100</span></td><td><a href="feedback.html">Xem phản hồi</a></td></tr>
             </tbody>
           </table>
@@ -124,7 +164,7 @@
       <div class="footer-grid">
         <div class="footer-brand">
           <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
-          <p class="footer-tag">AI Interview Coach hỗ trợ luyện tập phỏng vấn.</p>
+          <p class="footer-tag">Trợ lý AI hỗ trợ luyện tập phỏng vấn.</p>
         </div>
         <div class="footer-col">
           <h4>Sản phẩm</h4>
@@ -146,10 +186,11 @@
           </div>
         </div>
       </div>
-      <div class="footer-bottom">© 2026 HireMate. All rights reserved.</div>
+      <div class="footer-bottom">© 2026 HireMate. Đã đăng ký bản quyền.</div>
     </div>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

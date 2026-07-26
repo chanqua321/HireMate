@@ -6,6 +6,7 @@
   <title>Xác nhận thông tin — HireMate</title>
   <link rel="icon" href="logo.png">
   <link rel="stylesheet" href="styles.css">
+  <script>(function(){try{var t=localStorage.getItem('hm_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}document.documentElement.classList.add('js');})();</script>
 </head>
 <body>
 
@@ -25,7 +26,7 @@
             <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="dropdown">
-            <a href="dashboard.html">Dashboard</a>
+            <a href="dashboard.html">Bảng điều khiển</a>
             <a href="pricing.html">Bảng giá</a>
             <hr>
             <a href="index.html">Đăng xuất</a>
@@ -42,7 +43,7 @@
       <a href="index.html">Trang chủ</a>
       <a href="pricing.html">Bảng giá</a>
       <a href="interview-setup.html">Phỏng vấn</a>
-      <a href="dashboard.html">Dashboard</a>
+      <a href="dashboard.html">Bảng điều khiển</a>
       <div class="mm-actions"><a class="btn btn-ghost btn-block" href="index.html">Đăng xuất</a></div>
     </div>
   </div>
@@ -58,7 +59,7 @@
         <div class="st active"><span class="num">3</span><span class="lbl">Xác nhận</span></div>
       </div>
 
-      <div class="form-card reveal">
+      <div class="form-card reveal" id="obSummary">
         <div class="text-center" style="margin-bottom:var(--s4)">
           <h1 style="font-size:1.6rem;margin-bottom:6px">Xác nhận thông tin</h1>
           <p class="muted">Kiểm tra lại thông tin trước khi hoàn tất thiết lập hồ sơ.</p>
@@ -71,9 +72,9 @@
             <h3>Mục tiêu nghề nghiệp</h3>
           </div>
           <div class="info-list">
-            <div class="row"><span>Ngành nghề</span><span>Công nghệ thông tin</span></div>
-            <div class="row"><span>Vị trí ứng tuyển</span><span>Lập trình viên Frontend</span></div>
-            <div class="row"><span>Kinh nghiệm</span><span>1 - 3 năm</span></div>
+            <div class="row"><span>Ngành nghề</span><span id="sumField">Công nghệ thông tin</span></div>
+            <div class="row"><span>Vị trí ứng tuyển</span><span id="sumRole">Lập trình viên Frontend</span></div>
+            <div class="row"><span>Kinh nghiệm</span><span id="sumExp">1 - 3 năm</span></div>
           </div>
         </div>
 
@@ -84,9 +85,9 @@
             <h3>Hồ sơ cá nhân</h3>
           </div>
           <div class="info-list">
-            <div class="row"><span>Họ và tên</span><span>Nguyễn Ngọc Phương Linh</span></div>
-            <div class="row"><span>Giới thiệu bản thân</span><span style="max-width:60%;text-align:right">Sinh viên CNTT yêu thích Frontend, mong muốn phát triển sự nghiệp.</span></div>
-            <div class="row"><span>Sở thích</span><span>Đọc sách, Công nghệ, Du lịch</span></div>
+            <div class="row"><span>Họ và tên</span><span id="sumName">Nguyễn Ngọc Phương Linh</span></div>
+            <div class="row"><span>Giới thiệu bản thân</span><span id="sumBio" style="max-width:60%;text-align:right">Sinh viên CNTT yêu thích Frontend, mong muốn phát triển sự nghiệp.</span></div>
+            <div class="row"><span>Sở thích</span><span id="sumHobbies">Đọc sách, Công nghệ, Du lịch</span></div>
           </div>
         </div>
 
@@ -104,7 +105,7 @@
       <div class="footer-grid">
         <div class="footer-brand">
           <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
-          <p class="footer-tag">AI Interview Coach hỗ trợ luyện tập phỏng vấn.</p>
+          <p class="footer-tag">Trợ lý AI hỗ trợ luyện tập phỏng vấn.</p>
         </div>
         <div class="footer-col">
           <h4>Sản phẩm</h4>
@@ -126,7 +127,7 @@
           </div>
         </div>
       </div>
-      <div class="footer-bottom">© 2026 HireMate. All rights reserved.</div>
+      <div class="footer-bottom">© 2026 HireMate. Đã đăng ký bản quyền.</div>
     </div>
   </footer>
 

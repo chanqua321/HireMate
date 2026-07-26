@@ -6,6 +6,7 @@
   <title>Phản hồi STAR — HireMate</title>
   <link rel="icon" href="logo.png">
   <link rel="stylesheet" href="styles.css">
+  <script>(function(){try{var t=localStorage.getItem('hm_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}document.documentElement.classList.add('js');})();</script>
 </head>
 <body>
 
@@ -25,7 +26,7 @@
             <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="dropdown">
-            <a href="dashboard.html">Dashboard</a>
+            <a href="dashboard.html">Bảng điều khiển</a>
             <a href="pricing.html">Bảng giá</a>
             <hr>
             <a href="index.html">Đăng xuất</a>
@@ -42,7 +43,7 @@
       <a href="index.html">Trang chủ</a>
       <a href="pricing.html">Bảng giá</a>
       <a href="interview-setup.html" class="active">Phỏng vấn</a>
-      <a href="dashboard.html">Dashboard</a>
+      <a href="dashboard.html">Bảng điều khiển</a>
       <div class="mm-actions"><a class="btn btn-ghost btn-block" href="index.html">Đăng xuất</a></div>
     </div>
   </div>
@@ -50,39 +51,52 @@
   <!-- ============ FEEDBACK ============ -->
   <main class="app-bg">
     <div class="container section--tight">
-      <div class="form-card" style="max-width:780px">
+      <div id="fbRoot" class="form-card" style="max-width:780px">
         <div class="text-center" style="margin-bottom:var(--s4)">
           <span class="badge badge--success" style="margin-bottom:var(--s2)">Hoàn thành buổi phỏng vấn</span>
           <h1 style="font-size:1.7rem">Phản hồi STAR của bạn</h1>
+          <p class="muted" style="margin-top:6px">Vị trí: <span id="fbRole">Lập trình viên Frontend</span></p>
         </div>
 
         <!-- Score -->
         <div class="card card-pad-lg text-center reveal" style="margin-bottom:var(--s3)">
-          <div class="score-ring" style="--p:85">
-            <div class="score-inner"><b>85</b><span>/ 100 điểm</span></div>
+          <div class="score-ring" id="fbRing" style="--p:85">
+            <div class="score-inner"><b id="fbScore" data-count="85">85</b><span>/ 100 điểm</span></div>
           </div>
-          <p class="muted" style="margin-top:var(--s2)">Kết quả tốt! Bạn đang tiến bộ rõ rệt so với buổi trước.</p>
+          <p id="fbMessage" class="muted" style="margin-top:var(--s2)">Kết quả tốt! Bạn đang tiến bộ rõ rệt so với buổi trước.</p>
+        </div>
+
+        <!-- Sub-scores -->
+        <div class="card card-pad-lg reveal d1" style="margin-bottom:var(--s3)">
+          <h3 style="margin-bottom:var(--s3)">Điểm thành phần</h3>
+          <div class="subscore" id="fbSubscores">
+            <div class="row"><span class="k">Bối cảnh (S)</span><div class="bar"><span data-w="85" style="width:85%"></span></div><span class="v">85</span></div>
+            <div class="row"><span class="k">Nhiệm vụ (T)</span><div class="bar"><span data-w="80" style="width:80%"></span></div><span class="v">80</span></div>
+            <div class="row"><span class="k">Hành động (A)</span><div class="bar"><span data-w="64" style="width:64%"></span></div><span class="v">64</span></div>
+            <div class="row"><span class="k">Kết quả (R)</span><div class="bar"><span data-w="60" style="width:60%"></span></div><span class="v">60</span></div>
+            <div class="row"><span class="k">Sự rõ ràng</span><div class="bar"><span data-w="78" style="width:78%"></span></div><span class="v">78</span></div>
+          </div>
         </div>
 
         <!-- STAR breakdown -->
         <div class="card card-pad-lg reveal d1" style="margin-bottom:var(--s3)">
           <h3 style="margin-bottom:var(--s3)">Đánh giá theo mô hình STAR</h3>
           <div class="star-list">
-            <div class="star-item good">
+            <div class="star-item good" data-k="S">
               <span class="st-icon">S</span>
-              <div><h4>Situation — Bối cảnh <span class="badge badge--success">Tốt</span></h4><p>Đã mô tả bối cảnh rõ ràng.</p></div>
+              <div><h4>Bối cảnh (S) <span class="badge badge--success">Tốt</span></h4><p>Đã mô tả bối cảnh rõ ràng.</p></div>
             </div>
-            <div class="star-item good">
+            <div class="star-item good" data-k="T">
               <span class="st-icon">T</span>
-              <div><h4>Task — Nhiệm vụ <span class="badge badge--success">Tốt</span></h4><p>Đã nêu đúng nhiệm vụ.</p></div>
+              <div><h4>Nhiệm vụ (T) <span class="badge badge--success">Tốt</span></h4><p>Đã nêu đúng nhiệm vụ.</p></div>
             </div>
-            <div class="star-item warn">
+            <div class="star-item warn" data-k="A">
               <span class="st-icon">A</span>
-              <div><h4>Action — Hành động <span class="badge badge--warning">Cần cải thiện</span></h4><p>Cần trình bày chi tiết hơn.</p></div>
+              <div><h4>Hành động (A) <span class="badge badge--warning">Cần cải thiện</span></h4><p>Cần trình bày chi tiết hơn.</p></div>
             </div>
-            <div class="star-item warn">
+            <div class="star-item warn" data-k="R">
               <span class="st-icon">R</span>
-              <div><h4>Result — Kết quả <span class="badge badge--warning">Cần cải thiện</span></h4><p>Nên bổ sung kết quả cụ thể.</p></div>
+              <div><h4>Kết quả (R) <span class="badge badge--warning">Cần cải thiện</span></h4><p>Nên bổ sung kết quả cụ thể.</p></div>
             </div>
           </div>
         </div>
@@ -92,7 +106,7 @@
           <h3 style="margin-bottom:var(--s2)">Gợi ý cải thiện</h3>
           <ul class="price-feats" style="margin:0">
             <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary-strong)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary-strong)"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Thêm ví dụ thực tế.</li>
-            <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary-strong)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary-strong)"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Làm rõ phần Action.</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary-strong)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary-strong)"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Làm rõ phần Hành động.</li>
             <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary-strong)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary-strong)"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Bổ sung kết quả có số liệu nếu có.</li>
           </ul>
         </div>
@@ -116,7 +130,7 @@
 
         <div class="form-row">
           <a class="btn btn-ghost" href="interview-room.html">Luyện tập lại</a>
-          <a class="btn btn-primary" href="dashboard.html">Về Dashboard</a>
+          <a class="btn btn-primary" href="dashboard.html">Về Bảng điều khiển</a>
         </div>
       </div>
     </div>
@@ -128,7 +142,7 @@
       <div class="footer-grid">
         <div class="footer-brand">
           <a class="brand" href="index.html"><img src="logo.png" alt="HireMate"></a>
-          <p class="footer-tag">AI Interview Coach hỗ trợ luyện tập phỏng vấn.</p>
+          <p class="footer-tag">Trợ lý AI hỗ trợ luyện tập phỏng vấn.</p>
         </div>
         <div class="footer-col">
           <h4>Sản phẩm</h4>
@@ -150,7 +164,7 @@
           </div>
         </div>
       </div>
-      <div class="footer-bottom">© 2026 HireMate. All rights reserved.</div>
+      <div class="footer-bottom">© 2026 HireMate. Đã đăng ký bản quyền.</div>
     </div>
   </footer>
 
