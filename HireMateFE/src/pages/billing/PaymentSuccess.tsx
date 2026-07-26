@@ -1,11 +1,39 @@
 import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle, ArrowRight, FileText, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useConfetti } from '../../hooks/useConfetti';
 
+const PLAN_SUCCESS_MAP: Record<
+  string,
+  {
+    title: string;
+    packageName: string;
+    price: string;
+  }
+> = {
+  free: {
+    title: 'Chào mừng bạn đến với Gói Miễn phí!',
+    packageName: 'Gói Miễn phí - 1 tháng',
+    price: '0đ',
+  },
+  basic: {
+    title: 'Chào mừng bạn đến với Gói Cơ Bản!',
+    packageName: 'Gói Cơ Bản - 1 tháng',
+    price: '79.000đ',
+  },
+  pro: {
+    title: 'Chào mừng bạn đến với Gói Nâng Cao!',
+    packageName: 'Gói Nâng Cao - 1 tháng',
+    price: '149.000đ',
+  },
+};
+
 export const PaymentSuccess: React.FC = () => {
   const { triggerConfetti } = useConfetti();
+  const [searchParams] = useSearchParams();
+  const planKey = searchParams.get('plan') || 'pro';
+  const planInfo = PLAN_SUCCESS_MAP[planKey] || PLAN_SUCCESS_MAP.pro;
 
   useEffect(() => {
     triggerConfetti();
@@ -42,9 +70,9 @@ export const PaymentSuccess: React.FC = () => {
         >
           <Sparkles size={16} /> Thanh toán thành công
         </span>
-        <h2 style={{ marginBottom: '12px' }}>Chào mừng bạn đến với gói Pro!</h2>
+        <h2 style={{ marginBottom: '12px' }}>{planInfo.title}</h2>
         <p className="muted" style={{ marginBottom: '28px' }}>
-          Tài khoản HireMate của bạn đã được kích hoạt đầy đủ quyền lợi phỏng vấn không giới hạn.
+          Tài khoản HireMate của bạn đã được kích hoạt đầy đủ quyền lợi phỏng vấn AI cao cấp.
         </p>
 
         <div
@@ -63,11 +91,11 @@ export const PaymentSuccess: React.FC = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span className="muted">Gói cước</span>
-            <strong>Chuyên nghiệp (Pro) - 1 năm</strong>
+            <strong>{planInfo.packageName}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span className="muted">Số tiền thanh toán</span>
-            <strong style={{ color: 'var(--primary)' }}>1.908.000đ</strong>
+            <strong style={{ color: 'var(--primary)' }}>{planInfo.price}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span className="muted">Trạng thái</span>
@@ -84,7 +112,7 @@ export const PaymentSuccess: React.FC = () => {
             Về Bảng điều khiển <ArrowRight size={18} />
           </Link>
           <Link
-            to="/invoice"
+            to={`/invoice?plan=${planKey}`}
             className="btn btn-ghost"
             style={{ width: '100%', justifyContent: 'center' }}
           >

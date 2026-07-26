@@ -1,10 +1,51 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreditCard, QrCode, Building2, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const PLAN_INFO_MAP: Record<
+  string,
+  {
+    name: string;
+    price: string;
+    origPrice: string;
+    period: string;
+    desc: string;
+    savings: string;
+  }
+> = {
+  free: {
+    name: 'Gói Miễn phí (HireMate Free)',
+    price: '0đ',
+    origPrice: '0đ',
+    period: 'Thanh toán 0đ',
+    desc: 'Lý tưởng để bắt đầu hành trình tìm kiếm công việc đầu tiên (3 buổi/tháng).',
+    savings: '0đ',
+  },
+  basic: {
+    name: 'Gói Cơ Bản (HireMate Basic)',
+    price: '79.000đ',
+    origPrice: '99.000đ',
+    period: 'Thanh toán theo tháng',
+    desc: 'Mở khóa tiềm AI để chiếm ưu thế trong mọi cuộc phỏng vấn (15 buổi/tháng).',
+    savings: '-20.000đ',
+  },
+  pro: {
+    name: 'Gói Nâng Cao (HireMate Pro)',
+    price: '149.000đ',
+    origPrice: '189.000đ',
+    period: 'Thanh toán theo tháng',
+    desc: 'Mở khóa toàn bộ tiềm năng AI, tối ưu CV chuẩn ATS chuyên sâu (50 buổi/tháng).',
+    savings: '-40.000đ',
+  },
+};
+
 export const Checkout: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const planKey = searchParams.get('plan') || 'pro';
+  const planInfo = PLAN_INFO_MAP[planKey] || PLAN_INFO_MAP.pro;
+
   const [method, setMethod] = useState<'credit' | 'atm' | 'qr'>('credit');
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -14,7 +55,7 @@ export const Checkout: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Simulate checkout success
-    navigate('/payment-success');
+    navigate(`/payment-success?plan=${planKey}`);
   };
 
   return (
@@ -218,7 +259,7 @@ export const Checkout: React.FC = () => {
               className="btn btn-primary btn-lg"
               style={{ width: '100%', justifyContent: 'center' }}
             >
-              <Lock size={16} /> Thanh toán 1.908.000đ <ArrowRight size={18} />
+              <Lock size={16} /> Thanh toán {planInfo.price} <ArrowRight size={18} />
             </button>
           </form>
 
@@ -242,10 +283,12 @@ export const Checkout: React.FC = () => {
           <h3 style={{ marginBottom: '20px' }}>Tóm tắt đơn hàng</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
             <div>
-              <div style={{ fontWeight: 600 }}>Gói Chuyên nghiệp (Pro)</div>
-              <span className="muted" style={{ fontSize: '0.85rem' }}>Thanh toán theo năm</span>
+              <div style={{ fontWeight: 600 }}>{planInfo.name}</div>
+              <span className="muted" style={{ fontSize: '0.85rem' }}>{planInfo.period}</span>
             </div>
-            <div style={{ fontWeight: 600 }}>2.388.000đ</div>
+            <div style={{ fontWeight: 600, textDecoration: 'line-through', color: 'var(--muted)' }}>
+              {planInfo.origPrice}
+            </div>
           </div>
 
           <div
@@ -257,8 +300,8 @@ export const Checkout: React.FC = () => {
               fontWeight: 600,
             }}
           >
-            <div>Ưu đãi giảm giá (20%)</div>
-            <div>-480.000đ</div>
+            <div>Ưu đãi ưu tiên AI</div>
+            <div>{planInfo.savings}</div>
           </div>
 
           <hr style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} />
@@ -272,8 +315,8 @@ export const Checkout: React.FC = () => {
             }}
           >
             <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Tổng thanh toán</div>
-            <div style={{ fontWeight: 800, fontSize: '1.5rem', color: 'var(--primary)' }}>
-              1.908.000đ
+            <div style={{ fontWeight: 800, fontSize: '1.8rem', color: '#03BFFF' }}>
+              {planInfo.price}
             </div>
           </div>
 
@@ -282,18 +325,15 @@ export const Checkout: React.FC = () => {
               background: 'rgba(3, 191, 255, 0.08)',
               padding: '16px',
               borderRadius: '10px',
-              borderLeft: '4px solid var(--primary)',
+              borderLeft: '4px solid #03BFFF',
             }}
           >
             <h4 style={{ fontSize: '0.95rem', marginBottom: '6px', color: 'var(--ink)' }}>
-              Quyền lợi đi kèm
+              Quyền lợi đi kèm gói cước
             </h4>
-            <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.85rem', color: 'var(--muted)' }}>
-              <li>Luyện phỏng vấn AI không giới hạn 365 ngày</li>
-              <li>Chấm điểm STAR & phân tích chi tiết</li>
-              <li>Trả lời bằng giọng nói (Voice AI)</li>
-              <li>Hỗ trợ xuất báo cáo PDF</li>
-            </ul>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)', lineHeight: 1.5 }}>
+              {planInfo.desc}
+            </p>
           </div>
         </div>
       </div>
