@@ -104,7 +104,7 @@ export const Checkout: React.FC = () => {
                       : '1px solid var(--border)',
                     background: active
                       ? 'rgba(3, 191, 255, 0.08)'
-                      : 'var(--card)',
+                      : 'var(--surface)',
                     color: active ? 'var(--primary)' : 'var(--ink)',
                     fontWeight: 600,
                     cursor: 'pointer',

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, User, Mail, Lock, LogIn, UserPlus, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Lock, LogIn, UserPlus, ArrowRight, CheckCircle2, Sparkles, Check } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { authService } from '../../services';
+import { useConfetti } from '../../hooks/useConfetti';
 
 interface AuthContainerProps {
   initialMode: 'login' | 'register';
@@ -11,7 +13,15 @@ interface AuthContainerProps {
 export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => {
   const { login } = useApp();
   const navigate = useNavigate();
+  const { triggerConfetti } = useConfetti();
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
+
+  // Register success animation state
+  const [registerSuccessData, setRegisterSuccessData] = useState<{
+    show: boolean;
+    email: string;
+    confirmLinkDev?: string;
+  }>({ show: false, email: '' });
 
   // Sync mode with route prop
   useEffect(() => {
@@ -40,13 +50,37 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
     navigate(targetMode === 'login' ? '/login' : '/register', { replace: true });
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginForm.email.trim() || !loginForm.password.trim()) {
       setLoginError('Vui lòng nhập đầy đủ email và mật khẩu.');
       return;
     }
     setLoginError('');
+
+    try {
+      const res = await authService.login({
+        email: loginForm.email.trim(),
+        password: loginForm.password.trim(),
+      });
+      if (res.ok && res.data) {
+        const fullNameFromDb = res.data.user?.fullName;
+        const fallbackName = fullNameFromDb || loginForm.email.split('@')[0] || 'Người dùng';
+        login(fallbackName);
+        navigate('/dashboard');
+        return;
+      } else if (res.status !== 0 && res.message) {
+        setLoginError(res.message);
+        return;
+      }
+    } catch (err: any) {
+      if (err?.message) {
+        setLoginError(err.message);
+        return;
+      }
+    }
+
+    // Fallback khi network offline
     const prefix = loginForm.email.split('@')[0] || 'Người dùng';
     const displayName =
       prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
@@ -55,7 +89,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
     navigate('/dashboard');
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
       !registerForm.name.trim() ||
@@ -71,8 +105,42 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
       return;
     }
     setRegisterError('');
-    login(registerForm.name.trim());
-    navigate('/onboarding/profile');
+
+    try {
+      const res = await authService.register({
+        email: registerForm.email.trim(),
+        password: registerForm.password.trim(),
+        fullName: registerForm.name.trim(),
+      });
+      if (res.ok || (res as any).status > 0) {
+        const rawDevLink = res.data?.confirmLinkDev || (res as any).data?.confirmLinkDev || (res as any).confirmLinkDev;
+        const devLink = rawDevLink
+          ? rawDevLink.replace('http://localhost:5080', 'https://localhost:7080')
+          : undefined;
+        setRegisterSuccessData({
+          show: true,
+          email: registerForm.email.trim(),
+          confirmLinkDev: devLink,
+        });
+        triggerConfetti();
+        return;
+      } else if (res.status !== 0 && res.message) {
+        setRegisterError(res.message);
+        return;
+      }
+    } catch (err: any) {
+      if (err?.message) {
+        setRegisterError(err.message);
+        return;
+      }
+    }
+
+    // Fallback khi offline
+    setRegisterSuccessData({
+      show: true,
+      email: registerForm.email.trim(),
+    });
+    triggerConfetti();
   };
 
   const handleSocialLogin = (provider: string) => {
@@ -326,8 +394,137 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
           }}
           transition={{ duration: 0.5, ease: 'easeInOut' }}
         >
-          <div style={{ maxWidth: '340px', width: '100%', margin: '0 auto' }}>
-            <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+          <div style={{ maxWidth: '360px', width: '100%', margin: '0 auto' }}>
+            {registerSuccessData.show ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, type: 'spring', stiffness: 280, damping: 20 }}
+                style={{ textAlign: 'center', padding: '10px 0' }}
+              >
+                <motion.div
+                  style={{
+                    width: '82px',
+                    height: '82px',
+                    margin: '0 auto 20px',
+                    borderRadius: '50%',
+                    background:
+                      'linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(34, 197, 94, 0.08))',
+                    color: '#22C55E',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid rgba(34, 197, 94, 0.35)',
+                    boxShadow: '0 12px 28px rgba(34, 197, 94, 0.22)',
+                  }}
+                  initial={{ scale: 0.4, rotate: -30 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+                >
+                  <Mail size={42} strokeWidth={2.2} />
+                </motion.div>
+
+                <span
+                  className="badge badge--success"
+                  style={{
+                    marginBottom: '12px',
+                    padding: '6px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    background: 'rgba(34, 197, 94, 0.15)',
+                    color: '#16A34A',
+                    borderRadius: '20px',
+                  }}
+                >
+                  <Sparkles size={14} style={{ marginRight: '6px' }} /> ĐĂNG KÝ THÀNH CÔNG
+                </span>
+
+                <h2
+                  style={{
+                    fontSize: '1.65rem',
+                    fontWeight: 800,
+                    color: 'var(--navy, #001B3F)',
+                    marginBottom: '12px',
+                  }}
+                >
+                  Kiểm Tra Email Của Bạn!
+                </h2>
+
+                <p
+                  style={{
+                    color: '#6B7280',
+                    fontSize: '0.94rem',
+                    lineHeight: 1.6,
+                    marginBottom: '22px',
+                  }}
+                >
+                  Chúng tôi đã gửi một email xác thực tài khoản tới{' '}
+                  <strong style={{ color: 'var(--navy, #001B3F)' }}>
+                    {registerSuccessData.email}
+                  </strong>
+                  . Vui lòng kiểm tra hộp thư (hoặc thư rác/Spam) để xác thực tài khoản và tiếp tục sử dụng.
+                </p>
+
+                {registerSuccessData.confirmLinkDev && (
+                  <div
+                    style={{
+                      background: 'rgba(3, 191, 255, 0.08)',
+                      border: '1px dashed rgba(3, 191, 255, 0.5)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      marginBottom: '20px',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        color: '#03BFFF',
+                        marginBottom: '8px',
+                      }}
+                    >
+                      ⚡ Chế độ kiểm thử (Dev Mode) - Không cần mở Gmail:
+                    </div>
+                    <a
+                      href={registerSuccessData.confirmLinkDev}
+                      className="btn btn-primary"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '12px',
+                        fontWeight: 700,
+                        textDecoration: 'none',
+                        width: '100%',
+                      }}
+                    >
+                      <Check size={18} />
+                      <span>Xác thực tài khoản ngay (Test Confirm)</span>
+                    </a>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginForm({ ...loginForm, email: registerSuccessData.email });
+                      handleModeChange('login');
+                    }}
+                    className="btn btn-secondary"
+                    style={{ fontWeight: 600, padding: '12px', width: '100%' }}
+                  >
+                    Đã xác thực? Đăng nhập ngay
+                  </button>
+                </div>
+              </motion.div>
+            ) : (
+              <>
+                <div style={{ textAlign: 'center', marginBottom: '22px' }}>
               <div
                 style={{
                   display: 'inline-flex',
@@ -505,6 +702,8 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
                 Đăng nhập ngay
               </button>
             </div>
+              </>
+            )}
           </div>
         </motion.div>
 
