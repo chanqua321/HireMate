@@ -1,0 +1,39 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "ChangeMe_Str0ng!"
+    ports:
+      - "1433:1433"
+    volumes:
+      - hiremate_mssql:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "ChangeMe_Str0ng!" -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build: .
+    ports:
+      - "5080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      PORT: "8080"
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HireMateDB;User Id=sa;Password=ChangeMe_Str0ng!;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      Jwt__Key: "CHANGE_ME_JWT_KEY_MIN_32_CHARS_LONG"
+      EmailSettings__ApiPublicUrl: "http://localhost:5080"
+      EmailSettings__FrontendUrl: "http://localhost:3000"
+      Cors__Origins__0: "http://localhost:3000"
+      Swagger__Enabled: "true"
+      Ai__Provider: "Heuristic"
+      Ai__Enabled: "true"
+      VnPay__Enabled: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  hiremate_mssql:

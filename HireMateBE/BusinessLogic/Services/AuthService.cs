@@ -1,0 +1,382 @@
+using BusinessLogic.Base;
+using BusinessLogic.IServices;
+using Common;
+using Common.DTOs.AuthDto;
+using Google.Apis.Auth;
+using Infrastructure.IUnitOfWork;
+using Infrastructure.Models;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace BusinessLogic.Services;
+
+public class AuthService(
+    UserManager<UserAccount> userManager,
+    SignInManager<UserAccount> signInManager,
+    IConfiguration configuration,
+    IEmailService emailService,
+    IWebHostEnvironment env,
+    IUnitOfWork unitOfWork) : IAuthService
+{
+    private readonly UserManager<UserAccount> _userManager = userManager;
+    private readonly SignInManager<UserAccount> _signInManager = signInManager;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly IEmailService _emailService = emailService;
+    private readonly IWebHostEnvironment _env = env;
+    private readonly IUnitOfWork _unitOfWork = unitOfWork;
+
+    private bool ExposeDevTokens =>
+        _env.IsDevelopment()
+        && !string.Equals(_configuration["EmailSettings:ExposeDevTokens"], "false", StringComparison.OrdinalIgnoreCase);
+
+    public async Task<IServiceResult> RegisterAsync(RegisterDto dto)
+    {
+        var existing = await _userManager.FindByEmailAsync(dto.Email);
+        if (existing != null)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Email already registered");
+
+        var user = new UserAccount
+        {
+            Id = Guid.NewGuid(),
+            UserName = dto.Email,
+            Email = dto.Email,
+            FullName = dto.FullName,
+            EmailConfirmed = false,
+            OnboardingCompleted = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        var result = await _userManager.CreateAsync(user, dto.Password);
+        if (!result.Succeeded)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, Const.FAIL_CREATE_MSG, result.Errors.Select(e => e.Description).ToList());
+
+        var roleResult = await _userManager.AddToRoleAsync(user, "User");
+        if (!roleResult.Succeeded)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Failed to assign role", roleResult.Errors.Select(e => e.Description).ToList());
+
+        var confirmLink = await SendConfirmEmailAsync(user);
+
+        var data = new Dictionary<string, object?>
+        {
+            ["email"] = user.Email,
+            ["emailConfirmed"] = false,
+            ["message"] = "Check your inbox to confirm email before login."
+        };
+        if (ExposeDevTokens)
+            data["confirmLinkDev"] = confirmLink;
+
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE,
+            "Registered. Please confirm your email before logging in.", data);
+    }
+
+    public async Task<IServiceResult> LoginAsync(LoginDto dto)
+    {
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.FAIL_READ_CODE, "Invalid email or password");
+
+        if (!user.EmailConfirmed)
+            return new ServiceResult(Const.FAIL_READ_CODE, "Email not confirmed. Please check your inbox or resend confirmation.");
+
+        var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
+        if (!result.Succeeded)
+            return new ServiceResult(Const.FAIL_READ_CODE, "Invalid email or password");
+
+        user.LastLogin = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
+
+        var auth = await IssueTokensAsync(user, null);
+        return new ServiceResult(Const.SUCCESS_LOGIN_CODE, Const.SUCCESS_READ_MSG, auth);
+    }
+
+    public async Task<IServiceResult> LoginWithGoogleAsync(string idToken, string? ip)
+    {
+        var clientId = _configuration["Authentication:Google:ClientId"];
+        if (string.IsNullOrWhiteSpace(clientId))
+            return new ServiceResult(Const.FAIL_READ_CODE, "Google login is not configured. Set Authentication:Google:ClientId.");
+
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await GoogleJsonWebSignature.ValidateAsync(idToken, new GoogleJsonWebSignature.ValidationSettings
+            {
+                Audience = [clientId]
+            });
+        }
+        catch (Exception)
+        {
+            return new ServiceResult(Const.FAIL_READ_CODE, "Invalid Google idToken");
+        }
+
+        var email = payload.Email;
+        if (string.IsNullOrWhiteSpace(email))
+            return new ServiceResult(Const.FAIL_READ_CODE, "Google account has no email");
+
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            user = new UserAccount
+            {
+                Id = Guid.NewGuid(),
+                Email = email,
+                UserName = email,
+                FullName = payload.Name ?? email.Split('@')[0],
+                EmailConfirmed = payload.EmailVerified,
+                OnboardingCompleted = false,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            var create = await _userManager.CreateAsync(user);
+            if (!create.Succeeded)
+                return new ServiceResult(Const.FAIL_CREATE_CODE, "Cannot create user from Google", create.Errors.Select(e => e.Description).ToList());
+
+            await _userManager.AddToRoleAsync(user, "User");
+        }
+        else if (user.IsDeleted)
+        {
+            return new ServiceResult(Const.FAIL_READ_CODE, "Account disabled");
+        }
+        else if (!user.EmailConfirmed && payload.EmailVerified)
+        {
+            user.EmailConfirmed = true;
+            await _userManager.UpdateAsync(user);
+        }
+
+        if (!user.EmailConfirmed)
+            return new ServiceResult(Const.FAIL_READ_CODE, "Email not confirmed");
+
+        user.LastLogin = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
+
+        var auth = await IssueTokensAsync(user, ip);
+        return new ServiceResult(Const.SUCCESS_LOGIN_CODE, "Login Google success", auth);
+    }
+
+    public async Task<IServiceResult> RefreshAsync(string refreshToken, string? ip)
+    {
+        var existing = await _unitOfWork.RefreshTokenRepository.GetQueryable()
+            .FirstOrDefaultAsync(t => t.Token == refreshToken);
+
+        if (existing == null || !existing.IsActive)
+            return new ServiceResult(Const.FAIL_READ_CODE, "Invalid or expired refresh token");
+
+        var user = await _userManager.FindByIdAsync(existing.UserId.ToString());
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.FAIL_READ_CODE, "User not found");
+
+        existing.RevokedAt = DateTime.UtcNow;
+        var auth = await IssueTokensAsync(user, ip);
+        existing.ReplacedByToken = auth.RefreshToken;
+        await _unitOfWork.SaveChangesAsync();
+
+        return new ServiceResult(Const.SUCCESS_READ_CODE, "Token refreshed", auth);
+    }
+
+    public async Task<IServiceResult> LogoutAsync(string refreshToken)
+    {
+        var existing = await _unitOfWork.RefreshTokenRepository.GetQueryable()
+            .FirstOrDefaultAsync(t => t.Token == refreshToken);
+        if (existing != null && existing.RevokedAt == null)
+        {
+            existing.RevokedAt = DateTime.UtcNow;
+            await _unitOfWork.SaveChangesAsync();
+        }
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Logged out");
+    }
+
+    public async Task<IServiceResult> GetMeAsync(Guid userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, Const.WARNING_NO_DATA_MSG);
+
+        var roles = await _userManager.GetRolesAsync(user);
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new MeDto
+        {
+            Id = user.Id,
+            Email = user.Email ?? string.Empty,
+            FullName = user.FullName,
+            Roles = roles,
+            OnboardingCompleted = user.OnboardingCompleted,
+            IsPremium = user.IsPremium
+        });
+    }
+
+    public async Task<IServiceResult> ConfirmEmailAsync(string userId, string token)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+
+        if (user.EmailConfirmed)
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Email already confirmed");
+
+        var result = await _userManager.ConfirmEmailAsync(user, token);
+        if (!result.Succeeded)
+            result = await _userManager.ConfirmEmailAsync(user, Uri.UnescapeDataString(token));
+
+        if (!result.Succeeded)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Invalid or expired confirmation token",
+                result.Errors.Select(e => e.Description).ToList());
+
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Email confirmed successfully. You can log in now.");
+    }
+
+    public async Task<IServiceResult> ResendConfirmEmailAsync(string email)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "If the email exists, a confirmation link was sent.");
+
+        if (user.EmailConfirmed)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Email already confirmed");
+
+        var link = await SendConfirmEmailAsync(user);
+        if (ExposeDevTokens)
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Confirmation email sent.", new { confirmLinkDev = link });
+        return new ServiceResult(Const.SUCCESS_READ_CODE, "Confirmation email sent.");
+    }
+
+    public async Task<IServiceResult> ForgotPasswordAsync(string email)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "If the email exists, a reset link was sent.");
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var encoded = Uri.EscapeDataString(token);
+        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "http://localhost:5080").TrimEnd('/');
+        var frontUrl = (_configuration["EmailSettings:FrontendUrl"] ?? apiUrl).TrimEnd('/');
+        var resetFrontLink = $"{frontUrl}/reset-password.html?email={Uri.EscapeDataString(user.Email!)}&token={encoded}";
+
+        var tokenBlock = ExposeDevTokens
+            ? $"<p>Token (Dev/Swagger):</p><p><code>{WebUtility.HtmlEncode(token)}</code></p>"
+            : "";
+
+        var html = $"""
+            <p>Xin chào {WebUtility.HtmlEncode(user.FullName)},</p>
+            <p>Bạn yêu cầu đặt lại mật khẩu HireMate.</p>
+            <p><a href="{resetFrontLink}">Nhấn vào đây để đặt lại mật khẩu</a></p>
+            {tokenBlock}
+            <p>Nếu không phải bạn, hãy bỏ qua email này.</p>
+            <p>— HireMate</p>
+            """;
+
+        await _emailService.SendAsync(user.Email!, "HireMate — Đặt lại mật khẩu", html);
+
+        if (ExposeDevTokens)
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "If the email exists, a reset link was sent.",
+                new { email = user.Email, resetToken = token, resetLink = resetFrontLink });
+
+        return new ServiceResult(Const.SUCCESS_READ_CODE, "If the email exists, a reset link was sent.");
+    }
+
+    public async Task<IServiceResult> ResetPasswordAsync(string email, string token, string newPassword)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+
+        var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+        if (!result.Succeeded)
+            result = await _userManager.ResetPasswordAsync(user, Uri.UnescapeDataString(token), newPassword);
+
+        if (!result.Succeeded)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Reset failed", result.Errors.Select(e => e.Description).ToList());
+
+        // revoke all refresh tokens after password change
+        var tokens = await _unitOfWork.RefreshTokenRepository.GetQueryable()
+            .Where(t => t.UserId == user.Id && t.RevokedAt == null).ToListAsync();
+        foreach (var t in tokens)
+            t.RevokedAt = DateTime.UtcNow;
+        await _unitOfWork.SaveChangesAsync();
+
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Password reset successfully");
+    }
+
+    private async Task<string> SendConfirmEmailAsync(UserAccount user)
+    {
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        var encoded = Uri.EscapeDataString(token);
+        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "http://localhost:5080").TrimEnd('/');
+        var link = $"{apiUrl}/api/Auth/confirm-email?userId={user.Id}&token={encoded}";
+
+        var html = $"""
+            <p>Xin chào {WebUtility.HtmlEncode(user.FullName)},</p>
+            <p>Cảm ơn bạn đã đăng ký <b>HireMate</b>.</p>
+            <p><a href="{link}">Nhấn vào đây để xác nhận email</a></p>
+            <p>— HireMate</p>
+            """;
+
+        await _emailService.SendAsync(user.Email!, "HireMate — Xác nhận email", html);
+        return link;
+    }
+
+    private async Task<AuthResponseDto> IssueTokensAsync(UserAccount user, string? ip)
+    {
+        var roles = await _userManager.GetRolesAsync(user);
+        var claims = new List<Claim>
+        {
+            new("userId", user.Id.ToString()),
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Email, user.Email ?? string.Empty),
+            new("email", user.Email ?? string.Empty),
+            new("fullName", user.FullName),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+            claims.Add(new Claim("role", role));
+        }
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+        var accessMinutes = double.TryParse(_configuration["Jwt:AccessExpireMinutes"], out var m) ? m : 30;
+        var refreshDays = double.TryParse(_configuration["Jwt:RefreshExpireDays"], out var d) ? d : 14;
+
+        var jwt = new JwtSecurityToken(
+            issuer: _configuration["Jwt:Issuer"],
+            audience: _configuration["Jwt:Audience"],
+            expires: DateTime.UtcNow.AddMinutes(accessMinutes),
+            claims: claims,
+            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)
+        );
+
+        var refresh = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
+            ExpiresAt = DateTime.UtcNow.AddDays(refreshDays),
+            CreatedAt = DateTime.UtcNow,
+            CreatedByIp = ip
+        };
+        await _unitOfWork.RefreshTokenRepository.CreateAsync(refresh);
+        await _unitOfWork.SaveChangesAsync();
+
+        return new AuthResponseDto
+        {
+            Token = new JwtSecurityTokenHandler().WriteToken(jwt),
+            Expiration = jwt.ValidTo,
+            RefreshToken = refresh.Token,
+            RefreshExpiration = refresh.ExpiresAt,
+            Email = user.Email ?? string.Empty,
+            FullName = user.FullName,
+            Roles = roles,
+            OnboardingCompleted = user.OnboardingCompleted,
+            IsPremium = user.IsPremium
+        };
+    }
+}

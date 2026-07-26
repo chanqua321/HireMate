@@ -1,0 +1,73 @@
+@APIs_HostAddress = http://localhost:5080
+@token = paste_jwt_here
+
+### Register
+POST {{APIs_HostAddress}}/api/Auth/register
+Content-Type: application/json
+
+{
+  "email": "demo@hiremate.local",
+  "password": "Password1",
+  "fullName": "Demo User"
+}
+
+### Login
+POST {{APIs_HostAddress}}/api/Auth/login
+Content-Type: application/json
+
+{
+  "email": "demo@hiremate.local",
+  "password": "Password1"
+}
+
+### Me
+GET {{APIs_HostAddress}}/api/Auth/me
+Authorization: Bearer {{token}}
+
+### Onboarding goal
+PUT {{APIs_HostAddress}}/api/Onboarding/goal
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "desiredIndustry": "Công nghệ thông tin",
+  "desiredPosition": "Lập trình viên Frontend",
+  "experienceLevel": "Fresher"
+}
+
+### Onboarding personal
+PUT {{APIs_HostAddress}}/api/Onboarding/personal
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "fullName": "Demo User",
+  "university": "FPT University",
+  "major": "Software Engineering",
+  "graduationYear": 2026
+}
+
+### Onboarding confirm
+POST {{APIs_HostAddress}}/api/Onboarding/confirm
+Authorization: Bearer {{token}}
+
+### Profile
+GET {{APIs_HostAddress}}/api/Profile
+Authorization: Bearer {{token}}
+
+### Create interview session
+POST {{APIs_HostAddress}}/api/Interview/sessions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "industry": "Công nghệ thông tin",
+  "position": "Lập trình viên Frontend",
+  "difficulty": "Medium",
+  "mode": "Text",
+  "questionCount": 5
+}
+
+### Dashboard
+GET {{APIs_HostAddress}}/api/Dashboard
+Authorization: Bearer {{token}}
