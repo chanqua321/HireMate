@@ -3,13 +3,14 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "HireMate_Str0ng!"
+      # Override via .env (MSSQL_SA_PASSWORD) — do not commit real secrets
+      MSSQL_SA_PASSWORD: "ChangeMe_Str0ng!"
     ports:
       - "1433:1433"
     volumes:
       - hiremate_mssql:/var/opt/mssql
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "HireMate_Str0ng!" -C -Q "SELECT 1" || exit 1
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "ChangeMe_Str0ng!" -C -Q "SELECT 1" || exit 1
       interval: 10s
       timeout: 5s
       retries: 10
@@ -22,8 +23,9 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       PORT: "8080"
-      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HireMateDB;User Id=sa;Password=HireMate_Str0ng!;TrustServerCertificate=True;MultipleActiveResultSets=true"
-      Jwt__Key: "HireMate_SuperSecret_JWT_Key_Min32Chars_2026!"
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HireMateDB;User Id=sa;Password=ChangeMe_Str0ng!;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      # Override via .env (JWT_KEY) — do not commit real secrets
+      Jwt__Key: "CHANGE_ME_JWT_KEY_MIN_32_CHARS_LONG"
       EmailSettings__ApiPublicUrl: "http://localhost:5080"
       EmailSettings__FrontendUrl: "http://localhost:3000"
       Cors__Origins__0: "http://localhost:3000"

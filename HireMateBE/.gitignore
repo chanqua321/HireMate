@@ -8,10 +8,15 @@ obj/
 project.lock.json
 artifacts/
 
-## Secrets / local
+## Secrets / local — never commit real appsettings
+appsettings.json
+appsettings.*.json
+!appsettings*.Example.json
 appsettings.*.local.json
 **/Properties/launchSettings.json.user
 **/secrets.json
+.env
+.env.*
 
 ## Uploads
 **/wwwroot/uploads/

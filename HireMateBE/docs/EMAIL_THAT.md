@@ -10,7 +10,7 @@ cd HireMateBE\APIs
 dotnet user-secrets set "EmailSettings:Password" "YOUR_APP_PASSWORD"
 ```
 
-From: `pphuc6464@gmail.com`
+From: `your-email@example.com`
 
 ## Luồng
 
