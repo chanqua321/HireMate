@@ -1,0 +1,192 @@
+﻿[
+    {
+        "Status":  "PASS",
+        "Feature":  "Waitlist",
+        "Detail":  "Joined waitlist"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Contact",
+        "Detail":  "Message received"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "FAQ",
+        "Detail":  "count=3"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Blog",
+        "Detail":  "count=1"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "ContentPage",
+        "Detail":  "Chính sách bảo mật"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "BillingPlans",
+        "Detail":  "free,combo,premium"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Resources",
+        "Detail":  "count=2"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "AuthRegister",
+        "Detail":  "chk2080941197@hiremate.local"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "AuthLogin",
+        "Detail":  "roles=User"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "AuthMe",
+        "Detail":  "premium=False"
+    },
+    {
+        "Status":  "FAIL",
+        "Feature":  "AuthForgotReset",
+        "Detail":  "The remote server returned an error: (400) Bad Request."
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Onboarding",
+        "Detail":  "completed"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Profile",
+        "Detail":  "Lập trình viên Frontend"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "InterviewSTAR",
+        "Detail":  "score=76 S=85"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "InterviewHistory",
+        "Detail":  "count=1"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "SuggestedAnswer",
+        "Detail":  "provider=heuristic"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Dashboard",
+        "Detail":  "avg=76 remain=2"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "CvUploadAnalyze",
+        "Detail":  "format=72 provider=heuristic"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "JdMatch",
+        "Detail":  "score=74"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "EmailGenerate",
+        "Detail":  "provider=heuristic"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Career/memory",
+        "Detail":  "ok"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Career/profile",
+        "Detail":  "ok"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Career/progress",
+        "Detail":  "ok"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Career/development",
+        "Detail":  "ok"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Career/path",
+        "Detail":  "ok"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Career/learning",
+        "Detail":  "ok"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "BillingCheckout",
+        "Detail":  "invoice=HM-20260726-3362 amount=71100"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "BillingInvoices",
+        "Detail":  "count=1"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Referral",
+        "Detail":  "HM19453B64"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Badges",
+        "Detail":  "count=4"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Leaderboard",
+        "Detail":  "count=2"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Benchmark",
+        "Detail":  "myAvg=76"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "AdminAnalytics",
+        "Detail":  "regs=11"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "AdminUsers",
+        "Detail":  "count=11"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "AdminRevenue",
+        "Detail":  "mrr=142200.00"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "University",
+        "Detail":  "students=1 org=FPT University Demo"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "Enterprise",
+        "Detail":  "TechCorp Demo"
+    },
+    {
+        "Status":  "PASS",
+        "Feature":  "AdminForbidden",
+        "Detail":  "403 as expected"
+    }
+]

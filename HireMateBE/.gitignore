@@ -1,0 +1,21 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.swp
+project.lock.json
+artifacts/
+
+## Secrets / local
+appsettings.*.local.json
+**/Properties/launchSettings.json.user
+**/secrets.json
+
+## Uploads
+**/wwwroot/uploads/
+
+## OS
+.DS_Store
+Thumbs.db
