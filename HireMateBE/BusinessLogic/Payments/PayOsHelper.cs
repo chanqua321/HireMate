@@ -89,7 +89,7 @@ public class PayOsClient(HttpClient http, Microsoft.Extensions.Options.IOptions<
     public async Task<PayOsCreateResult> CreatePaymentLinkAsync(long orderCode, int amountVnd, string description, CancellationToken ct = default)
     {
         if (!_opts.Enabled || string.IsNullOrWhiteSpace(_opts.ClientId) || string.IsNullOrWhiteSpace(_opts.ApiKey) || string.IsNullOrWhiteSpace(_opts.ChecksumKey))
-            return new PayOsCreateResult { Ok = false, Error = "PayOS is not configured. Set PayOS:Enabled + ClientId + ApiKey + ChecksumKey." };
+            return new PayOsCreateResult { Ok = false, Error = "PayOS chưa được cấu hình. Thiết lập PayOS:Enabled + ClientId + ApiKey + ChecksumKey." };
 
         // description: tài khoản không liên kết PayOS giới hạn ~9 ký tự
         var desc = string.IsNullOrWhiteSpace(description) ? "HireMate" : description.Trim();
@@ -119,7 +119,7 @@ public class PayOsClient(HttpClient http, Microsoft.Extensions.Options.IOptions<
         if (!res.IsSuccessStatusCode || code != "00" || !root.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
         {
             var descErr = root.TryGetProperty("desc", out var d) ? d.GetString() : raw;
-            return new PayOsCreateResult { Ok = false, OrderCode = orderCode, Error = descErr ?? "PayOS create failed" };
+            return new PayOsCreateResult { Ok = false, OrderCode = orderCode, Error = descErr ?? "Tạo thanh toán PayOS thất bại" };
         }
 
         return new PayOsCreateResult

@@ -22,7 +22,7 @@ public class ServiceResult : IServiceResult
     public ServiceResult()
     {
         Status = -1;
-        Message = "Action fail";
+        Message = "Thao tác thất bại";
     }
 
     public ServiceResult(int status, string message)

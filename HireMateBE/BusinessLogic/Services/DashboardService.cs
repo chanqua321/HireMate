@@ -21,7 +21,7 @@ public class DashboardService(
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         var completed = await _unitOfWork.InterviewSessionRepository.GetQueryable()
             .AsNoTracking()

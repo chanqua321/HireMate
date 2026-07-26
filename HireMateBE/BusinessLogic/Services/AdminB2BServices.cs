@@ -63,7 +63,7 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
     public async Task<IServiceResult> PatchUserAsync(Guid id, PatchUserDto dto)
     {
         var user = await users.FindByIdAsync(id.ToString());
-        if (user == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+        if (user == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         if (dto.Lock == true)
             user.LockoutEnd = DateTimeOffset.UtcNow.AddYears(100);
@@ -76,7 +76,7 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
         if (!string.IsNullOrWhiteSpace(dto.Role))
         {
             if (!await roles.RoleExistsAsync(dto.Role))
-                return new ServiceResult(Const.FAIL_UPDATE_CODE, "Role not found");
+                return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không tìm thấy vai trò");
             var current = await users.GetRolesAsync(user);
             await users.RemoveFromRolesAsync(user, current);
             await users.AddToRoleAsync(user, dto.Role);
@@ -111,7 +111,7 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
     public async Task<IServiceResult> PatchTicketAsync(Guid id, PatchTicketDto dto)
     {
         var t = await uow.SupportTicketRepository.GetQueryable().FirstOrDefaultAsync(x => x.Id == id);
-        if (t == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Ticket not found");
+        if (t == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy ticket");
         t.Status = dto.Status;
         t.UpdatedAt = DateTime.UtcNow;
         await uow.SaveChangesAsync();
@@ -149,7 +149,7 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
         else
         {
             var e = await uow.FaqRepository.GetQueryable().FirstOrDefaultAsync(x => x.Id == item.Id);
-            if (e == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "FAQ not found");
+            if (e == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy FAQ");
             e.Question = item.Question;
             e.Answer = item.Answer;
             e.Category = item.Category;
@@ -170,7 +170,7 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
         else
         {
             var e = await uow.ResourceRepository.GetQueryable().FirstOrDefaultAsync(x => x.Id == item.Id);
-            if (e == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Resource not found");
+            if (e == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy tài nguyên");
             e.Title = item.Title;
             e.Summary = item.Summary;
             e.Body = item.Body;
@@ -245,7 +245,7 @@ public class B2BService(IUnitOfWork uow, UserManager<UserAccount> users) : IB2BS
     public async Task<IServiceResult> UniversityDashboardAsync(Guid userId)
     {
         var org = await GetOrgAsync(userId, "University");
-        if (org == null) return new ServiceResult(Const.FAIL_READ_CODE, "Not a university admin member");
+        if (org == null) return new ServiceResult(Const.FAIL_READ_CODE, "Không phải thành viên quản trị trường");
 
         var memberIds = await uow.OrganizationMemberRepository.GetQueryable().AsNoTracking()
             .Where(m => m.OrganizationId == org.Id && m.Role == "Member")
@@ -260,14 +260,14 @@ public class B2BService(IUnitOfWork uow, UserManager<UserAccount> users) : IB2BS
             students = memberIds.Count,
             avgReadiness = sessions.Count == 0 ? 0 : Math.Round(sessions.Average(s => s.OverallScore ?? 0), 1),
             sessions = sessions.Count,
-            skillGaps = new[] { "Communication", "STAR Result", "Technical depth" }
+            skillGaps = new[] { "Giao tiếp", "STAR Result", "Chiều sâu kỹ thuật" }
         });
     }
 
     public async Task<IServiceResult> UniversityStudentsAsync(Guid userId)
     {
         var org = await GetOrgAsync(userId, "University");
-        if (org == null) return new ServiceResult(Const.FAIL_READ_CODE, "Not a university admin member");
+        if (org == null) return new ServiceResult(Const.FAIL_READ_CODE, "Không phải thành viên quản trị trường");
 
         var members = await uow.OrganizationMemberRepository.GetQueryable().AsNoTracking()
             .Where(m => m.OrganizationId == org.Id && m.Role == "Member").ToListAsync();
@@ -286,7 +286,7 @@ public class B2BService(IUnitOfWork uow, UserManager<UserAccount> users) : IB2BS
     public async Task<IServiceResult> EnterpriseInsightsAsync(Guid userId)
     {
         var org = await GetOrgAsync(userId, "Enterprise");
-        if (org == null) return new ServiceResult(Const.FAIL_READ_CODE, "Not an enterprise admin member");
+        if (org == null) return new ServiceResult(Const.FAIL_READ_CODE, "Không phải thành viên quản trị doanh nghiệp");
 
         var sessions = await uow.InterviewSessionRepository.GetQueryable().AsNoTracking()
             .Where(s => s.Status == "Completed").ToListAsync();
@@ -300,8 +300,8 @@ public class B2BService(IUnitOfWork uow, UserManager<UserAccount> users) : IB2BS
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new
         {
             organization = org.Name,
-            hotSkills = new[] { "Problem Solving", "Communication", "API Design" },
-            missingSkills = new[] { "System Design", "Leadership" },
+            hotSkills = new[] { "Giải quyết vấn đề", "Giao tiếp", "Thiết kế API" },
+            missingSkills = new[] { "Thiết kế hệ thống", "Lãnh đạo" },
             byIndustry,
             interestedPositions = byPosition
         });

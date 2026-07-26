@@ -18,7 +18,7 @@ public class InterviewController(IInterviewService interviewService) : Controlle
     public async Task<IActionResult> CreateSession([FromBody] CreateInterviewSessionDto dto)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _interviewService.CreateSessionAsync(userId, dto);
         if (result.Status == Const.FAIL_QUOTA_CODE)
@@ -34,7 +34,7 @@ public class InterviewController(IInterviewService interviewService) : Controlle
     public async Task<IActionResult> GetQuestions(Guid id)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _interviewService.GetQuestionsAsync(userId, id);
         return Map(result);
@@ -44,7 +44,7 @@ public class InterviewController(IInterviewService interviewService) : Controlle
     public async Task<IActionResult> SubmitAnswer(Guid id, [FromBody] SubmitAnswerDto dto)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _interviewService.SubmitAnswerAsync(userId, id, dto);
         return Map(result);
@@ -54,7 +54,7 @@ public class InterviewController(IInterviewService interviewService) : Controlle
     public async Task<IActionResult> Complete(Guid id)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _interviewService.CompleteAsync(userId, id);
         return Map(result);
@@ -64,7 +64,7 @@ public class InterviewController(IInterviewService interviewService) : Controlle
     public async Task<IActionResult> History()
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _interviewService.GetHistoryAsync(userId);
         return Ok(new { data = result.Data, message = result.Message });
@@ -74,7 +74,7 @@ public class InterviewController(IInterviewService interviewService) : Controlle
     public async Task<IActionResult> Detail(Guid id)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _interviewService.GetDetailAsync(userId, id);
         return Map(result);
@@ -84,7 +84,7 @@ public class InterviewController(IInterviewService interviewService) : Controlle
     public async Task<IActionResult> Suggested([FromBody] Common.DTOs.PublicDto.SuggestedAnswerDto dto)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
         return Map(await _interviewService.SuggestedAnswerAsync(userId, dto));
     }
 
@@ -93,7 +93,7 @@ public class InterviewController(IInterviewService interviewService) : Controlle
     public async Task<IActionResult> Voice(Guid id, IFormFile file)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
         await using var stream = file.OpenReadStream();
         return Map(await _interviewService.UploadVoiceAsync(userId, id, stream, file.FileName));
     }

@@ -21,7 +21,7 @@ public class OnboardingService(
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         var profile = await GetOrCreateProfileAsync(userId);
         profile.DesiredIndustry = dto.DesiredIndustry;
@@ -37,7 +37,7 @@ public class OnboardingService(
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         user.FullName = dto.FullName;
         user.UpdatedAt = DateTime.UtcNow;
@@ -57,7 +57,7 @@ public class OnboardingService(
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         var profile = await _unitOfWork.CareerProfileRepository.GetQueryable()
             .FirstOrDefaultAsync(p => p.UserId == userId);
@@ -68,14 +68,14 @@ public class OnboardingService(
             || string.IsNullOrWhiteSpace(profile.University)
             || string.IsNullOrWhiteSpace(user.FullName))
         {
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Complete goal and personal steps before confirm");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Vui lòng hoàn thành bước mục tiêu và thông tin cá nhân trước khi xác nhận");
         }
 
         user.OnboardingCompleted = true;
         user.UpdatedAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Onboarding completed", MapProfile(user, profile));
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Hoàn thành onboarding", MapProfile(user, profile));
     }
 
     private async Task<CareerProfile> GetOrCreateProfileAsync(Guid userId)
@@ -125,7 +125,7 @@ public class ProfileService(
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         var profile = await _unitOfWork.CareerProfileRepository.GetQueryable()
             .AsNoTracking()
@@ -139,7 +139,7 @@ public class ProfileService(
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         user.FullName = dto.FullName;
         user.UpdatedAt = DateTime.UtcNow;

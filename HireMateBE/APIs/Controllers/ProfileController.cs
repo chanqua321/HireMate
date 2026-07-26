@@ -18,7 +18,7 @@ public class ProfileController(IProfileService profileService) : ControllerBase
     public async Task<IActionResult> Get()
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _profileService.GetAsync(userId);
         if (result.Status == Const.WARNING_NO_DATA_CODE)
@@ -30,7 +30,7 @@ public class ProfileController(IProfileService profileService) : ControllerBase
     public async Task<IActionResult> Update([FromBody] UpdateProfileDto dto)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _profileService.UpdateAsync(userId, dto);
         if (result.Status == Const.WARNING_NO_DATA_CODE)

@@ -1,7 +1,10 @@
 using Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Data;
 
@@ -12,8 +15,9 @@ public static class DbSeeder
         using var scope = services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<HireMateContext>();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
+        var logger = scope.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("DbSeeder");
 
-        await context.Database.MigrateAsync();
+        await EnsureDatabaseCreatedAndMigratedAsync(context, logger);
 
         await EnsureRoleAsync(roleManager, "User", "Default HireMate user");
         await EnsureRoleAsync(roleManager, "Admin", "System administrator");
@@ -23,6 +27,47 @@ public static class DbSeeder
         await SeedCmsAndPlansAsync(context);
         await SeedBadgesAsync(context);
         await SeedAdminAndOrgsAsync(scope.ServiceProvider);
+    }
+
+    /// <summary>
+    /// Tạo database nếu chưa có, rồi apply toàn bộ EF migrations. Retry khi SQL Server/LocalDB chưa sẵn sàng.
+    /// </summary>
+    private static async Task EnsureDatabaseCreatedAndMigratedAsync(HireMateContext context, ILogger? logger)
+    {
+        const int maxAttempts = 8;
+        Exception? last = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var creator = context.Database.GetService<IRelationalDatabaseCreator>();
+                var existed = await creator.ExistsAsync();
+
+                // MigrateAsync: tạo DB nếu chưa có + cập nhật schema theo migrations
+                await context.Database.MigrateAsync();
+
+                logger?.LogInformation(
+                    existed
+                        ? "Database ready (created if missing + migrations applied)."
+                        : "Database was missing — auto-created and migrated.");
+
+                return;
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                logger?.LogWarning(ex,
+                    "Ensure database attempt {Attempt}/{Max} failed. Retrying...",
+                    attempt, maxAttempts);
+                if (attempt < maxAttempts)
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(2 * attempt, 10)));
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Cannot create/migrate HireMate database. Check ConnectionStrings:DefaultConnection and that SQL Server/LocalDB is running.",
+            last);
     }
 
     private static async Task EnsureRoleAsync(RoleManager<Role> roleManager, string name, string description)
@@ -147,8 +192,8 @@ public static class DbSeeder
         if (!await context.SubscriptionPlans.AnyAsync())
         {
             await context.SubscriptionPlans.AddRangeAsync(
-                new SubscriptionPlan { Id = Guid.NewGuid(), Code = "free", Name = "Free", PriceVnd = 0, DurationDays = 3650, Description = "3 phiên/tháng, Text only" },
-                new SubscriptionPlan { Id = Guid.NewGuid(), Code = "premium", Name = "Premium", PriceVnd = 79000, DurationDays = 30, Description = "Unlimited + Voice + full feedback" },
+                new SubscriptionPlan { Id = Guid.NewGuid(), Code = "free", Name = "Free", PriceVnd = 0, DurationDays = 3650, Description = "3 phiên/tháng, chỉ văn bản" },
+                new SubscriptionPlan { Id = Guid.NewGuid(), Code = "premium", Name = "Premium", PriceVnd = 79000, DurationDays = 30, Description = "Không giới hạn + Voice + phản hồi đầy đủ" },
                 new SubscriptionPlan { Id = Guid.NewGuid(), Code = "combo", Name = "Combo 2 tháng", PriceVnd = 149000, DurationDays = 60, Description = "Premium 2 tháng" });
         }
 
@@ -171,10 +216,10 @@ public static class DbSeeder
     {
         if (await context.Badges.AnyAsync()) return;
         await context.Badges.AddRangeAsync(
-            new Badge { Id = Guid.NewGuid(), Code = "first_interview", Name = "First Interview", Description = "Hoàn thành phiên đầu tiên" },
-            new Badge { Id = Guid.NewGuid(), Code = "ten_sessions", Name = "10 Sessions", Description = "Hoàn thành 10 phiên" },
+            new Badge { Id = Guid.NewGuid(), Code = "first_interview", Name = "Phỏng vấn đầu tiên", Description = "Hoàn thành phiên đầu tiên" },
+            new Badge { Id = Guid.NewGuid(), Code = "ten_sessions", Name = "10 phiên luyện", Description = "Hoàn thành 10 phiên" },
             new Badge { Id = Guid.NewGuid(), Code = "top_performer", Name = "Top Performer", Description = "Đạt >= 85 điểm" },
-            new Badge { Id = Guid.NewGuid(), Code = "streak_7", Name = "Streak 7", Description = "Luyện 7 ngày liên tiếp" });
+            new Badge { Id = Guid.NewGuid(), Code = "streak_7", Name = "Chuỗi 7 ngày", Description = "Luyện 7 ngày liên tiếp" });
         await context.SaveChangesAsync();
     }
 

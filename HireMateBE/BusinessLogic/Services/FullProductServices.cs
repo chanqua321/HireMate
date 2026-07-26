@@ -19,7 +19,7 @@ public class PublicContentService(IUnitOfWork uow) : IPublicContentService
     {
         var exists = await uow.WaitlistRepository.GetQueryable().AnyAsync(x => x.Email == dto.Email);
         if (exists)
-            return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Already on waitlist");
+            return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Bạn đã có trong danh sách chờ");
 
         await uow.WaitlistRepository.CreateAsync(new WaitlistEntry
         {
@@ -29,7 +29,7 @@ public class PublicContentService(IUnitOfWork uow) : IPublicContentService
             University = dto.University
         });
         await uow.SaveChangesAsync();
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Joined waitlist");
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Đã tham gia danh sách chờ");
     }
 
     public async Task<IServiceResult> ContactAsync(ContactDto dto)
@@ -43,7 +43,7 @@ public class PublicContentService(IUnitOfWork uow) : IPublicContentService
             Body = dto.Body
         });
         await uow.SaveChangesAsync();
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Message received");
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Đã nhận tin nhắn");
     }
 
     public async Task<IServiceResult> GetPageAsync(string slug)
@@ -51,7 +51,7 @@ public class PublicContentService(IUnitOfWork uow) : IPublicContentService
         var page = await uow.ContentPageRepository.GetQueryable().AsNoTracking()
             .FirstOrDefaultAsync(p => p.Slug == slug && p.IsPublished);
         return page == null
-            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Page not found")
+            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy trang")
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, page);
     }
 
@@ -67,7 +67,7 @@ public class PublicContentService(IUnitOfWork uow) : IPublicContentService
         var post = await uow.BlogPostRepository.GetQueryable().AsNoTracking()
             .FirstOrDefaultAsync(b => b.Slug == slug && b.IsPublished);
         return post == null
-            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Post not found")
+            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy bài viết")
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, post);
     }
 
@@ -89,7 +89,7 @@ public class PublicContentService(IUnitOfWork uow) : IPublicContentService
             Status = "Open"
         });
         await uow.SaveChangesAsync();
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Ticket created");
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Đã tạo ticket hỗ trợ");
     }
 }
 
@@ -98,7 +98,7 @@ public class CvService(IUnitOfWork uow, IAiClient ai) : ICvService
     public async Task<IServiceResult> UploadAsync(Guid userId, IFormFile file, string webRoot)
     {
         if (file.Length == 0)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Empty file");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "File trống");
 
         var dir = Path.Combine(webRoot, "uploads", "cv", userId.ToString());
         Directory.CreateDirectory(dir);
@@ -152,7 +152,7 @@ public class CvService(IUnitOfWork uow, IAiClient ai) : ICvService
         var doc = await uow.CvDocumentRepository.GetQueryable().AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId);
         return doc == null
-            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "CV not found")
+            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy CV")
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, Map(doc));
     }
 
@@ -161,7 +161,7 @@ public class CvService(IUnitOfWork uow, IAiClient ai) : ICvService
         var doc = await uow.CvDocumentRepository.GetQueryable()
             .FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId);
         if (doc == null)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "CV not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy CV");
 
         var aiResult = await ai.CompleteAsync(
             "You are a CV ATS analyzer. Return JSON only.",
@@ -197,7 +197,7 @@ public class CvService(IUnitOfWork uow, IAiClient ai) : ICvService
             PayloadJson = JsonSerializer.Serialize(new { doc.FormatScore, doc.KeywordsScore })
         });
         await uow.SaveChangesAsync();
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "CV analyzed", Map(doc));
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đã phân tích CV", Map(doc));
     }
 
     private static object Map(CvDocument d) => new
@@ -261,7 +261,7 @@ public class MatchService(IUnitOfWork uow, IAiClient ai) : IMatchService
         var row = await uow.JdMatchRepository.GetQueryable().AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
         return row == null
-            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Not found")
+            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy")
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, row);
     }
 }
@@ -338,7 +338,7 @@ public class CareerOsService(IUnitOfWork uow, UserManager<UserAccount> users, IA
             interviewScore,
             cvScore,
             matchScore,
-            readiness = careerScore >= 75 ? "Ready" : careerScore >= 55 ? "Almost" : "Building"
+            readiness = careerScore >= 75 ? "Sẵn sàng" : careerScore >= 55 ? "Gần đạt" : "Đang xây dựng"
         });
     }
 
@@ -384,7 +384,7 @@ public class CareerOsService(IUnitOfWork uow, UserManager<UserAccount> users, IA
         var item = await uow.ResourceRepository.GetQueryable().AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == id && r.IsPublished);
         return item == null
-            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Not found")
+            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy")
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, item);
     }
 
@@ -416,11 +416,11 @@ public class BillingService(
     public async Task<IServiceResult> CheckoutAsync(Guid userId, CheckoutDto dto, string? clientIp)
     {
         var user = await users.FindByIdAsync(userId.ToString());
-        if (user == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+        if (user == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         var plan = await uow.PlanRepository.GetQueryable()
             .FirstOrDefaultAsync(p => p.Code == dto.PlanCode && p.IsActive);
-        if (plan == null) return new ServiceResult(Const.FAIL_CREATE_CODE, "Plan not found");
+        if (plan == null) return new ServiceResult(Const.FAIL_CREATE_CODE, "Không tìm thấy gói");
 
         decimal amount = plan.PriceVnd;
         if (!string.IsNullOrWhiteSpace(dto.PromoCode))
@@ -446,7 +446,7 @@ public class BillingService(
     private async Task<IServiceResult> CheckoutPayOsAsync(UserAccount user, Guid userId, SubscriptionPlan plan, decimal amount)
     {
         if (!_payOs.Enabled)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "PayOS is not configured. Set PayOS:Enabled + ClientId + ApiKey + ChecksumKey, or use PaymentMethod=Mock.");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "PayOS chưa được cấu hình. Thiết lập PayOS:Enabled + ClientId + ApiKey + ChecksumKey, hoặc dùng PaymentMethod=Mock.");
 
         var orderCode = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 900_000_000_000L + Random.Shared.Next(1, 999);
         var invoice = new Invoice
@@ -473,9 +473,9 @@ public class BillingService(
 
         var created = await _payOsClient.CreatePaymentLinkAsync(orderCode, (int)amount, "HireMate");
         if (!created.Ok || string.IsNullOrWhiteSpace(created.CheckoutUrl))
-            return new ServiceResult(Const.FAIL_CREATE_CODE, created.Error ?? "PayOS create payment failed");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, created.Error ?? "Tạo thanh toán PayOS thất bại");
 
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Redirect to PayOS", new
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Chuyển hướng tới PayOS", new
         {
             invoice.Id,
             invoice.InvoiceNumber,
@@ -494,7 +494,7 @@ public class BillingService(
     private async Task<IServiceResult> CheckoutVnPayAsync(UserAccount user, Guid userId, SubscriptionPlan plan, decimal amount, string? clientIp)
     {
         if (!_vnPay.Enabled || string.IsNullOrWhiteSpace(_vnPay.TmnCode) || string.IsNullOrWhiteSpace(_vnPay.HashSecret))
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "VNPay is not configured. Set VnPay:Enabled + TmnCode + HashSecret, or use PaymentMethod=Mock.");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "VNPay chưa được cấu hình. Thiết lập VnPay:Enabled + TmnCode + HashSecret, hoặc dùng PaymentMethod=Mock.");
 
         var invoice = new Invoice
         {
@@ -522,7 +522,7 @@ public class BillingService(
         var paymentUrl = BusinessLogic.Payments.VnPayHelper.BuildPaymentUrl(
             _vnPay, txnRef, (long)amount, $"HireMate {plan.Code} {invoice.InvoiceNumber}", clientIp ?? "127.0.0.1", DateTime.UtcNow);
 
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Redirect to VNPay", new
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Chuyển hướng tới VNPay", new
         {
             invoice.Id,
             invoice.InvoiceNumber,
@@ -564,7 +564,7 @@ public class BillingService(
         await users.UpdateAsync(user);
         await uow.SaveChangesAsync();
 
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Checkout success", new
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Thanh toán thành công", new
         {
             mockInvoice.Id,
             mockInvoice.InvoiceNumber,
@@ -579,16 +579,16 @@ public class BillingService(
     public async Task<IServiceResult> HandlePayOsWebhookAsync(string jsonBody)
     {
         if (!_payOs.Enabled)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "PayOS disabled");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "PayOS đang tắt");
 
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(jsonBody) ? "{}" : jsonBody);
         var root = doc.RootElement;
         var signature = root.TryGetProperty("signature", out var sig) ? sig.GetString() ?? "" : "";
         if (!root.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Invalid PayOS webhook");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Webhook PayOS không hợp lệ");
 
         if (!BusinessLogic.Payments.PayOsHelper.VerifyWebhookSignature(data, signature, _payOs.ChecksumKey))
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Invalid PayOS signature");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Chữ ký PayOS không hợp lệ");
 
         var orderCode = data.TryGetProperty("orderCode", out var oc)
             ? (oc.ValueKind == JsonValueKind.Number ? oc.GetInt64().ToString() : oc.GetString())
@@ -600,10 +600,10 @@ public class BillingService(
             .FirstOrDefaultAsync(p => p.TransactionRef == orderCode && p.Provider == "PayOS");
 
         if (payment?.Invoice == null)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Order not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy đơn hàng");
 
         if (payment.Status == "Success" && payment.Invoice.Status == "Paid")
-            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Already paid", new { success = true });
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đơn hàng đã được thanh toán", new { success = true });
 
         if (code == "00" || (root.TryGetProperty("success", out var ok) && ok.ValueKind == JsonValueKind.True))
         {
@@ -618,13 +618,13 @@ public class BillingService(
                 await users.UpdateAsync(user);
             }
             await uow.SaveChangesAsync();
-            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Payment success", new { success = true });
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Thanh toán thành công", new { success = true });
         }
 
         payment.Status = "Failed";
         payment.Invoice.Status = "Failed";
         await uow.SaveChangesAsync();
-        return new ServiceResult(Const.FAIL_UPDATE_CODE, "Payment failed", new { success = false });
+        return new ServiceResult(Const.FAIL_UPDATE_CODE, "Thanh toán thất bại", new { success = false });
     }
 
     public async Task<IServiceResult> HandleVnPayReturnAsync(IDictionary<string, string> query)
@@ -636,10 +636,10 @@ public class BillingService(
     private async Task<IServiceResult> FinalizeVnPayAsync(IDictionary<string, string> query, bool isIpn)
     {
         if (!_vnPay.Enabled)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "VNPay disabled");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "VNPay đang tắt");
 
         if (!BusinessLogic.Payments.VnPayHelper.ValidateSignature(query, _vnPay.HashSecret))
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Invalid VNPay signature", new { RspCode = "97", Message = "Invalid signature" });
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Chữ ký VNPay không hợp lệ", new { RspCode = "97", Message = "Chữ ký không hợp lệ" });
 
         query.TryGetValue("vnp_TxnRef", out var txnRef);
         query.TryGetValue("vnp_ResponseCode", out var responseCode);
@@ -649,11 +649,11 @@ public class BillingService(
             .FirstOrDefaultAsync(p => p.TransactionRef == txnRef && p.Provider == "VNPay");
 
         if (payment?.Invoice == null)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Payment not found", new { RspCode = "01", Message = "Order not found" });
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy thanh toán", new { RspCode = "01", Message = "Không tìm thấy đơn hàng" });
 
         if (payment.Status == "Success" && payment.Invoice.Status == "Paid")
         {
-            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Already paid", new
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đơn hàng đã được thanh toán", new
             {
                 RspCode = "00",
                 Message = "Confirm Success",
@@ -677,7 +677,7 @@ public class BillingService(
             }
             await uow.SaveChangesAsync();
 
-            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Payment success", new
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Thanh toán thành công", new
             {
                 RspCode = "00",
                 Message = "Confirm Success",
@@ -690,7 +690,7 @@ public class BillingService(
         payment.Status = "Failed";
         payment.Invoice.Status = "Failed";
         await uow.SaveChangesAsync();
-        return new ServiceResult(Const.FAIL_UPDATE_CODE, "Payment failed", new
+        return new ServiceResult(Const.FAIL_UPDATE_CODE, "Thanh toán thất bại", new
         {
             RspCode = "00",
             Message = "Confirm Success",
@@ -712,7 +712,7 @@ public class BillingService(
             .Include(i => i.Plan)
             .FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId);
         return inv == null
-            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Invoice not found")
+            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy hóa đơn")
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, inv);
     }
 }
@@ -746,12 +746,12 @@ public class GrowthService(IUnitOfWork uow, UserManager<UserAccount> users) : IG
         var refCode = await uow.ReferralCodeRepository.GetQueryable()
             .FirstOrDefaultAsync(r => r.Code == dto.Code);
         if (refCode == null || refCode.UserId == userId)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Invalid referral code");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Mã giới thiệu không hợp lệ");
 
         var already = await uow.ReferralInviteRepository.GetQueryable()
             .AnyAsync(i => i.InviteeUserId == userId);
         if (already)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Referral already applied");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Mã giới thiệu đã được áp dụng");
 
         await uow.ReferralInviteRepository.CreateAsync(new ReferralInvite
         {
@@ -762,7 +762,7 @@ public class GrowthService(IUnitOfWork uow, UserManager<UserAccount> users) : IG
         });
         refCode.InviteCount++;
         await uow.SaveChangesAsync();
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Referral applied");
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Áp dụng mã giới thiệu thành công");
     }
 
     public async Task<IServiceResult> GetBadgesAsync(Guid userId)

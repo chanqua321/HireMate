@@ -51,7 +51,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     public async Task<IActionResult> LoginGoogle([FromBody] GoogleLoginDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.IdToken))
-            return BadRequest(new { message = "IdToken is required" });
+            return BadRequest(new { message = "IdToken là bắt buộc" });
 
         var result = await _authService.LoginWithGoogleAsync(dto.IdToken, HttpContext.Connection.RemoteIpAddress?.ToString());
         if (result.Status == Const.FAIL_READ_CODE || result.Status == Const.FAIL_CREATE_CODE)
@@ -65,7 +65,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     public async Task<IActionResult> Refresh([FromBody] RefreshRequestDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.RefreshToken))
-            return BadRequest(new { message = "RefreshToken is required" });
+            return BadRequest(new { message = "RefreshToken là bắt buộc" });
 
         var result = await _authService.RefreshAsync(dto.RefreshToken, HttpContext.Connection.RemoteIpAddress?.ToString());
         if (result.Status == Const.FAIL_READ_CODE)
@@ -92,7 +92,7 @@ public class AuthController(IAuthService authService) : ControllerBase
         var html = $"""
             <!DOCTYPE html><html><head><meta charset="utf-8"><title>HireMate</title></head>
             <body style="font-family:sans-serif;max-width:520px;margin:40px auto;">
-              <h1>{(ok ? "Email confirmed" : "Confirmation failed")}</h1>
+              <h1>{(ok ? "Email đã được xác nhận" : "Xác nhận thất bại")}</h1>
               <p>{System.Net.WebUtility.HtmlEncode(result.Message)}</p>
               <p><a href="/swagger">Back to Swagger</a></p>
             </body></html>
@@ -148,7 +148,7 @@ public class AuthController(IAuthService authService) : ControllerBase
             ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _authService.GetMeAsync(userId);
 

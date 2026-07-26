@@ -18,7 +18,7 @@ public class OnboardingController(IOnboardingService onboardingService) : Contro
     public async Task<IActionResult> SaveGoal([FromBody] OnboardingGoalDto dto)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _onboardingService.SaveGoalAsync(userId, dto);
         return Map(result);
@@ -28,7 +28,7 @@ public class OnboardingController(IOnboardingService onboardingService) : Contro
     public async Task<IActionResult> SavePersonal([FromBody] OnboardingPersonalDto dto)
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _onboardingService.SavePersonalAsync(userId, dto);
         return Map(result);
@@ -38,7 +38,7 @@ public class OnboardingController(IOnboardingService onboardingService) : Contro
     public async Task<IActionResult> Confirm()
     {
         if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _onboardingService.ConfirmAsync(userId);
         return Map(result);

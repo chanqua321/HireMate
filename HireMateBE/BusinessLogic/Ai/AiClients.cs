@@ -241,7 +241,7 @@ public class HeuristicAiClient : IAiClient
                     new { title = "Junior", focus = "Làm việc nhóm, ownership feature nhỏ" },
                     new { title = "Mid", focus = "Thiết kế hệ thống, mentor junior" }
                 },
-                skillsToLearn = new[] { "System design", "Testing", "Communication" }
+                skillsToLearn = new[] { "Thiết kế hệ thống", "Kiểm thử", "Giao tiếp" }
             });
         }
         else if (lower.Contains("learning") || lower.Contains("học"))
@@ -250,9 +250,9 @@ public class HeuristicAiClient : IAiClient
             {
                 courses = new[]
                 {
-                    new { title = "STAR Interview Mastery", type = "Course", hours = 4 },
-                    new { title = "ATS CV Workshop", type = "Workshop", hours = 2 },
-                    new { title = "Project: Build a portfolio app", type = "Project", hours = 20 }
+                    new { title = "Làm chủ phỏng vấn STAR", type = "Khóa học", hours = 4 },
+                    new { title = "Workshop CV chuẩn ATS", type = "Workshop", hours = 2 },
+                    new { title = "Dự án: Xây dựng app portfolio", type = "Dự án", hours = 20 }
                 }
             });
         }

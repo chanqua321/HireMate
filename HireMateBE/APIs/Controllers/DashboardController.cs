@@ -18,7 +18,7 @@ public class DashboardController(IDashboardService dashboardService) : Controlle
     {
         var claim = User.FindFirstValue("userId") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(claim) || !Guid.TryParse(claim, out var userId))
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { message = "Token không hợp lệ" });
 
         var result = await _dashboardService.GetAsync(userId);
         if (result.Status == Const.WARNING_NO_DATA_CODE)

@@ -100,6 +100,7 @@ builder.Services.AddIdentity<UserAccount, Role>(options =>
     options.User.RequireUniqueEmail = true;
 })
 .AddEntityFrameworkStores<HireMateContext>()
+.AddErrorDescriber<VietnameseIdentityErrorDescriber>()
 .AddDefaultTokenProviders();
 
 builder.Services.AddAuthentication(options =>
@@ -208,15 +209,14 @@ var app = builder.Build();
 Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "wwwroot", "uploads", "cv"));
 await DbSeeder.SeedAsync(app.Services);
 
-if (!app.Environment.IsProduction() || builder.Configuration.GetValue("Swagger:Enabled", false))
+if (builder.Configuration.GetValue("Swagger:Enabled", true))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
 app.UseStaticFiles();
-if (!app.Environment.IsDevelopment())
-    app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 app.UseCors("AllowConfigured");
 app.UseRateLimiter();
 app.UseAuthentication();

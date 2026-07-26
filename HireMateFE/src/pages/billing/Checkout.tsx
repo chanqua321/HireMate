@@ -162,7 +162,7 @@ export const Checkout: React.FC = () => {
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="MM/YY"
+                        placeholder="MM/YY (tháng/năm)"
                         value={expiry}
                         onChange={(e) => setExpiry(e.target.value)}
                         required

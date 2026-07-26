@@ -26,13 +26,13 @@ public class InterviewService(
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         if (!user.OnboardingCompleted)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Complete onboarding before starting an interview");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Vui lòng hoàn thành onboarding trước khi bắt đầu phỏng vấn");
 
         if (dto.Mode.Equals("Voice", StringComparison.OrdinalIgnoreCase) && !user.IsPremium)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Voice mode requires Premium");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Chế độ giọng nói yêu cầu gói Premium");
 
         if (!user.IsPremium)
         {
@@ -64,10 +64,10 @@ public class InterviewService(
     {
         var session = await GetOwnedSessionAsync(userId, sessionId);
         if (session == null)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Session not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
 
         if (session.Status is "Completed" or "Abandoned")
-            return new ServiceResult(Const.FAIL_READ_CODE, "Session already finished");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Phiên phỏng vấn đã kết thúc");
 
         var existing = await _unitOfWork.InterviewAnswerRepository.GetQueryable()
             .AsNoTracking()
@@ -90,7 +90,7 @@ public class InterviewService(
 
         var picked = await PickQuestionsAsync(session.Industry, session.Position, session.Difficulty, session.QuestionCount);
         if (picked.Count == 0)
-            return new ServiceResult(Const.FAIL_READ_CODE, "No questions available in bank");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Ngân hàng câu hỏi hiện không có dữ liệu");
 
         var result = new List<InterviewQuestionDto>();
         for (var i = 0; i < picked.Count; i++)
@@ -128,10 +128,10 @@ public class InterviewService(
     {
         var session = await GetOwnedSessionAsync(userId, sessionId);
         if (session == null)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Session not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
 
         if (session.Status is "Completed" or "Abandoned")
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Session already finished");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Phiên phỏng vấn đã kết thúc");
 
         if (session.Status == "Setup")
             session.Status = "InProgress";
@@ -172,14 +172,14 @@ public class InterviewService(
     {
         var session = await GetOwnedSessionAsync(userId, sessionId, includeAnswers: true);
         if (session == null)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Session not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
 
         if (session.Status == "Completed")
-            return new ServiceResult(Const.SUCCESS_READ_CODE, "Already completed", MapDetail(session));
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã hoàn thành", MapDetail(session));
 
         var answers = session.Answers.OrderBy(a => a.OrderIndex).ToList();
         if (answers.Count == 0)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "No answers to score");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Chưa có câu trả lời để chấm điểm");
 
         var score = StarHeuristicScorer.Score(answers);
         session.OverallScore = score.Overall;
@@ -214,7 +214,7 @@ public class InterviewService(
         await _unitOfWork.CareerMemoryEventRepository.CreateAsync(memory);
         await _unitOfWork.SaveChangesAsync();
 
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Interview completed", MapDetail(session));
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Hoàn thành phỏng vấn", MapDetail(session));
     }
 
     public async Task<IServiceResult> GetHistoryAsync(Guid userId)
@@ -234,7 +234,7 @@ public class InterviewService(
     {
         var session = await GetOwnedSessionAsync(userId, sessionId, includeAnswers: true, asNoTracking: true);
         if (session == null)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Session not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
 
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, MapDetail(session));
     }
@@ -256,15 +256,15 @@ public class InterviewService(
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || !user.IsPremium)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Voice upload requires Premium");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Tải lên giọng nói yêu cầu gói Premium");
 
         var session = await GetOwnedSessionAsync(userId, sessionId);
         if (session == null)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Session not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
 
         // Stub transcript until local STT is wired
         var transcript = $"[Voice stub transcript from {fileName}] Em đã phân tích tình huống, thực hiện hành động và đạt kết quả đo được.";
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Voice received (stub transcript)", new
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Đã nhận giọng nói (bản ghi tạm)", new
         {
             sessionId,
             fileName,

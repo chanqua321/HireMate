@@ -42,7 +42,7 @@ public class AuthService(
     {
         var existing = await _userManager.FindByEmailAsync(dto.Email);
         if (existing != null)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Email already registered");
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Email đã được đăng ký");
 
         var user = new UserAccount
         {
@@ -62,7 +62,7 @@ public class AuthService(
 
         var roleResult = await _userManager.AddToRoleAsync(user, "User");
         if (!roleResult.Succeeded)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Failed to assign role", roleResult.Errors.Select(e => e.Description).ToList());
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Gán vai trò thất bại", roleResult.Errors.Select(e => e.Description).ToList());
 
         var confirmLink = await SendConfirmEmailAsync(user);
 
@@ -70,27 +70,27 @@ public class AuthService(
         {
             ["email"] = user.Email,
             ["emailConfirmed"] = false,
-            ["message"] = "Check your inbox to confirm email before login."
+            ["message"] = "Vui lòng kiểm tra hộp thư để xác nhận email trước khi đăng nhập."
         };
         if (ExposeDevTokens)
             data["confirmLinkDev"] = confirmLink;
 
         return new ServiceResult(Const.SUCCESS_CREATE_CODE,
-            "Registered. Please confirm your email before logging in.", data);
+            "Đăng ký thành công. Vui lòng xác nhận email trước khi đăng nhập.", data);
     }
 
     public async Task<IServiceResult> LoginAsync(LoginDto dto)
     {
         var user = await _userManager.FindByEmailAsync(dto.Email);
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Invalid email or password");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Email hoặc mật khẩu không đúng");
 
         if (!user.EmailConfirmed)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Email not confirmed. Please check your inbox or resend confirmation.");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Email chưa được xác nhận. Vui lòng kiểm tra hộp thư hoặc gửi lại email xác nhận.");
 
         var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Invalid email or password");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Email hoặc mật khẩu không đúng");
 
         user.LastLogin = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
@@ -104,7 +104,7 @@ public class AuthService(
     {
         var clientId = _configuration["Authentication:Google:ClientId"];
         if (string.IsNullOrWhiteSpace(clientId))
-            return new ServiceResult(Const.FAIL_READ_CODE, "Google login is not configured. Set Authentication:Google:ClientId.");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Đăng nhập Google chưa được cấu hình. Vui lòng thiết lập Authentication:Google:ClientId.");
 
         GoogleJsonWebSignature.Payload payload;
         try
@@ -116,12 +116,12 @@ public class AuthService(
         }
         catch (Exception)
         {
-            return new ServiceResult(Const.FAIL_READ_CODE, "Invalid Google idToken");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Mã Google idToken không hợp lệ");
         }
 
         var email = payload.Email;
         if (string.IsNullOrWhiteSpace(email))
-            return new ServiceResult(Const.FAIL_READ_CODE, "Google account has no email");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Tài khoản Google không có email");
 
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null)
@@ -139,13 +139,13 @@ public class AuthService(
             };
             var create = await _userManager.CreateAsync(user);
             if (!create.Succeeded)
-                return new ServiceResult(Const.FAIL_CREATE_CODE, "Cannot create user from Google", create.Errors.Select(e => e.Description).ToList());
+                return new ServiceResult(Const.FAIL_CREATE_CODE, "Không thể tạo tài khoản từ Google", create.Errors.Select(e => e.Description).ToList());
 
             await _userManager.AddToRoleAsync(user, "User");
         }
         else if (user.IsDeleted)
         {
-            return new ServiceResult(Const.FAIL_READ_CODE, "Account disabled");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Tài khoản đã bị vô hiệu hóa");
         }
         else if (!user.EmailConfirmed && payload.EmailVerified)
         {
@@ -154,14 +154,14 @@ public class AuthService(
         }
 
         if (!user.EmailConfirmed)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Email not confirmed");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Email chưa được xác nhận");
 
         user.LastLogin = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
         var auth = await IssueTokensAsync(user, ip);
-        return new ServiceResult(Const.SUCCESS_LOGIN_CODE, "Login Google success", auth);
+        return new ServiceResult(Const.SUCCESS_LOGIN_CODE, "Đăng nhập Google thành công", auth);
     }
 
     public async Task<IServiceResult> RefreshAsync(string refreshToken, string? ip)
@@ -170,18 +170,18 @@ public class AuthService(
             .FirstOrDefaultAsync(t => t.Token == refreshToken);
 
         if (existing == null || !existing.IsActive)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Invalid or expired refresh token");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Refresh token không hợp lệ hoặc đã hết hạn");
 
         var user = await _userManager.FindByIdAsync(existing.UserId.ToString());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.FAIL_READ_CODE, "User not found");
+            return new ServiceResult(Const.FAIL_READ_CODE, "Không tìm thấy người dùng");
 
         existing.RevokedAt = DateTime.UtcNow;
         var auth = await IssueTokensAsync(user, ip);
         existing.ReplacedByToken = auth.RefreshToken;
         await _unitOfWork.SaveChangesAsync();
 
-        return new ServiceResult(Const.SUCCESS_READ_CODE, "Token refreshed", auth);
+        return new ServiceResult(Const.SUCCESS_READ_CODE, "Làm mới token thành công", auth);
     }
 
     public async Task<IServiceResult> LogoutAsync(string refreshToken)
@@ -193,7 +193,7 @@ public class AuthService(
             existing.RevokedAt = DateTime.UtcNow;
             await _unitOfWork.SaveChangesAsync();
         }
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Logged out");
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đăng xuất thành công");
     }
 
     public async Task<IServiceResult> GetMeAsync(Guid userId)
@@ -218,42 +218,42 @@ public class AuthService(
     {
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         if (user.EmailConfirmed)
-            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Email already confirmed");
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Email đã được xác nhận");
 
         var result = await _userManager.ConfirmEmailAsync(user, token);
         if (!result.Succeeded)
             result = await _userManager.ConfirmEmailAsync(user, Uri.UnescapeDataString(token));
 
         if (!result.Succeeded)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Invalid or expired confirmation token",
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mã xác nhận không hợp lệ hoặc đã hết hạn",
                 result.Errors.Select(e => e.Description).ToList());
 
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Email confirmed successfully. You can log in now.");
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Xác nhận email thành công. Bạn có thể đăng nhập ngay.");
     }
 
     public async Task<IServiceResult> ResendConfirmEmailAsync(string email)
     {
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.SUCCESS_READ_CODE, "If the email exists, a confirmation link was sent.");
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Nếu email tồn tại, liên kết xác nhận đã được gửi.");
 
         if (user.EmailConfirmed)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Email already confirmed");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Email đã được xác nhận");
 
         var link = await SendConfirmEmailAsync(user);
         if (ExposeDevTokens)
-            return new ServiceResult(Const.SUCCESS_READ_CODE, "Confirmation email sent.", new { confirmLinkDev = link });
-        return new ServiceResult(Const.SUCCESS_READ_CODE, "Confirmation email sent.");
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi email xác nhận.", new { confirmLinkDev = link });
+        return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi email xác nhận.");
     }
 
     public async Task<IServiceResult> ForgotPasswordAsync(string email)
     {
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.SUCCESS_READ_CODE, "If the email exists, a reset link was sent.");
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Nếu email tồn tại, liên kết đặt lại mật khẩu đã được gửi.");
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var encoded = Uri.EscapeDataString(token);
@@ -277,24 +277,24 @@ public class AuthService(
         await _emailService.SendAsync(user.Email!, "HireMate — Đặt lại mật khẩu", html);
 
         if (ExposeDevTokens)
-            return new ServiceResult(Const.SUCCESS_READ_CODE, "If the email exists, a reset link was sent.",
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Nếu email tồn tại, liên kết đặt lại mật khẩu đã được gửi.",
                 new { email = user.Email, resetToken = token, resetLink = resetFrontLink });
 
-        return new ServiceResult(Const.SUCCESS_READ_CODE, "If the email exists, a reset link was sent.");
+        return new ServiceResult(Const.SUCCESS_READ_CODE, "Nếu email tồn tại, liên kết đặt lại mật khẩu đã được gửi.");
     }
 
     public async Task<IServiceResult> ResetPasswordAsync(string email, string token, string newPassword)
     {
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "User not found");
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
         if (!result.Succeeded)
             result = await _userManager.ResetPasswordAsync(user, Uri.UnescapeDataString(token), newPassword);
 
         if (!result.Succeeded)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Reset failed", result.Errors.Select(e => e.Description).ToList());
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Đặt lại mật khẩu thất bại", result.Errors.Select(e => e.Description).ToList());
 
         // revoke all refresh tokens after password change
         var tokens = await _unitOfWork.RefreshTokenRepository.GetQueryable()
@@ -303,7 +303,7 @@ public class AuthService(
             t.RevokedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
 
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Password reset successfully");
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đặt lại mật khẩu thành công");
     }
 
     private async Task<string> SendConfirmEmailAsync(UserAccount user)
