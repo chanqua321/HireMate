@@ -8,7 +8,7 @@ docker compose up --build -d
 ```
 
 API: http://localhost:5080/swagger  
-SQL Server trong container: `localhost:1433` / `sa` / `ChangeMe_Str0ng!`
+SQL Server trong container: `localhost:1433` / `sa` / `ChangeMe_Str0ng!` (đổi password trước khi dùng thật)
 
 ---
 

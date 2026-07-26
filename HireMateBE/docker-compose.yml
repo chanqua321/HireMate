@@ -3,6 +3,7 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       ACCEPT_EULA: "Y"
+      # Override via .env (MSSQL_SA_PASSWORD) — do not commit real secrets
       MSSQL_SA_PASSWORD: "ChangeMe_Str0ng!"
     ports:
       - "1433:1433"
@@ -23,6 +24,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       PORT: "8080"
       ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HireMateDB;User Id=sa;Password=ChangeMe_Str0ng!;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      # Override via .env (JWT_KEY) — do not commit real secrets
       Jwt__Key: "CHANGE_ME_JWT_KEY_MIN_32_CHARS_LONG"
       EmailSettings__ApiPublicUrl: "http://localhost:5080"
       EmailSettings__FrontendUrl: "http://localhost:3000"
