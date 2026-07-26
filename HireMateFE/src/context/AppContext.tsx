@@ -11,6 +11,7 @@ import {
   DEFAULT_INTERVIEW_CONFIG,
 } from '../config/constants';
 import { SAMPLE_HISTORY, SAMPLE_LAST_RESULT } from '../data/sampleHistory';
+import { authService, profileService } from '../services';
 
 interface AppContextType {
   profile: Profile;
@@ -81,6 +82,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (next.name && next.name.trim().length > 0) {
         setIsLoggedIn(true);
       }
+      // Non-blocking BE sync if logged in
+      if (localStorage.getItem('hm_access_token')) {
+        profileService.updateProfile(updates).catch(() => {});
+      }
       return next;
     });
   }, []);
@@ -119,6 +124,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [updateProfile]);
 
   const logout = useCallback(() => {
+    authService.logout().catch(() => {});
     setIsLoggedIn(false);
     updateProfile({ name: '' });
   }, [updateProfile]);
@@ -127,6 +133,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Sync theme attributes on mount
     document.documentElement.removeAttribute('data-theme');
     document.documentElement.classList.add('js');
+
+    // Automatically sync profile from backend API if JWT token is stored
+    if (localStorage.getItem('hm_access_token')) {
+      profileService.getProfile().then((res) => {
+        if (res.ok && res.data) {
+          const beData: any = res.data;
+          setProfileState((prev) => ({
+            ...prev,
+            ...beData,
+            name: beData.fullName || beData.name || prev.name,
+            role: beData.desiredPosition || beData.role || prev.role,
+            field: beData.desiredIndustry || beData.field || prev.field,
+          }));
+          setIsLoggedIn(true);
+        }
+      }).catch(() => {
+        // Fallback silently to localStorage if backend is offline
+      });
+    }
   }, []);
 
   return (

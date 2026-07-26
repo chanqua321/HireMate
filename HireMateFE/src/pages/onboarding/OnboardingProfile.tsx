@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { User, ArrowRight, X } from 'lucide-react';
@@ -9,6 +9,13 @@ export const OnboardingProfile: React.FC = () => {
   const navigate = useNavigate();
 
   const [name, setName] = useState(profile.name || '');
+
+  useEffect(() => {
+    if (profile.name) {
+      setName(profile.name);
+    }
+  }, [profile.name]);
+
   const [bio, setBio] = useState(
     profile.bio ||
       'Tôi là một kỹ sư phần mềm có đam mê với phát triển sản phẩm thực tế.'

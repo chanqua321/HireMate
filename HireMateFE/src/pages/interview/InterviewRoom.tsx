@@ -5,6 +5,7 @@ import { QUESTION_BANK } from '../../data/questionBank';
 import { Question, InterviewResult } from '../../types';
 import { Mic, Send, Clock, Sparkles, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { interviewService } from '../../services';
 
 interface ChatMessage {
   sender: 'ai' | 'user';
@@ -118,10 +119,22 @@ export const InterviewRoom: React.FC = () => {
       { sender: 'user', text: userAnswer },
     ];
 
+    // Synchronize current answer to Backend AI API non-blockingly
+    if (localStorage.getItem('hm_access_token')) {
+      interviewService.submitAnswer('current-session', {
+        questionIndex: currentIndex,
+        questionText: questions[currentIndex]?.q || '',
+        answerText: userAnswer,
+      }).catch(() => {});
+    }
+
     if (currentIndex >= questions.length - 1) {
       // Complete interview
       const result = calculateScore();
       saveLastResult(result);
+      if (localStorage.getItem('hm_access_token')) {
+        interviewService.completeSession('current-session').catch(() => {});
+      }
       navigate('/feedback');
       return;
     }

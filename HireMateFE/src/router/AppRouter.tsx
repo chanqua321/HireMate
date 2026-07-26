@@ -7,6 +7,7 @@ import { MainLayout } from '../layouts/MainLayout';
 import { Home } from '../pages/home/Home';
 import { Login } from '../pages/auth/Login';
 import { Register } from '../pages/auth/Register';
+import { EmailConfirmed } from '../pages/auth/EmailConfirmed';
 import { OnboardingProfile } from '../pages/onboarding/OnboardingProfile';
 import { OnboardingGoal } from '../pages/onboarding/OnboardingGoal';
 import { OnboardingSummary } from '../pages/onboarding/OnboardingSummary';
@@ -36,6 +37,8 @@ export const AppRouter: React.FC = () => {
           <Route path="login.html" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="register.html" element={<Register />} />
+          <Route path="email-confirmed" element={<EmailConfirmed />} />
+          <Route path="email-confirmation" element={<EmailConfirmed />} />
 
           {/* Onboarding */}
           <Route path="onboarding/profile" element={<OnboardingProfile />} />
