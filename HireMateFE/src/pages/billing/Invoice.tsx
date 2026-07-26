@@ -1,10 +1,46 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Printer, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
+const PLAN_INVOICE_MAP: Record<
+  string,
+  {
+    name: string;
+    desc: string;
+    origPrice: string;
+    discount: string;
+    finalPrice: string;
+  }
+> = {
+  free: {
+    name: 'Gói Miễn phí - 1 Tháng',
+    desc: '3 lượt phỏng vấn ảo, phân tích CV ATS cơ bản',
+    origPrice: '0đ',
+    discount: '0đ',
+    finalPrice: '0đ',
+  },
+  basic: {
+    name: 'Gói Cơ Bản - 1 Tháng',
+    desc: 'Luyện phỏng vấn AI, 15 lượt/tháng, feedback STAR chi tiết',
+    origPrice: '99.000đ',
+    discount: '-20.000đ',
+    finalPrice: '79.000đ',
+  },
+  pro: {
+    name: 'Gói Nâng Cao - 1 Tháng',
+    desc: 'Luyện phỏng vấn AI, 50 lượt/tháng, tối ưu CV ATS chuyên sâu, tính năng Beta',
+    origPrice: '189.000đ',
+    discount: '-40.000đ',
+    finalPrice: '149.000đ',
+  },
+};
+
 export const Invoice: React.FC = () => {
   const { profile } = useApp();
+  const [searchParams] = useSearchParams();
+  const planKey = searchParams.get('plan') || 'pro';
+  const planInvoice = PLAN_INVOICE_MAP[planKey] || PLAN_INVOICE_MAP.pro;
 
   const handlePrint = () => {
     window.print();
@@ -130,24 +166,24 @@ export const Invoice: React.FC = () => {
           <tbody>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               <td style={{ padding: '16px 8px' }}>
-                <div style={{ fontWeight: 600 }}>Gói Chuyên nghiệp (Pro) - 1 Năm</div>
+                <div style={{ fontWeight: 600 }}>{planInvoice.name}</div>
                 <div className="muted" style={{ fontSize: '0.85rem' }}>
-                  Luyện phỏng vấn AI không giới hạn, chấm điểm STAR S-T-A-R
+                  {planInvoice.desc}
                 </div>
               </td>
               <td style={{ padding: '16px 8px', textAlign: 'center' }}>1</td>
-              <td style={{ padding: '16px 8px', textAlign: 'right' }}>2.388.000đ</td>
+              <td style={{ padding: '16px 8px', textAlign: 'right' }}>{planInvoice.origPrice}</td>
               <td style={{ padding: '16px 8px', textAlign: 'right', fontWeight: 600 }}>
-                2.388.000đ
+                {planInvoice.origPrice}
               </td>
             </tr>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               <td style={{ padding: '16px 8px' }}>
-                <div style={{ fontWeight: 600 }}>Ưu đãi thanh toán năm (20%)</div>
+                <div style={{ fontWeight: 600 }}>Ưu đãi tài khoản AI</div>
               </td>
               <td style={{ padding: '16px 8px', textAlign: 'center' }}>1</td>
               <td style={{ padding: '16px 8px', textAlign: 'right', color: '#22C55E' }}>
-                -480.000đ
+                {planInvoice.discount}
               </td>
               <td
                 style={{
@@ -157,7 +193,7 @@ export const Invoice: React.FC = () => {
                   color: '#22C55E',
                 }}
               >
-                -480.000đ
+                {planInvoice.discount}
               </td>
             </tr>
           </tbody>
@@ -168,7 +204,7 @@ export const Invoice: React.FC = () => {
           <div style={{ width: '280px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="muted">Cộng tiền hàng:</span>
-              <span>1.908.000đ</span>
+              <span>{planInvoice.finalPrice}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="muted">Thuế VAT (0%):</span>
@@ -185,7 +221,7 @@ export const Invoice: React.FC = () => {
               }}
             >
               <span>Tổng thanh toán:</span>
-              <span>1.908.000đ</span>
+              <span>{planInvoice.finalPrice}</span>
             </div>
           </div>
         </div>

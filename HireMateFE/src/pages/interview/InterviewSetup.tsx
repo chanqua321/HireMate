@@ -1,9 +1,113 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { INDUSTRY_ROLES } from '../../data/questionBank';
-import { Settings, Mic, MessageSquare, ArrowRight, Sparkles } from 'lucide-react';
-import { motion } from 'framer-motion';
+import {
+  Settings,
+  Mic,
+  MessageSquare,
+  ArrowRight,
+  Sparkles,
+  ChevronDown,
+  Check,
+  Briefcase,
+  Award,
+  Zap,
+  Target,
+  Flame,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+interface CustomSelectProps {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (val: string) => void;
+  icon: React.ReactNode;
+}
+
+const CustomSelect: React.FC<CustomSelectProps> = ({
+  label,
+  value,
+  options,
+  onChange,
+  icon,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, []);
+
+  return (
+    <div className="custom-select-wrap" ref={containerRef}>
+      <button
+        type="button"
+        className={`custom-select-trigger ${isOpen ? 'is-open' : ''}`}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        <div className="trigger-left">
+          <div className="trigger-icon">{icon}</div>
+          <div className="trigger-label">
+            <span className="trigger-label-title">{label}</span>
+            <span className="trigger-label-value">{value}</span>
+          </div>
+        </div>
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.25, ease: 'easeInOut' }}
+          style={{ color: isOpen ? '#03BFFF' : '#6B7280', display: 'flex' }}
+        >
+          <ChevronDown size={20} />
+        </motion.div>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            className="custom-select-menu"
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          >
+            {options.map((opt) => {
+              const selected = opt === value;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  className={`custom-select-item ${selected ? 'is-selected' : ''}`}
+                  onClick={() => {
+                    onChange(opt);
+                    setIsOpen(false);
+                  }}
+                >
+                  <span>{opt}</span>
+                  {selected && (
+                    <Check size={18} style={{ color: '#03BFFF', flexShrink: 0 }} />
+                  )}
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 export const InterviewSetup: React.FC = () => {
   const { profile, interviewConfig, updateInterviewConfig } = useApp();
@@ -54,175 +158,351 @@ export const InterviewSetup: React.FC = () => {
 
   const currentRoles = INDUSTRY_ROLES[field] || [];
 
+  const difficultyItems = [
+    {
+      id: 'Dễ' as const,
+      label: 'Dễ',
+      subtitle: 'Khởi động nhẹ nhàng',
+      icon: <Zap size={18} />,
+      color: '#10B981',
+    },
+    {
+      id: 'Trung bình' as const,
+      label: 'Trung bình',
+      subtitle: 'Chuẩn thực tế',
+      icon: <Target size={18} />,
+      color: '#03BFFF',
+    },
+    {
+      id: 'Khó' as const,
+      label: 'Khó',
+      subtitle: 'Chuyên sâu, hóc búa',
+      icon: <Flame size={18} />,
+      color: '#F59E0B',
+    },
+  ];
+
+  const modeItems = [
+    {
+      id: 'Text' as const,
+      label: 'Văn bản',
+      subtitle: 'Gõ câu trả lời chuẩn STAR',
+      icon: <MessageSquare size={20} />,
+    },
+    {
+      id: 'Voice' as const,
+      label: 'Giọng nói',
+      subtitle: 'Phỏng vấn bằng Micro AI',
+      icon: <Mic size={20} />,
+    },
+  ];
+
   return (
-    <div className="section container" style={{ maxWidth: '680px', margin: '30px auto' }}>
+    <div className="section container" style={{ maxWidth: '780px', margin: '40px auto' }}>
       <motion.div
-        className="card"
-        style={{ padding: '36px' }}
-        initial={{ opacity: 0, y: 12 }}
+        className="setup-card"
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
       >
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+        {/* ==================== HERO HEADER BANNER ==================== */}
+        <div className="setup-header-banner">
+          {/* Subtle ice blue glow */}
           <div
-            className="icon-chip"
-            style={{ margin: '0 auto 16px', width: '48px', height: '48px' }}
+            style={{
+              position: 'absolute',
+              top: '-80px',
+              right: '-60px',
+              width: '280px',
+              height: '280px',
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(161, 203, 229, 0.35), transparent 70%)',
+              filter: 'blur(35px)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              marginBottom: '16px',
+              position: 'relative',
+              zIndex: 2,
+            }}
           >
-            <Settings size={24} />
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '16px',
+                background: 'rgba(3, 191, 255, 0.18)',
+                border: '1px solid rgba(161, 203, 229, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#03BFFF',
+                flexShrink: 0,
+              }}
+            >
+              <Settings size={26} />
+            </div>
+            <div>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.8rem',
+                  textTransform: 'uppercase',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  color: '#A1CBE5',
+                  marginBottom: '4px',
+                }}
+              >
+                <Sparkles size={14} /> HIREMATE AI INTERVIEW ROOM
+              </span>
+              <h1 style={{ fontSize: '1.9rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                Thiết lập phòng phỏng vấn AI
+              </h1>
+            </div>
           </div>
-          <span className="eyebrow" style={{ justifyContent: 'center' }}>
-            <Sparkles size={16} /> Chuẩn bị phòng phỏng vấn
-          </span>
-          <h2>Thiết lập phỏng vấn AI</h2>
-          <p className="muted">
-            Cấu hình ngành nghề, độ khó và hình thức phỏng vấn trước khi bắt đầu.
+
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.98rem',
+              color: '#A1CBE5',
+              lineHeight: 1.6,
+              maxWidth: '580px',
+              position: 'relative',
+              zIndex: 2,
+            }}
+          >
+            Tùy chỉnh chuyên ngành, vị trí ứng tuyển, mức độ thử thách và hình thức phỏng vấn
+            trước khi bắt đầu buổi tập luyện mô phỏng chuẩn STAR.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          {/* Field Selector */}
-          <div className="form-group" style={{ marginBottom: '20px' }}>
-            <label htmlFor="field" style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>
-              Ngành nghề
-            </label>
-            <select
-              id="field"
-              className="form-control"
-              value={field}
-              onChange={(e) => setField(e.target.value)}
-              required
-            >
-              {industries.map((ind) => (
-                <option key={ind} value={ind}>
-                  {ind}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* ==================== SETUP BODY ==================== */}
+        <div className="setup-body">
+          <form onSubmit={handleSubmit}>
+            {/* 1. INDUSTRY / FIELD CUSTOM DROP BOX */}
+            <div style={{ marginBottom: '24px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.92rem',
+                  fontWeight: 700,
+                  color: '#001B3F',
+                  marginBottom: '10px',
+                }}
+              >
+                1. Chọn ngành nghề
+              </label>
+              <CustomSelect
+                label="Lĩnh vực chuyên môn"
+                value={field}
+                options={industries}
+                onChange={(val) => setField(val)}
+                icon={<Briefcase size={22} />}
+              />
+            </div>
 
-          {/* Role Selector */}
-          <div className="form-group" style={{ marginBottom: '24px' }}>
-            <label htmlFor="pos" style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>
-              Vị trí ứng tuyển
-            </label>
-            <select
-              id="pos"
-              className="form-control"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              required
-            >
-              {currentRoles.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* 2. ROLE CUSTOM DROP BOX */}
+            <div style={{ marginBottom: '32px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.92rem',
+                  fontWeight: 700,
+                  color: '#001B3F',
+                  marginBottom: '10px',
+                }}
+              >
+                2. Vị trí ứng tuyển
+              </label>
+              <CustomSelect
+                label="Vị trí mục tiêu"
+                value={role}
+                options={currentRoles}
+                onChange={(val) => setRole(val)}
+                icon={<Award size={22} />}
+              />
+            </div>
 
-          {/* Difficulty Segmented Control */}
-          <div className="form-group" style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '10px' }}>
-              Độ khó câu hỏi
-            </label>
-            <div
+            {/* 3. DIFFICULTY SELECTOR */}
+            <div style={{ marginBottom: '32px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.92rem',
+                  fontWeight: 700,
+                  color: '#001B3F',
+                  marginBottom: '10px',
+                }}
+              >
+                3. Mức độ câu hỏi phỏng vấn
+              </label>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '12px',
+                }}
+              >
+                {difficultyItems.map((item) => {
+                  const active = difficulty === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setDifficulty(item.id)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '16px 12px',
+                        borderRadius: '16px',
+                        border: active
+                          ? '2px solid #03BFFF'
+                          : '1.5px solid rgba(161, 203, 229, 0.4)',
+                        background: active ? 'rgba(3, 191, 255, 0.08)' : '#ffffff',
+                        color: active ? '#001B3F' : '#6B7280',
+                        cursor: 'pointer',
+                        transition: 'all 0.22s ease',
+                        boxShadow: active
+                          ? '0 8px 24px rgba(3, 191, 255, 0.16)'
+                          : '0 2px 8px rgba(0, 27, 63, 0.02)',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '10px',
+                          background: active ? '#03BFFF' : 'rgba(161, 203, 229, 0.2)',
+                          color: active ? '#ffffff' : item.color,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginBottom: '8px',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {item.icon}
+                      </div>
+                      <span style={{ fontSize: '0.96rem', fontWeight: 700, marginBottom: '2px' }}>
+                        {item.label}
+                      </span>
+                      <span style={{ fontSize: '0.78rem', color: '#6B7280', fontWeight: 500 }}>
+                        {item.subtitle}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 4. INTERVIEW MODE SELECTOR */}
+            <div style={{ marginBottom: '38px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.92rem',
+                  fontWeight: 700,
+                  color: '#001B3F',
+                  marginBottom: '10px',
+                }}
+              >
+                4. Hình thức tương tác
+              </label>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '14px',
+                }}
+              >
+                {modeItems.map((item) => {
+                  const active = mode === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setMode(item.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '14px',
+                        padding: '16px 20px',
+                        borderRadius: '16px',
+                        border: active
+                          ? '2px solid #03BFFF'
+                          : '1.5px solid rgba(161, 203, 229, 0.4)',
+                        background: active ? 'rgba(3, 191, 255, 0.08)' : '#ffffff',
+                        color: active ? '#001B3F' : '#6B7280',
+                        cursor: 'pointer',
+                        transition: 'all 0.22s ease',
+                        boxShadow: active
+                          ? '0 8px 24px rgba(3, 191, 255, 0.16)'
+                          : '0 2px 8px rgba(0, 27, 63, 0.02)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          background: active ? '#03BFFF' : 'rgba(161, 203, 229, 0.2)',
+                          color: active ? '#ffffff' : '#001B3F',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {item.icon}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.02rem', fontWeight: 700, color: '#001B3F' }}>
+                          {item.label}
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: '#6B7280', fontWeight: 500 }}>
+                          {item.subtitle}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* SUBMIT BUTTON */}
+            <button
+              type="submit"
+              className="btn btn-primary btn-lg"
               style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr',
-                gap: '8px',
-                background: 'var(--card, #F1F5F9)',
-                padding: '6px',
-                borderRadius: '12px',
-                border: '1px solid var(--border)',
+                width: '100%',
+                justifyContent: 'center',
+                padding: '16px',
+                fontSize: '1.08rem',
+                fontWeight: 700,
+                borderRadius: '18px',
+                boxShadow: '0 12px 32px rgba(3, 191, 255, 0.28)',
+                background: 'linear-gradient(135deg, #03BFFF 0%, #0088CC 100%)',
               }}
             >
-              {(['Dễ', 'Trung bình', 'Khó'] as const).map((level) => {
-                const active = difficulty === level;
-                return (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setDifficulty(level)}
-                    style={{
-                      padding: '10px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: active ? '#ffffff' : 'transparent',
-                      color: active ? 'var(--primary)' : 'var(--muted)',
-                      fontWeight: active ? 700 : 500,
-                      boxShadow: active ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    {level}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="muted" style={{ fontSize: '0.8rem', marginTop: '6px' }}>
-              * Độ khó quyết định thời gian suy nghĩ và tính chất hóc búa của câu hỏi STAR.
-            </p>
-          </div>
-
-          {/* Mode Segmented Control */}
-          <div className="form-group" style={{ marginBottom: '32px' }}>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: '10px' }}>
-              Hình thức trả lời
-            </label>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '8px',
-                background: 'var(--card, #F1F5F9)',
-                padding: '6px',
-                borderRadius: '12px',
-                border: '1px solid var(--border)',
-              }}
-            >
-              {[
-                { id: 'Text', label: 'Văn bản (Gõ câu trả lời)', icon: <MessageSquare size={16} /> },
-                { id: 'Voice', label: 'Giọng nói (Microphone)', icon: <Mic size={16} /> },
-              ].map((item) => {
-                const active = mode === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setMode(item.id as 'Text' | 'Voice')}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: active ? '#ffffff' : 'transparent',
-                      color: active ? 'var(--primary)' : 'var(--muted)',
-                      fontWeight: active ? 700 : 500,
-                      boxShadow: active ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="btn btn-primary btn-lg"
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            Vào phòng phỏng vấn <ArrowRight size={18} />
-          </button>
-        </form>
+              Vào phòng phỏng vấn AI ngay <ArrowRight size={20} />
+            </button>
+          </form>
+        </div>
       </motion.div>
     </div>
   );

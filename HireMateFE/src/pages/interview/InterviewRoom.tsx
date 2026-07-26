@@ -259,78 +259,71 @@ export const InterviewRoom: React.FC = () => {
       </div>
 
       {/* Input / Controls */}
-      <div className="card" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+      <div>
+        <div className="interview-input-wrap">
           <textarea
-            className="form-control"
-            rows={2}
-            placeholder="Nhập câu trả lời theo cấu trúc STAR (Bối cảnh -> Nhiệm vụ -> Hành động -> Kết quả)..."
+            className="interview-textarea"
+            rows={3}
+            placeholder="Nhập câu trả lời theo chuẩn STAR (Bối cảnh -> Nhiệm vụ -> Hành động -> Kết quả)..."
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
-            style={{ flex: 1, resize: 'none' }}
           />
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={handleRecordToggle}
-              className={`btn ${recording ? 'btn-record recording' : 'btn-ghost'}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                height: '44px',
-                justifyContent: 'center',
-                padding: '0 16px',
-              }}
-              title="Ghi âm câu trả lời"
-            >
-              <Mic size={18} />
-              <span>{recording ? 'Đang ghi âm...' : 'Giọng nói'}</span>
-            </button>
+          <div className="interview-input-toolbar">
+            <div className="interview-toolbar-hint">
+              <Sparkles size={16} color="#03BFFF" />
+              <span>Cố vấn AI: Mở đầu bằng Bối cảnh (S) & kết thúc bằng Kết quả (R)</span>
+            </div>
 
-            <button
-              type="button"
-              onClick={handleNextQuestion}
-              className="btn btn-primary"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                height: '44px',
-                justifyContent: 'center',
-                padding: '0 20px',
-              }}
-            >
-              <span>
-                {currentIndex === (questions.length || 5) - 1
-                  ? 'Hoàn tất & xem điểm'
-                  : 'Câu tiếp theo'}
-              </span>
-              <Send size={16} />
-            </button>
+            <div className="interview-toolbar-actions">
+              <button
+                type="button"
+                onClick={handleRecordToggle}
+                className={`btn-record-pill ${recording ? 'is-recording' : ''}`}
+                title="Ghi âm câu trả lời qua micro"
+              >
+                <Mic size={18} />
+                <span>{recording ? 'Đang ghi âm...' : 'Giọng nói'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNextQuestion}
+                className="btn-send-pill"
+              >
+                <span>
+                  {currentIndex === (questions.length || 5) - 1
+                    ? 'Hoàn tất & Chấm điểm'
+                    : 'Câu tiếp theo'}
+                </span>
+                <Send size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Current question hint tooltip */}
         {questions[currentIndex]?.hint && (
-          <div
-            style={{
-              marginTop: '12px',
-              padding: '10px 14px',
-              background: 'rgba(3, 191, 255, 0.08)',
-              borderRadius: '8px',
-              fontSize: '0.85rem',
-              color: 'var(--muted)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            <Sparkles size={16} color="var(--primary)" />
-            <span>
-              <b>Gợi ý STAR:</b> {questions[currentIndex].hint}
-            </span>
+          <div className="star-hint-card">
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '12px',
+                background: 'rgba(3, 191, 255, 0.16)',
+                color: '#03BFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <b style={{ color: '#03BFFF', marginRight: '6px' }}>Gợi ý STAR từ trợ lý AI:</b>
+              <span>{questions[currentIndex].hint}</span>
+            </div>
           </div>
         )}
       </div>

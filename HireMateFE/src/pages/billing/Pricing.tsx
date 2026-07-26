@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { FaqAccordion } from '../../components/common/FaqAccordion';
 
@@ -15,63 +15,61 @@ const PRICING_FAQS = [
   },
   {
     q: 'Sự khác nhau giữa các gói là gì?',
-    a: 'Gói Basic (Miễn phí) cho phép bạn trải nghiệm 3 buổi phỏng vấn thử mỗi tháng. Gói Premium mở khóa phỏng vấn không giới hạn với AI tiên tiến hơn. Gói VIP cung cấp toàn bộ tính năng cao cấp nhất, hỗ trợ ưu tiên 24/7.',
+    a: 'Gói Miễn phí cho phép bạn trải nghiệm 3 buổi phỏng vấn thử mỗi tháng. Gói Cơ Bản mở khóa 15 buổi phỏng vấn cùng feedback STAR chi tiết. Gói Nâng Cao cung cấp 50 buổi phỏng vấn tối ưu CV chuyên sâu và tính năng Beta ưu tiên.',
   },
 ];
 
 const PLANS = [
   {
     id: 'free',
-    label: 'BASIC (FREE)',
+    label: 'Gói Miễn phí',
     price: '0đ',
-    period: '/mo',
+    period: '/tháng',
+    description: 'Lý tưởng để bắt đầu hành trình tìm kiếm công việc đầu tiên.',
     features: [
-      '3 buổi phỏng vấn thử / tháng',
-      'Phản hồi điểm STAR cơ bản',
-      'Bộ 30+ câu hỏi phổ biến',
-      'Mô hình AI tiêu chuẩn',
+      '3 lượt Phỏng vấn ảo mỗi tháng',
+      'Phân tích CV cơ bản (ATS)',
+      'Feedback cấu trúc STAR rút gọn',
     ],
-    cta: 'Đăng ký miễn phí',
+    cta: 'Nâng cấp ngay',
     ctaTo: '/register',
-    ctaStyle: 'ghost',
     featured: false,
     badge: null,
   },
   {
-    id: 'premium',
-    label: 'PREMIUM',
-    price: '250.000đ',
-    period: '/mo',
+    id: 'basic',
+    label: 'Gói Cơ Bản',
+    price: '79.000đ',
+    period: '/tháng',
+    description: 'Mở khóa tiềm AI để chiếm ưu thế trong mọi cuộc phỏng vấn.',
     features: [
-      'Không giới hạn buổi phỏng vấn',
-      'Phân tích STAR chi tiết từng câu',
-      'Ưu tiên xử lý nhanh',
-      'Ngân hàng 500+ câu hỏi chuyên sâu',
-      'Mô hình AI Mistral nâng cao',
+      '15 lượt Phỏng vấn ảo mỗi tháng',
+      'Phân tích CV cơ bản (ATS)',
+      'Feedback STAR chi tiết theo từng ngành',
+      'Luyện tập câu hỏi chuyên sâu',
     ],
-    cta: 'Thanh toán 250.000đ',
-    ctaTo: '/checkout',
-    ctaStyle: 'primary',
+    cta: 'Nâng cấp ngay',
+    ctaTo: '/checkout?plan=basic',
     featured: false,
     badge: null,
   },
   {
-    id: 'vip',
-    label: 'VIP',
-    price: '500.000đ',
-    period: '/mo',
+    id: 'pro',
+    label: 'Gói Nâng Cao',
+    price: '149.000đ',
+    period: '/tháng',
+    description: 'Mở khóa toàn bộ tiềm năng AI để chiếm ưu thế trong mọi cuộc phỏng vấn.',
     features: [
-      'Mọi quyền lợi gói Premium',
-      'Hỗ trợ ưu tiên 24/7',
-      'Tùy chỉnh bộ câu hỏi theo CV',
-      'Xuất báo cáo PDF chi tiết',
-      'Mô hình AI Qwen2.5 mạnh nhất',
+      '50 lượt Phỏng vấn ảo mỗi tháng',
+      'Tối ưu CV chuẩn ATS chuyên sâu',
+      'Feedback STAR chi tiết theo từng ngành',
+      'Luyện tập câu hỏi nâng cao',
+      'Ưu tiên trải nghiệm tính năng Beta',
     ],
-    cta: 'THANH TOÁN 500.000Đ',
-    ctaTo: '/checkout',
-    ctaStyle: 'ayaka',
+    cta: 'Nâng cấp ngay',
+    ctaTo: '/checkout?plan=pro',
     featured: true,
-    badge: 'POPULAR',
+    badge: 'Phổ biến nhất',
   },
 ];
 
@@ -117,223 +115,166 @@ export const Pricing: React.FC = () => {
                 transition={{ duration: 0.45, delay: i * 0.1 }}
                 whileHover={{ y: -6, transition: { duration: 0.25 } }}
                 style={{
-                  /* Gradient border wrapper for featured (VIP) card */
-                  background: plan.featured
-                    ? '#a1cbe5'
-                    : 'transparent',
-                  borderRadius: '18px',
-                  padding: plan.featured ? '2px' : '0',
-                  boxShadow: plan.featured
-                    ? '0 8px 32px rgba(161, 203, 229, 0.45)'
-                    : '0 2px 12px rgba(16,24,40,0.06)',
+                  background: 'transparent',
+                  borderRadius: '20px',
                   position: 'relative',
                 }}
               >
                 <div
                   style={{
-                    background: '#fff',
-                    borderRadius: plan.featured ? '16px' : '16px',
-                    border: plan.featured ? 'none' : '1.5px solid #E5E7EB',
-                    padding: '36px 32px',
+                    background: '#ffffff',
+                    borderRadius: '20px',
+                    border: plan.featured ? '2px solid #03BFFF' : '1.5px solid #E5E7EB',
+                    padding: '36px 30px',
                     display: 'flex',
                     flexDirection: 'column',
                     position: 'relative',
                     cursor: 'default',
                     height: '100%',
+                    boxShadow: plan.featured
+                      ? '0 12px 36px rgba(3, 191, 255, 0.18)'
+                      : '0 4px 16px rgba(16, 24, 40, 0.05)',
                   }}
                 >
-
-                {/* POPULAR badge */}
-                {plan.badge && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '-1px',
-                      right: '20px',
-                      background: '#a1cbe5',
-                      color: '#141c28',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      padding: '5px 12px',
-                      borderRadius: '0 0 10px 10px',
-                    }}
-                  >
-                    {plan.badge}
-                  </div>
-                )}
-
-                {/* Plan label */}
-                <p
-                  style={{
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.1em',
-                    color: 'var(--muted)',
-                    textTransform: 'uppercase',
-                    marginBottom: '14px',
-                  }}
-                >
-                  {plan.label}
-                </p>
-
-                {/* Price */}
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '24px' }}>
-                  <span
-                    style={{
-                      fontSize: '2.1rem',
-                      fontWeight: 800,
-                      color: 'var(--secondary)',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {plan.price}
-                  </span>
-                  <span style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
-                    {plan.period}
-                  </span>
-                </div>
-
-                {/* Divider */}
-                <div
-                  style={{
-                    height: '1px',
-                    background: '#E5E7EB',
-                    marginBottom: '20px',
-                  }}
-                />
-
-                {/* Feature list */}
-                <ul
-                  style={{
-                    listStyle: 'none',
-                    padding: 0,
-                    margin: '0 0 32px',
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '11px',
-                  }}
-                >
-                  {plan.features.map((f) => (
-                    <li
-                      key={f}
+                  {/* POPULAR badge at top right corner */}
+                  {plan.badge && (
+                    <div
                       style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '10px',
-                        fontSize: '0.9rem',
-                        color: '#374151',
-                        lineHeight: 1.5,
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        background: '#03BFFF',
+                        color: '#ffffff',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        padding: '6px 16px',
+                        borderRadius: '0 18px 0 16px',
+                        boxShadow: '0 2px 8px rgba(3, 191, 255, 0.3)',
                       }}
                     >
-                      <span
-                        style={{
-                          color: 'var(--primary)',
-                          fontWeight: 700,
-                          fontSize: '1rem',
-                          lineHeight: 1.4,
-                          flexShrink: 0,
-                        }}
-                      >
-                        •
-                      </span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+                      {plan.badge}
+                    </div>
+                  )}
 
-                {/* CTA Button */}
-                {plan.ctaStyle === 'ghost' && (
-                  <Link
-                    to={plan.ctaTo}
+                  {/* Plan label */}
+                  <h3
                     style={{
-                      display: 'block',
-                      textAlign: 'center',
-                      padding: '13px 20px',
-                      borderRadius: '999px',
-                      border: '1.5px solid #D1D5DB',
-                      background: '#fff',
-                      color: '#1B1D21',
-                      fontWeight: 600,
-                      fontSize: '0.95rem',
-                      textDecoration: 'none',
-                      transition: 'border-color 0.2s, box-shadow 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.borderColor = 'var(--primary)';
-                      (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(3,191,255,0.2)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.borderColor = '#D1D5DB';
-                      (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                      fontSize: '1.45rem',
+                      fontWeight: 800,
+                      color: '#001B3F',
+                      margin: '0 0 14px',
                     }}
                   >
-                    {plan.cta}
-                  </Link>
-                )}
+                    {plan.label}
+                  </h3>
 
-                {plan.ctaStyle === 'primary' && (
+                  {/* Price */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '14px' }}>
+                    <span
+                      style={{
+                        fontSize: '2.4rem',
+                        fontWeight: 800,
+                        color: '#03BFFF',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {plan.price}
+                    </span>
+                    <span style={{ color: '#6B7280', fontSize: '0.92rem', fontWeight: 500 }}>
+                      {plan.period}
+                    </span>
+                  </div>
+
+                  {/* Description */}
+                  <p
+                    style={{
+                      fontSize: '0.92rem',
+                      color: '#6B7280',
+                      lineHeight: 1.55,
+                      margin: '0 0 24px',
+                      minHeight: '44px',
+                    }}
+                  >
+                    {plan.description}
+                  </p>
+
+                  {/* Divider */}
+                  <div
+                    style={{
+                      height: '1px',
+                      background: '#F3F4F6',
+                      marginBottom: '22px',
+                    }}
+                  />
+
+                  {/* Feature list */}
+                  <ul
+                    style={{
+                      listStyle: 'none',
+                      padding: 0,
+                      margin: '0 0 32px',
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                  >
+                    {plan.features.map((f) => (
+                      <li
+                        key={f}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '10px',
+                          fontSize: '0.9rem',
+                          color: '#374151',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        <CheckCircle2
+                          size={18}
+                          style={{
+                            color: '#03BFFF',
+                            flexShrink: 0,
+                            marginTop: '2px',
+                          }}
+                        />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* CTA Button */}
                   <Link
                     to={plan.ctaTo}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '8px',
+                      width: '100%',
                       padding: '13px 20px',
-                      borderRadius: '999px',
+                      borderRadius: '12px',
                       border: 'none',
-                      background: 'var(--grad-primary)',
-                      color: 'var(--navy)',
+                      background: '#03BFFF',
+                      color: '#ffffff',
                       fontWeight: 700,
-                      fontSize: '0.95rem',
+                      fontSize: '0.96rem',
                       textDecoration: 'none',
-                      boxShadow: 'var(--sh-primary)',
-                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      boxShadow: '0 4px 14px rgba(3, 191, 255, 0.35)',
+                      transition: 'all 0.2s ease',
+                      boxSizing: 'border-box',
                     }}
                     onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.transform = 'scale(1.02)';
+                      (e.currentTarget as HTMLElement).style.background = '#008BDD';
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
                     }}
                     onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
-                    }}
-                  >
-                    {plan.cta}
-                    <ArrowRight size={16} />
-                  </Link>
-                )}
-
-                {plan.ctaStyle === 'ayaka' && (
-                  <Link
-                    to={plan.ctaTo}
-                    style={{
-                      display: 'block',
-                      textAlign: 'center',
-                      padding: '13px 20px',
-                      borderRadius: '999px',
-                      border: 'none',
-                      background: '#a1cbe5',
-                      color: '#141c28',
-                      fontWeight: 700,
-                      fontSize: '0.9rem',
-                      letterSpacing: '0.04em',
-                      textDecoration: 'none',
-                      boxShadow: '0 4px 15px rgba(161, 203, 229, 0.45)',
-                      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)';
-                      (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 22px rgba(161, 203, 229, 0.65)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
-                      (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 15px rgba(161, 203, 229, 0.45)';
+                      (e.currentTarget as HTMLElement).style.background = '#03BFFF';
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
                     }}
                   >
                     {plan.cta}
                   </Link>
-                )}
                 </div>
               </motion.div>
             ))}
