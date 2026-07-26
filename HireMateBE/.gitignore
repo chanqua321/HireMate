@@ -8,7 +8,10 @@ obj/
 project.lock.json
 artifacts/
 
-## Secrets / local overrides (single appsettings.json IS tracked)
+## Secrets — NEVER commit real appsettings.json
+appsettings.json
+appsettings.*.json
+!appsettings.Example.json
 appsettings.*.local.json
 **/Properties/launchSettings.json.user
 **/secrets.json
