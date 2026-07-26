@@ -1,0 +1,172 @@
+/* =====================================================================
+   HIREMATE — ENHANCED ANIMATIONS & MODERN VISUAL POLISH
+   Áp dụng các animation từ các dự án hiện đại: Framer Motion, glow effects,
+   smooth hover 3D, pulse recording, shimmer, interactive chips.
+   ===================================================================== */
+
+/* Page transition wrapper */
+.page-transition-wrapper {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* Hover 3D Card Animation */
+.card, .stat, .hero-copy, .chat-mock, .float-card {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover {
+  transform: translateY(-4px) scale(1.006);
+  box-shadow: 0 16px 32px -8px rgba(16, 24, 40, 0.12), 0 0 0 1px rgba(3, 191, 255, 0.25);
+}
+
+/* Glassmorphism & Subtle Glows */
+.chat-mock {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.float-card {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 12px 28px -6px rgba(16, 24, 40, 0.14);
+}
+
+.float-card:hover {
+  transform: translateY(-3px) scale(1.03);
+}
+
+/* Animated STAR Score Pill */
+.score-pill {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.score-pill:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 18px rgba(3, 191, 255, 0.35);
+}
+
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-150%) rotate(25deg); }
+  100% { transform: translateX(150%) rotate(25deg); }
+}
+
+.score-pill::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 50%;
+  height: 200%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer-sweep 3.5s infinite;
+  pointer-events: none;
+}
+
+/* Pulsing Recording Microphone Button */
+@keyframes pulse-red-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.btn-record.recording {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+  animation: pulse-red-ring 1.5s infinite;
+}
+
+/* Typing ellipsis animation for AI messages */
+@keyframes ellipsis-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+  display: inline-block;
+  animation: ellipsis-dot 1.4s infinite ease-in-out both;
+}
+
+.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+/* Interactive Tag in Onboarding / Hobbies */
+.tags .tag {
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tags .tag:hover {
+  transform: translateY(-2px);
+  background-color: rgba(3, 191, 255, 0.12);
+  border-color: var(--primary);
+}
+
+.tags .tag button {
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.tags .tag button:hover {
+  transform: scale(1.15) rotate(90deg);
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+/* Question Bank Filter Chip Animation */
+.qb-chip {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.qb-chip:hover {
+  transform: translateY(-2px);
+}
+
+.qb-chip.active {
+  box-shadow: 0 4px 12px -2px rgba(3, 191, 255, 0.4);
+}
+
+/* Pricing Card Glow & Feature List */
+.pricing-card.featured {
+  position: relative;
+  border: 2px solid var(--primary);
+  box-shadow: 0 20px 40px -12px rgba(3, 191, 255, 0.2);
+}
+
+/* Smooth Accordion Arrow Rotation */
+.accordion-arrow {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.accordion-arrow.open {
+  transform: rotate(180deg);
+}
