@@ -64,6 +64,7 @@ public class DashboardService(
         {
             InterviewScore = completed.Count > 0 ? completed.Average(x => x.OverallScore ?? 0) : null,
             SessionsCount = completed.Count,
+            SessionsThisMonth = usedThisMonth,
             RecentSession = recent,
             WeeklyScores = weekly,
             CompetencySummary = competency,

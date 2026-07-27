@@ -181,7 +181,7 @@ public class InterviewService(
         if (answers.Count == 0)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Chưa có câu trả lời để chấm điểm");
 
-        var score = StarHeuristicScorer.Score(answers);
+        var score = await ScoreWithAiOrHeuristicAsync(answers, session.Position, session.Industry);
         session.OverallScore = score.Overall;
         session.ScoreS = score.S;
         session.ScoreT = score.T;
@@ -262,16 +262,94 @@ public class InterviewService(
         if (session == null)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
 
-        // Stub transcript until local STT is wired
-        var transcript = $"[Voice stub transcript from {fileName}] Em đã phân tích tình huống, thực hiện hành động và đạt kết quả đo được.";
-        return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Đã nhận giọng nói (bản ghi tạm)", new
-        {
-            sessionId,
-            fileName,
-            transcript,
-            note = "Replace with local STT later"
-        });
+        // STT chưa sẵn sàng — không trả transcript giả
+        return new ServiceResult(Const.FAIL_CREATE_CODE,
+            "Chuyển giọng nói thành văn bản chưa được cấu hình. Vui lòng dùng chế độ văn bản.");
     }
+
+    public async Task<IServiceResult> GetQuestionBankAsync()
+    {
+        var list = await _unitOfWork.QuestionRepository.GetQueryable()
+            .AsNoTracking()
+            .Where(q => q.IsActive)
+            .OrderBy(q => q.Category)
+            .ThenBy(q => q.Content)
+            .Select(q => new
+            {
+                id = q.Id,
+                cat = q.Category,
+                q = q.Content,
+                hint = q.Hint ?? string.Empty,
+                industry = q.Industry,
+                difficulty = q.Difficulty
+            })
+            .ToListAsync();
+
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
+    }
+
+    private async Task<(int Overall, int S, int T, int A, int R, int Clarity, string FeedbackSummary)> ScoreWithAiOrHeuristicAsync(
+        List<InterviewAnswer> answers,
+        string position,
+        string industry)
+    {
+        try
+        {
+            var payload = string.Join("\n---\n", answers.Select(a =>
+                $"Q{a.OrderIndex}: {a.QuestionText}\nA: {(a.Skipped ? "[skipped]" : a.AnswerText)}"));
+            var ai = await _ai.CompleteAsync(
+                "You are an interview coach. Score STAR answers. Return JSON only with keys: overall,s,t,a,r,clarity (ints 0-100), feedback (Vietnamese string).",
+                $"Position: {position}\nIndustry: {industry}\nAnswers:\n{payload}");
+
+            if (!ai.UsedFallback && !string.IsNullOrWhiteSpace(ai.Content))
+            {
+                var json = ExtractJsonObject(ai.Content);
+                if (json != null)
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+                    int Get(string key, string alt)
+                    {
+                        if (root.TryGetProperty(key, out var v) && v.TryGetInt32(out var n)) return ClampInt(n);
+                        if (root.TryGetProperty(alt, out var v2) && v2.TryGetInt32(out var n2)) return ClampInt(n2);
+                        return -1;
+                    }
+                    var s = Get("s", "S");
+                    var t = Get("t", "T");
+                    var a = Get("a", "A");
+                    var r = Get("r", "R");
+                    var clarity = Get("clarity", "Clarity");
+                    var overall = Get("overall", "Overall");
+                    var feedback = root.TryGetProperty("feedback", out var fb) ? fb.GetString() : null;
+                    if (s >= 0 && t >= 0 && a >= 0 && r >= 0 && clarity >= 0)
+                    {
+                        if (overall < 0)
+                            overall = (int)Math.Round((s + t + a + r + clarity) / 5.0);
+                        return (overall, s, t, a, r, clarity,
+                            string.IsNullOrWhiteSpace(feedback)
+                                ? StarHeuristicScorer.BuildFeedback(overall)
+                                : feedback!);
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // fall through to deterministic heuristic
+        }
+
+        return StarHeuristicScorer.Score(answers);
+    }
+
+    private static string? ExtractJsonObject(string content)
+    {
+        var start = content.IndexOf('{');
+        var end = content.LastIndexOf('}');
+        if (start < 0 || end <= start) return null;
+        return content[start..(end + 1)];
+    }
+
+    private static int ClampInt(int n) => Math.Max(0, Math.Min(100, n));
 
     private async Task<int> CountCompletedThisMonthAsync(Guid userId)
     {
@@ -416,31 +494,42 @@ public static class StarHeuristicScorer
         IReadOnlyList<InterviewAnswer> answers)
     {
         var total = Math.Max(1, answers.Count);
-        var answered = answers.Where(a => !string.IsNullOrWhiteSpace(a.AnswerText)).ToList();
-        var avgLen = answered.Count > 0
-            ? answered.Average(a => a.AnswerText!.Length)
-            : 0;
-        var completion = answers.Count(a => !a.Skipped && !string.IsNullOrWhiteSpace(a.AnswerText)) / (double)total;
-        var baseScore = Clamp(38 + avgLen / 6.0 + completion * 28, 20, 96);
+        var answered = answers.Where(a => !a.Skipped && !string.IsNullOrWhiteSpace(a.AnswerText)).ToList();
+        var texts = answered.Select(a => a.AnswerText!.ToLowerInvariant()).ToList();
+        var joined = string.Join(" ", texts);
+        var avgLen = texts.Count > 0 ? texts.Average(t => t.Length) : 0;
+        var completion = answered.Count / (double)total;
 
-        var rnd = new Random(HashCode.Combine(answers.Count, (int)avgLen, answered.Count));
-        int Jitter(double b, double spread) =>
-            (int)Math.Round(Clamp(b + (rnd.NextDouble() * spread - spread / 2), 12, 98));
-
-        var s = Jitter(baseScore + 6, 14);
-        var t = Jitter(baseScore + 3, 14);
-        var a = Jitter(baseScore - 6, 18);
-        var r = Jitter(baseScore - 9, 18);
-        var clarity = Jitter(baseScore, 12);
+        var s = ScoreDimension(joined, avgLen, completion, ["bối cảnh", "situation", "khi đó", "thời điểm", "trong dự án", "lúc đó"], 4);
+        var t = ScoreDimension(joined, avgLen, completion, ["nhiệm vụ", "task", "trách nhiệm", "mục tiêu", "yêu cầu", "được giao"], 2);
+        var a = ScoreDimension(joined, avgLen, completion, ["hành động", "action", "tôi đã", "thực hiện", "triển khai", "xử lý", "phối hợp"], -2);
+        var r = ScoreDimension(joined, avgLen, completion, ["kết quả", "result", "đạt", "cải thiện", "%", "tăng", "giảm", "hoàn thành"], -4);
+        var clarity = ScoreClarity(texts, avgLen, completion);
         var overall = (int)Math.Round((s + t + a + r + clarity) / 5.0);
 
-        var feedback = overall >= 80
+        return (overall, s, t, a, r, clarity, BuildFeedback(overall));
+    }
+
+    public static string BuildFeedback(int overall) =>
+        overall >= 80
             ? "Kết quả xuất sắc! Bạn đã thể hiện rất tốt theo cấu trúc STAR."
             : overall >= 65
                 ? "Khá tốt. Hãy bổ sung thêm chi tiết Action và Result để tăng điểm."
                 : "Cần cải thiện. Trả lời đầy đủ hơn theo Situation → Task → Action → Result.";
 
-        return (overall, s, t, a, r, clarity, feedback);
+    private static int ScoreDimension(string joined, double avgLen, double completion, string[] keywords, double bias)
+    {
+        var hits = keywords.Count(k => joined.Contains(k, StringComparison.Ordinal));
+        var baseScore = 32 + avgLen / 7.0 + completion * 26 + hits * 6 + bias;
+        return (int)Math.Round(Clamp(baseScore, 12, 98));
+    }
+
+    private static int ScoreClarity(List<string> texts, double avgLen, double completion)
+    {
+        if (texts.Count == 0) return 20;
+        var sentenceish = texts.Average(t => t.Count(c => c is '.' or '!' or '?' or '\n') + 1);
+        var baseScore = 36 + avgLen / 8.0 + completion * 22 + Math.Min(12, sentenceish * 2);
+        return (int)Math.Round(Clamp(baseScore, 12, 98));
     }
 
     private static double Clamp(double n, double lo, double hi) => Math.Max(lo, Math.Min(hi, n));

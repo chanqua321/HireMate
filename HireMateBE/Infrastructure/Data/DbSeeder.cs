@@ -243,12 +243,26 @@ public static class DbSeeder
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-            await users.CreateAsync(u, password);
+
+            // Prefer Identity CreateAsync(password); if policy rejects (e.g. short demo pass),
+            // create user then set hash directly so seed accounts still work.
+            var create = await users.CreateAsync(u, password);
+            if (!create.Succeeded)
+            {
+                create = await users.CreateAsync(u);
+                if (!create.Succeeded)
+                    throw new InvalidOperationException(
+                        $"Failed to seed user {email}: {string.Join(", ", create.Errors.Select(e => e.Description))}");
+
+                u.PasswordHash = users.PasswordHasher.HashPassword(u, password);
+                await users.UpdateAsync(u);
+            }
+
             await users.AddToRoleAsync(u, role);
             return u;
         }
 
-        var admin = await EnsureUser("admin@hiremate.local", "HireMate Admin", "Admin123!", "Admin");
+        var admin = await EnsureUser("admin@gmail.com", "Admin", "12345", "Admin");
         var uniAdmin = await EnsureUser("uni@hiremate.local", "University Admin", "Admin123!", "UniversityAdmin");
         var entAdmin = await EnsureUser("enterprise@hiremate.local", "Enterprise Admin", "Admin123!", "EnterpriseAdmin");
         var student = await EnsureUser("student@hiremate.local", "Demo Student", "Password1", "User");
