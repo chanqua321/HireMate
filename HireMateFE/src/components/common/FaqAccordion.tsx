@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react';
 
 export interface FaqItemData {
   q: string;
-  a: string;
+  a: React.ReactNode;
 }
 
 interface FaqAccordionProps {
@@ -12,7 +12,7 @@ interface FaqAccordionProps {
 }
 
 export const FaqAccordion: React.FC<FaqAccordionProps> = ({ items }) => {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   const toggle = (idx: number) => {
     setOpenIndex((prev) => (prev === idx ? null : idx));
@@ -101,8 +101,8 @@ export const FaqAccordion: React.FC<FaqAccordionProps> = ({ items }) => {
                   }}
                   style={{ overflow: 'hidden' }}
                 >
-                  <p
-                    className="faq-a"
+                  <div
+                    className="faq-answer-content"
                     style={{
                       margin: 0,
                       padding: '0 28px 24px 28px',
@@ -112,7 +112,7 @@ export const FaqAccordion: React.FC<FaqAccordionProps> = ({ items }) => {
                     }}
                   >
                     {item.a}
-                  </p>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

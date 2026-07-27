@@ -273,20 +273,17 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
         >
           <div style={{ maxWidth: '340px', width: '100%', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'rgba(161, 203, 229, 0.25)',
-                  color: 'var(--secondary, #001B3F)',
-                  marginBottom: '12px',
-                }}
-              >
-                <LogIn size={22} />
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+                <img
+                  src="/logo.png"
+                  alt="HireMate Logo"
+                  style={{
+                    height: '46px',
+                    width: 'auto',
+                    objectFit: 'contain',
+                    filter: 'drop-shadow(0 4px 10px rgba(3, 191, 255, 0.18))',
+                  }}
+                />
               </div>
               <h2 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#001B3F', marginBottom: '6px' }}>
                 Chào mừng trở lại
@@ -399,7 +396,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
                   width="340"
                 />
               </div>
-              <button
+              {/* <button
                 type="button"
                 onClick={() => handleSocialLogin('LinkedIn')}
                 style={{
@@ -420,7 +417,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
                 }}
               >
                 <span style={{ color: '#0A66C2', fontWeight: 700, fontSize: '1rem' }}>in</span> Đăng nhập với LinkedIn
-              </button>
+              </button> */}
               {googleLoading && (
                 <div style={{ textAlign: 'center', color: '#03BFFF', fontSize: '0.8rem', fontWeight: 600 }}>
                   Đang xác thực với tài khoản Google...
@@ -593,144 +590,141 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
             ) : (
               <>
                 <div style={{ textAlign: 'center', marginBottom: '22px' }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '14px',
-                  background: 'rgba(161, 203, 229, 0.25)',
-                  color: 'var(--secondary, #001B3F)',
-                  marginBottom: '10px',
-                }}
-              >
-                <UserPlus size={22} />
-              </div>
-              <h2 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#001B3F', marginBottom: '4px' }}>
-                Tạo tài khoản mới
-              </h2>
-              <p style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: 500 }}>
-                Trải nghiệm phỏng vấn AI ngay hôm nay
-              </p>
-            </div>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                    <img
+                      src="/logo.png"
+                      alt="HireMate Logo"
+                      style={{
+                        height: '46px',
+                        width: 'auto',
+                        objectFit: 'contain',
+                        filter: 'drop-shadow(0 4px 10px rgba(3, 191, 255, 0.18))',
+                      }}
+                    />
+                  </div>
+                  <h2 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#001B3F', marginBottom: '4px' }}>
+                    Tạo tài khoản mới
+                  </h2>
+                  <p style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: 500 }}>
+                    Trải nghiệm phỏng vấn AI ngay hôm nay
+                  </p>
+                </div>
 
-            {registerError && (
-              <div
-                style={{
-                  background: '#FDECEC',
-                  color: '#EF4444',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  marginBottom: '14px',
-                  textAlign: 'center',
-                }}
-              >
-                {registerError}
-              </div>
-            )}
+                {registerError && (
+                  <div
+                    style={{
+                      background: '#FDECEC',
+                      color: '#EF4444',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      marginBottom: '14px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {registerError}
+                  </div>
+                )}
 
-            <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="auth-input-wrap">
-                <span className="auth-icon-left">
-                  <User size={18} />
-                </span>
-                <input
-                  type="text"
-                  required
-                  placeholder="Họ và tên"
-                  value={registerForm.name}
-                  onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
-                  className="auth-input"
-                />
-              </div>
+                <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="auth-input-wrap">
+                    <span className="auth-icon-left">
+                      <User size={18} />
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Họ và tên"
+                      value={registerForm.name}
+                      onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
+                      className="auth-input"
+                    />
+                  </div>
 
-              <div className="auth-input-wrap">
-                <span className="auth-icon-left">
-                  <Mail size={18} />
-                </span>
-                <input
-                  type="email"
-                  required
-                  placeholder="Địa chỉ Email"
-                  value={registerForm.email}
-                  onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-                  className="auth-input"
-                />
-              </div>
+                  <div className="auth-input-wrap">
+                    <span className="auth-icon-left">
+                      <Mail size={18} />
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      placeholder="Địa chỉ Email"
+                      value={registerForm.email}
+                      onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
+                      className="auth-input"
+                    />
+                  </div>
 
-              <div className="auth-input-wrap">
-                <span className="auth-icon-left">
-                  <Lock size={18} />
-                </span>
-                <input
-                  type={showRegPassword ? 'text' : 'password'}
-                  required
-                  placeholder="Mật khẩu (ít nhất 8 ký tự)"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                  className="auth-input"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowRegPassword(!showRegPassword)}
-                  className="auth-icon-right"
+                  <div className="auth-input-wrap">
+                    <span className="auth-icon-left">
+                      <Lock size={18} />
+                    </span>
+                    <input
+                      type={showRegPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Mật khẩu (ít nhất 8 ký tự)"
+                      value={registerForm.password}
+                      onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
+                      className="auth-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegPassword(!showRegPassword)}
+                      className="auth-icon-right"
+                    >
+                      {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+
+                  <div className="auth-input-wrap">
+                    <span className="auth-icon-left">
+                      <Lock size={18} />
+                    </span>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Xác nhận mật khẩu"
+                      value={registerForm.confirm}
+                      onChange={(e) => setRegisterForm({ ...registerForm, confirm: e.target.value })}
+                      className="auth-input"
+                    />
+                  </div>
+
+                  <button type="submit" className="auth-submit-btn">
+                    Tạo tài khoản <ArrowRight size={18} />
+                  </button>
+                </form>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    margin: '18px 0 14px',
+                    color: '#93A1BD',
+                    fontSize: '0.78rem',
+                  }}
                 >
-                  {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
+                  <hr style={{ flex: 1, borderTop: '1px solid #E5E7EB' }} />
+                  <span style={{ padding: '0 12px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                    hoặc đăng ký với
+                  </span>
+                  <hr style={{ flex: 1, borderTop: '1px solid #E5E7EB' }} />
+                </div>
 
-              <div className="auth-input-wrap">
-                <span className="auth-icon-left">
-                  <Lock size={18} />
-                </span>
-                <input
-                  type="password"
-                  required
-                  placeholder="Xác nhận mật khẩu"
-                  value={registerForm.confirm}
-                  onChange={(e) => setRegisterForm({ ...registerForm, confirm: e.target.value })}
-                  className="auth-input"
-                />
-              </div>
-
-              <button type="submit" className="auth-submit-btn">
-                Tạo tài khoản <ArrowRight size={18} />
-              </button>
-            </form>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                margin: '18px 0 14px',
-                color: '#93A1BD',
-                fontSize: '0.78rem',
-              }}
-            >
-              <hr style={{ flex: 1, borderTop: '1px solid #E5E7EB' }} />
-              <span style={{ padding: '0 12px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                hoặc đăng ký với
-              </span>
-              <hr style={{ flex: 1, borderTop: '1px solid #E5E7EB' }} />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', alignItems: 'center' }}>
-              <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={handleGoogleError}
-                  theme="outline"
-                  size="large"
-                  text="signup_with"
-                  shape="pill"
-                  width="360"
-                />
-              </div>
-              <button
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', alignItems: 'center' }}>
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={handleGoogleError}
+                      theme="outline"
+                      size="large"
+                      text="signup_with"
+                      shape="pill"
+                      width="360"
+                    />
+                  </div>
+                  {/* <button
                 type="button"
                 onClick={() => handleSocialLogin('LinkedIn')}
                 style={{
@@ -751,31 +745,31 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
                 }}
               >
                 <span style={{ color: '#0A66C2', fontWeight: 700, fontSize: '1rem' }}>in</span> Đăng ký với LinkedIn
-              </button>
-              {googleLoading && (
-                <div style={{ textAlign: 'center', color: '#03BFFF', fontSize: '0.8rem', fontWeight: 600 }}>
-                  Đang xác thực với tài khoản Google...
+              </button> */}
+                  {googleLoading && (
+                    <div style={{ textAlign: 'center', color: '#03BFFF', fontSize: '0.8rem', fontWeight: 600 }}>
+                      Đang xác thực với tài khoản Google...
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div className="auth-mobile-toggle">
-              Đã có tài khoản?{' '}
-              <button
-                type="button"
-                onClick={() => handleModeChange('login')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#03BFFF',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                Đăng nhập ngay
-              </button>
-            </div>
+                <div className="auth-mobile-toggle">
+                  Đã có tài khoản?{' '}
+                  <button
+                    type="button"
+                    onClick={() => handleModeChange('login')}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#03BFFF',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Đăng nhập ngay
+                  </button>
+                </div>
               </>
             )}
           </div>
