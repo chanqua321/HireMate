@@ -4,6 +4,7 @@ public class DashboardDto
 {
     public double? InterviewScore { get; set; }
     public int SessionsCount { get; set; }
+    public int SessionsThisMonth { get; set; }
     public InterviewRecentDto? RecentSession { get; set; }
     public List<WeeklyScoreDto> WeeklyScores { get; set; } = [];
     public CompetencySummaryDto? CompetencySummary { get; set; }

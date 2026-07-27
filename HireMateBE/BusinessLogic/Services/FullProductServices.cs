@@ -171,19 +171,25 @@ public class CvService(IUnitOfWork uow, IAiClient ai) : ICvService
         {
             using var parsed = JsonDocument.Parse(aiResult.Content);
             var root = parsed.RootElement;
-            doc.FormatScore = root.TryGetProperty("format", out var f) ? f.GetInt32() : 70;
-            doc.KeywordsScore = root.TryGetProperty("keywords", out var k) ? k.GetInt32() : 68;
-            doc.ReadabilityScore = root.TryGetProperty("readability", out var r) ? r.GetInt32() : 72;
-            doc.ProfessionalismScore = root.TryGetProperty("professionalism", out var p) ? p.GetInt32() : 70;
+            if (!TryReadScore(root, "format", out var format)
+                || !TryReadScore(root, "keywords", out var keywords)
+                || !TryReadScore(root, "readability", out var readability)
+                || !TryReadScore(root, "professionalism", out var professionalism))
+            {
+                return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                    "AI không trả về đủ điểm CV hợp lệ. Vui lòng thử lại.");
+            }
+
+            doc.FormatScore = format;
+            doc.KeywordsScore = keywords;
+            doc.ReadabilityScore = readability;
+            doc.ProfessionalismScore = professionalism;
             doc.AnalysisJson = aiResult.Content;
         }
         catch
         {
-            doc.FormatScore = 70;
-            doc.KeywordsScore = 68;
-            doc.ReadabilityScore = 72;
-            doc.ProfessionalismScore = 70;
-            doc.AnalysisJson = aiResult.Content;
+            return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                "Không phân tích được kết quả AI cho CV. Vui lòng thử lại.");
         }
 
         doc.AiProvider = aiResult.Provider;
@@ -197,6 +203,15 @@ public class CvService(IUnitOfWork uow, IAiClient ai) : ICvService
             PayloadJson = JsonSerializer.Serialize(new { doc.FormatScore, doc.KeywordsScore })
         });
         await uow.SaveChangesAsync();
+
+        static bool TryReadScore(JsonElement root, string key, out int score)
+        {
+            score = 0;
+            if (!root.TryGetProperty(key, out var el)) return false;
+            if (!el.TryGetInt32(out score)) return false;
+            if (score is < 0 or > 100) return false;
+            return true;
+        }
         return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đã phân tích CV", Map(doc));
     }
 
@@ -559,7 +574,7 @@ public class BillingService(
             TransactionRef = Guid.NewGuid().ToString("N")[..12]
         });
 
-        user.IsPremium = true;
+        user.IsPremium = plan.Code is not "free";
         user.UpdatedAt = DateTime.UtcNow;
         await users.UpdateAsync(user);
         await uow.SaveChangesAsync();
@@ -571,8 +586,9 @@ public class BillingService(
             mockInvoice.AmountVnd,
             mockInvoice.Status,
             paymentMethod = "Mock",
-            isPremium = true,
-            plan = plan.Code
+            isPremium = user.IsPremium,
+            plan = plan.Code,
+            planName = plan.Name
         });
     }
 
@@ -702,6 +718,7 @@ public class BillingService(
     public async Task<IServiceResult> GetInvoicesAsync(Guid userId)
     {
         var list = await uow.InvoiceRepository.GetQueryable().AsNoTracking()
+            .Include(i => i.Plan)
             .Where(i => i.UserId == userId).OrderByDescending(i => i.CreatedAt).ToListAsync();
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
     }

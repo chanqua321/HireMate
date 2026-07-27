@@ -29,6 +29,76 @@ SQL Server trong container: `localhost:1433` / `sa` / `HireMate_Str0ng!`
 
 ---
 
+## Oracle Cloud Always Free (khuyến nghị)
+
+> SQL Server image chỉ có **amd64**. VM free mạnh nhất là **Ampere ARM** → cần bật emulation (`qemu` / `binfmt`). RAM khuyến nghị ≥ **8–12 GB**.
+
+### A. Tạo VM trên Oracle Console
+
+1. Đăng ký: [https://cloud.oracle.com](https://cloud.oracle.com) (Always Free).
+2. **Compute → Instances → Create instance**
+3. Chọn:
+   - **Image:** Canonical Ubuntu 22.04 (aarch64)
+   - **Shape:** `VM.Standard.A1.Flex` (Ampere)
+   - **OCPU:** 2 · **Memory:** 12 GB (hoặc 4 OCPU / 24 GB nếu còn quota)
+   - **SSH key:** upload public key (`id_rsa.pub` / `id_ed25519.pub`)
+   - Gán **Public IP**
+4. **Networking → VCN → Security List** (subnet của VM) → Ingress:
+   - TCP **22** (SSH) từ IP của bạn
+   - TCP **5080** (API) từ `0.0.0.0/0` (hoặc chỉ IP bạn)
+5. Copy **Public IP** của instance.
+
+### B. SSH + cài Docker trên VM
+
+Trên máy Windows (PowerShell), trong thư mục có private key:
+
+```powershell
+ssh -i .\path\to\private_key ubuntu@YOUR_PUBLIC_IP
+```
+
+(Trên Oracle Linux image user có thể là `opc` thay vì `ubuntu`.)
+
+Trên VM:
+
+```bash
+# Clone hoặc scp code vào ~/HireMateBE
+git clone <YOUR_REPO_URL> ~/repo
+cd ~/repo/HireMateBE
+
+chmod +x scripts/oracle-setup.sh
+./scripts/oracle-setup.sh
+# đăng xuất rồi SSH lại (để group docker có hiệu lực)
+```
+
+### C. Cấu hình + chạy
+
+```bash
+cd ~/repo/HireMateBE
+cp .env.example .env
+nano .env
+# Sửa: MSSQL_SA_PASSWORD, JWT_KEY, API_PUBLIC_URL=http://YOUR_PUBLIC_IP:5080, FRONTEND_URL, CORS_*
+
+docker compose up --build -d
+docker compose ps
+docker compose logs -f api
+```
+
+Kiểm tra:
+
+- Swagger: `http://YOUR_PUBLIC_IP:5080/swagger`
+- FE `.env`: `VITE_API_BASE_URL=http://YOUR_PUBLIC_IP:5080`
+
+### D. Lỗi thường gặp
+
+| Triệu chứng | Cách xử lý |
+|---|---|
+| Timeout từ ngoài | Mở **5080** ở Security List + firewall VM |
+| `db` không start / platform | Chạy lại `docker run --privileged --rm tonistiigi/binfmt --install amd64` |
+| Out of memory | Tăng RAM shape (12 GB+), giảm service khác |
+| Permission denied docker | `newgrp docker` hoặc SSH lại sau `usermod -aG docker` |
+
+---
+
 ## Biến môi trường bắt buộc khi deploy
 
 ```text

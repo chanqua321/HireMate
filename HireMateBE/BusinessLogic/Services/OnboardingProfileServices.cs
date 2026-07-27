@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BusinessLogic.Base;
 using BusinessLogic.IServices;
 using Common;
@@ -110,8 +111,37 @@ public class OnboardingService(
         ExperienceLevel = profile?.ExperienceLevel,
         University = profile?.University,
         Major = profile?.Major,
-        GraduationYear = profile?.GraduationYear
+        GraduationYear = profile?.GraduationYear,
+        Bio = profile?.Bio,
+        Hobbies = ParseHobbies(profile?.HobbiesJson)
     };
+
+    internal static List<string> ParseHobbies(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    internal static string? SerializeHobbies(List<string>? hobbies)
+    {
+        if (hobbies == null || hobbies.Count == 0)
+            return null;
+        var cleaned = hobbies
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .Select(h => h.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(20)
+            .ToList();
+        return cleaned.Count == 0 ? null : JsonSerializer.Serialize(cleaned);
+    }
 }
 
 public class ProfileService(
@@ -165,6 +195,9 @@ public class ProfileService(
         profile.University = dto.University;
         profile.Major = dto.Major;
         profile.GraduationYear = dto.GraduationYear;
+        profile.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
+        if (dto.Hobbies != null)
+            profile.HobbiesJson = OnboardingService.SerializeHobbies(dto.Hobbies);
         profile.UpdatedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
 

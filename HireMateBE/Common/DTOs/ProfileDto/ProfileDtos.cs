@@ -15,6 +15,8 @@ public class ProfileDto
     public string? University { get; set; }
     public string? Major { get; set; }
     public int? GraduationYear { get; set; }
+    public string? Bio { get; set; }
+    public List<string> Hobbies { get; set; } = [];
 }
 
 public class UpdateProfileDto
@@ -39,4 +41,9 @@ public class UpdateProfileDto
 
     [Range(1980, 2100)]
     public int? GraduationYear { get; set; }
+
+    [MaxLength(1000)]
+    public string? Bio { get; set; }
+
+    public List<string>? Hobbies { get; set; }
 }

@@ -30,6 +30,13 @@ public class CareerProfile
 
     public int? GraduationYear { get; set; }
 
+    [MaxLength(1000)]
+    public string? Bio { get; set; }
+
+    /// <summary>JSON array of hobby strings, e.g. ["reading","coding"].</summary>
+    [MaxLength(500)]
+    public string? HobbiesJson { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

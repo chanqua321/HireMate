@@ -17,6 +17,11 @@ appsettings.*.local.json
 **/secrets.json
 .env
 .env.*
+!.env.example
+
+## Oracle deploy secrets (private key — NEVER commit)
+deploy/oracle/id_ed25519
+deploy/oracle/*.pem
 
 ## Uploads
 **/wwwroot/uploads/

@@ -14,4 +14,5 @@ public interface IInterviewService
     Task<IServiceResult> GetDetailAsync(Guid userId, Guid sessionId);
     Task<IServiceResult> SuggestedAnswerAsync(Guid userId, SuggestedAnswerDto dto);
     Task<IServiceResult> UploadVoiceAsync(Guid userId, Guid sessionId, Stream audio, string fileName);
+    Task<IServiceResult> GetQuestionBankAsync();
 }

@@ -35,8 +35,7 @@ public class AuthService(
     private readonly IUnitOfWork _unitOfWork = unitOfWork;
 
     private bool ExposeDevTokens =>
-        _env.IsDevelopment()
-        && !string.Equals(_configuration["EmailSettings:ExposeDevTokens"], "false", StringComparison.OrdinalIgnoreCase);
+        string.Equals(_configuration["EmailSettings:ExposeDevTokens"], "true", StringComparison.OrdinalIgnoreCase);
 
     public async Task<IServiceResult> RegisterAsync(RegisterDto dto)
     {
@@ -102,8 +101,20 @@ public class AuthService(
 
     public async Task<IServiceResult> LoginWithGoogleAsync(string idToken, string? ip)
     {
-        var clientId = _configuration["Authentication:Google:ClientId"];
-        if (string.IsNullOrWhiteSpace(clientId))
+        var audiences = _configuration.GetSection("Authentication:Google:Audiences").Get<string[]>()?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? [];
+
+        var primaryClientId = _configuration["Authentication:Google:ClientId"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(primaryClientId) &&
+            !audiences.Contains(primaryClientId, StringComparer.Ordinal))
+        {
+            audiences = [primaryClientId, .. audiences];
+        }
+
+        if (audiences.Length == 0)
             return new ServiceResult(Const.FAIL_READ_CODE, "Đăng nhập Google chưa được cấu hình. Vui lòng thiết lập Authentication:Google:ClientId.");
 
         GoogleJsonWebSignature.Payload payload;
@@ -111,12 +122,32 @@ public class AuthService(
         {
             payload = await GoogleJsonWebSignature.ValidateAsync(idToken, new GoogleJsonWebSignature.ValidationSettings
             {
-                Audience = [clientId]
+                Audience = audiences
             });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return new ServiceResult(Const.FAIL_READ_CODE, "Mã Google idToken không hợp lệ");
+            string? tokenAud = null;
+            try
+            {
+                var parts = idToken.Split('.');
+                if (parts.Length >= 2)
+                {
+                    var json = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("aud", out var audEl))
+                        tokenAud = audEl.ValueKind == System.Text.Json.JsonValueKind.Array
+                            ? string.Join(",", audEl.EnumerateArray().Select(x => x.GetString()))
+                            : audEl.GetString();
+                }
+            }
+            catch { /* ignore decode errors */ }
+
+            var expected = string.Join(" | ", audiences);
+            var detail = string.IsNullOrWhiteSpace(tokenAud)
+                ? $"Mã Google idToken không hợp lệ ({ex.Message})"
+                : $"Mã Google idToken không hợp lệ ({ex.Message}). Token aud={tokenAud}; BE expect={expected}";
+            return new ServiceResult(Const.FAIL_READ_CODE, detail);
         }
 
         var email = payload.Email;
@@ -257,7 +288,7 @@ public class AuthService(
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var encoded = Uri.EscapeDataString(token);
-        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "https://localhost:7080").TrimEnd('/');
+        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "http://localhost:5080").TrimEnd('/');
         var frontUrl = (_configuration["EmailSettings:FrontendUrl"] ?? apiUrl).TrimEnd('/');
         var resetFrontLink = $"{frontUrl}/reset-password.html?email={Uri.EscapeDataString(user.Email!)}&token={encoded}";
 
@@ -310,7 +341,7 @@ public class AuthService(
     {
         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
         var encoded = Uri.EscapeDataString(token);
-        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "https://localhost:7080").TrimEnd('/');
+        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "http://localhost:5080").TrimEnd('/');
         var link = $"{apiUrl}/api/Auth/confirm-email?userId={user.Id}&token={encoded}";
 
         var html = $"""
@@ -320,14 +351,7 @@ public class AuthService(
             <p>— HireMate</p>
             """;
 
-        try
-        {
-            await _emailService.SendAsync(user.Email!, "HireMate — Xác nhận email", html);
-        }
-        catch
-        {
-            // Ignore email sending error to avoid blocking registration in dev/offline mode
-        }
+        await _emailService.SendAsync(user.Email!, "HireMate — Xác nhận email", html);
         return link;
     }
 
@@ -385,5 +409,16 @@ public class AuthService(
             OnboardingCompleted = user.OnboardingCompleted,
             IsPremium = user.IsPremium
         };
+    }
+
+    private static byte[] Base64UrlDecode(string input)
+    {
+        var s = input.Replace('-', '+').Replace('_', '/');
+        switch (s.Length % 4)
+        {
+            case 2: s += "=="; break;
+            case 3: s += "="; break;
+        }
+        return Convert.FromBase64String(s);
     }
 }

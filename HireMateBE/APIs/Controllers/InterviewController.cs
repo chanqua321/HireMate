@@ -98,6 +98,14 @@ public class InterviewController(IInterviewService interviewService) : Controlle
         return Map(await _interviewService.UploadVoiceAsync(userId, id, stream, file.FileName));
     }
 
+    [AllowAnonymous]
+    [HttpGet("question-bank")]
+    public async Task<IActionResult> QuestionBank()
+    {
+        var result = await _interviewService.GetQuestionBankAsync();
+        return Ok(new { data = result.Data, message = result.Message });
+    }
+
     private bool TryGetUserId(out Guid userId)
     {
         userId = Guid.Empty;
