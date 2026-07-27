@@ -811,7 +811,7 @@ table.tbl tbody tr:hover { background: var(--bg-app); }
 .faq-q { width: 100%; text-align: left; background: none; border: none; padding: 18px 20px; font-size: 1.02rem; font-weight: 600; color: var(--secondary); display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
 .faq-q .faq-ic { flex-shrink: 0; color: var(--primary-strong); transition: transform .3s; }
 .faq-item.open .faq-q .faq-ic { transform: rotate(45deg); }
-.faq-a { max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+.faq-a { max-height: none !important; overflow: visible !important; }
 .faq-a-inner { padding: 0 20px 18px; color: var(--muted); line-height: 1.7; }
 
 /* =====================================================================
