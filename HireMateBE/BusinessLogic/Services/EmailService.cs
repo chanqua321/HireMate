@@ -26,8 +26,13 @@ public class EmailService(IConfiguration configuration, ILogger<EmailService> lo
             ?? throw new InvalidOperationException("EmailSettings:FromEmail missing");
         var fromName = _configuration["EmailSettings:FromName"] ?? "HireMate";
         var username = _configuration["EmailSettings:Username"] ?? fromEmail;
-        var password = _configuration["EmailSettings:Password"]
-            ?? throw new InvalidOperationException("EmailSettings:Password missing (use user-secrets)");
+        var password = _configuration["EmailSettings:Password"];
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            _logger.LogWarning("EmailSettings:Password is empty. Skipping SMTP email sending to {To}. Subject={Subject}", toEmail, subject);
+            return;
+        }
 
         using var message = new MailMessage
         {
@@ -51,8 +56,8 @@ public class EmailService(IConfiguration configuration, ILogger<EmailService> lo
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed sending email to {To}", toEmail);
-            throw;
+            _logger.LogWarning(ex, "Failed sending SMTP email to {To} (check EmailSettings in appsettings.json)", toEmail);
+            // Don't throw exception so registration/auth flows still succeed even when SMTP is offline or not configured
         }
     }
 }

@@ -257,7 +257,7 @@ public class AuthService(
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var encoded = Uri.EscapeDataString(token);
-        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "http://localhost:5080").TrimEnd('/');
+        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "https://localhost:7080").TrimEnd('/');
         var frontUrl = (_configuration["EmailSettings:FrontendUrl"] ?? apiUrl).TrimEnd('/');
         var resetFrontLink = $"{frontUrl}/reset-password.html?email={Uri.EscapeDataString(user.Email!)}&token={encoded}";
 
@@ -310,7 +310,7 @@ public class AuthService(
     {
         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
         var encoded = Uri.EscapeDataString(token);
-        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "http://localhost:5080").TrimEnd('/');
+        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "https://localhost:7080").TrimEnd('/');
         var link = $"{apiUrl}/api/Auth/confirm-email?userId={user.Id}&token={encoded}";
 
         var html = $"""
@@ -320,7 +320,14 @@ public class AuthService(
             <p>— HireMate</p>
             """;
 
-        await _emailService.SendAsync(user.Email!, "HireMate — Xác nhận email", html);
+        try
+        {
+            await _emailService.SendAsync(user.Email!, "HireMate — Xác nhận email", html);
+        }
+        catch
+        {
+            // Ignore email sending error to avoid blocking registration in dev/offline mode
+        }
         return link;
     }
 

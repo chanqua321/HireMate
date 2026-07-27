@@ -24,9 +24,17 @@ import { Dashboard } from '../pages/dashboard/Dashboard';
 export const AppRouter: React.FC = () => {
   const location = useLocation();
 
+  // Đảm bảo /login và /register dùng chung key để không bị unmount khi chuyển đổi chế độ split
+  const getRouteKey = (pathname: string) => {
+    if (pathname.includes('/login') || pathname.includes('/register')) {
+      return 'auth-split-layout';
+    }
+    return pathname;
+  };
+
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <Routes location={location} key={location.pathname}>
+      <Routes location={location} key={getRouteKey(location.pathname)}>
         <Route path="/" element={<MainLayout />}>
           {/* Home */}
           <Route index element={<Home />} />

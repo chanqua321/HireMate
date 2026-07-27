@@ -12,9 +12,10 @@ namespace APIs.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [EnableRateLimiting("auth")]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(IAuthService authService, IConfiguration configuration) : ControllerBase
 {
     private readonly IAuthService _authService = authService;
+    private readonly IConfiguration _configuration = configuration;
 
     [HttpPost("register")]
     [AllowAnonymous]
@@ -82,22 +83,17 @@ public class AuthController(IAuthService authService) : ControllerBase
         return Ok(new { message = result.Message });
     }
 
-    /// <summary>Click from email — returns simple HTML so browser works without FE.</summary>
+    /// <summary>Click from email — redirects to Frontend success/error notification page with animation.</summary>
     [HttpGet("confirm-email")]
     [AllowAnonymous]
     public async Task<IActionResult> ConfirmEmailGet([FromQuery] string userId, [FromQuery] string token)
     {
         var result = await _authService.ConfirmEmailAsync(userId, token);
         var ok = result.Status > 0;
-        var html = $"""
-            <!DOCTYPE html><html><head><meta charset="utf-8"><title>HireMate</title></head>
-            <body style="font-family:sans-serif;max-width:520px;margin:40px auto;">
-              <h1>{(ok ? "Email đã được xác nhận" : "Xác nhận thất bại")}</h1>
-              <p>{System.Net.WebUtility.HtmlEncode(result.Message)}</p>
-              <p><a href="/swagger">Back to Swagger</a></p>
-            </body></html>
-            """;
-        return Content(html, "text/html");
+        var feUrl = (_configuration["EmailSettings:FrontendUrl"] ?? "http://localhost:3000").TrimEnd('/');
+        var status = ok ? "success" : "error";
+        var msg = Uri.EscapeDataString(result.Message ?? (ok ? "Xác nhận email thành công. Bạn có thể đăng nhập ngay!" : "Mã xác nhận không hợp lệ hoặc đã hết hạn."));
+        return Redirect($"{feUrl}/email-confirmed?status={status}&message={msg}");
     }
 
     [HttpPost("confirm-email")]
