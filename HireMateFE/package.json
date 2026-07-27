@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.5",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.4.4",
     "framer-motion": "^11.5.4",

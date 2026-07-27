@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, User, Mail, Lock, LogIn, UserPlus, ArrowRight, CheckCircle2, Sparkles, Check } from 'lucide-react';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useApp } from '../../context/AppContext';
 import { authService } from '../../services';
 import { useConfetti } from '../../hooks/useConfetti';
@@ -13,6 +14,7 @@ interface AuthContainerProps {
 export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => {
   const { login } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const { triggerConfetti } = useConfetti();
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
 
@@ -23,10 +25,26 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
     confirmLinkDev?: string;
   }>({ show: false, email: '' });
 
-  // Sync mode with route prop
+  // Sync mode with URL pathname or initialMode without unmounting
   useEffect(() => {
-    setIsLogin(initialMode === 'login');
-  }, [initialMode]);
+    if (location.pathname.includes('register')) {
+      setIsLogin(false);
+    } else if (location.pathname.includes('login')) {
+      setIsLogin(true);
+    } else {
+      setIsLogin(initialMode === 'login');
+    }
+  }, [location.pathname, initialMode]);
+
+  // Handle browser Back / Forward buttons smoothly
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      setIsLogin(!path.includes('register'));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Login form state
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -47,7 +65,9 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
     setIsLogin(targetMode === 'login');
     setLoginError('');
     setRegisterError('');
-    navigate(targetMode === 'login' ? '/login' : '/register', { replace: true });
+    const targetUrl = targetMode === 'login' ? '/login' : '/register';
+    window.history.pushState(null, '', targetUrl);
+    document.title = targetMode === 'login' ? 'HireMate - Đăng nhập' : 'HireMate - Đăng ký';
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -143,6 +163,50 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
     triggerConfetti();
   };
 
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleSuccess = async (credRes: CredentialResponse) => {
+    const idToken = credRes.credential;
+    if (!idToken) {
+      const err = 'Không lấy được token xác thực từ Google.';
+      if (isLogin) setLoginError(err);
+      else setRegisterError(err);
+      return;
+    }
+
+    setGoogleLoading(true);
+    setLoginError('');
+    setRegisterError('');
+
+    try {
+      const res = await authService.loginWithGoogle(idToken);
+      if (res.ok && res.data) {
+        const fullNameFromDb = res.data.user?.fullName;
+        const fallbackName = fullNameFromDb || 'Người dùng Google';
+        login(fallbackName);
+        triggerConfetti();
+        navigate('/dashboard');
+        return;
+      } else {
+        const msg = res.message || 'Đăng nhập Google thất bại.';
+        if (isLogin) setLoginError(msg);
+        else setRegisterError(msg);
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Lỗi kết nối khi đăng nhập với Google.';
+      if (isLogin) setLoginError(msg);
+      else setRegisterError(msg);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    const msg = 'Đăng nhập Google bị hủy hoặc thất bại.';
+    if (isLogin) setLoginError(msg);
+    else setRegisterError(msg);
+  };
+
   const handleSocialLogin = (provider: string) => {
     login(`Người dùng ${provider}`);
     navigate('/dashboard');
@@ -205,7 +269,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
             opacity: isLogin ? 1 : 0,
             x: isLogin ? '0%' : '-15%',
           }}
-          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
         >
           <div style={{ maxWidth: '340px', width: '100%', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '28px' }}>
@@ -323,41 +387,45 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
               <hr style={{ flex: 1, borderTop: '1px solid #E5E7EB' }} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => handleSocialLogin('Google')}
-                style={{
-                  padding: '10px',
-                  background: '#ffffff',
-                  border: '1.5px solid #E5E7EB',
-                  borderRadius: '12px',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  color: '#1B1D21',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                Google
-              </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', alignItems: 'center' }}>
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                  theme="outline"
+                  size="large"
+                  text="signin_with"
+                  shape="pill"
+                  width="340"
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => handleSocialLogin('LinkedIn')}
                 style={{
-                  padding: '10px',
+                  padding: '9px 16px',
                   background: '#ffffff',
-                  border: '1.5px solid #E5E7EB',
-                  borderRadius: '12px',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  color: '#1B1D21',
+                  border: '1px solid #747775',
+                  borderRadius: '24px',
+                  fontWeight: 500,
+                  fontSize: '0.88rem',
+                  color: '#1f1f1f',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
                 }}
               >
-                LinkedIn
+                <span style={{ color: '#0A66C2', fontWeight: 700, fontSize: '1rem' }}>in</span> Đăng nhập với LinkedIn
               </button>
+              {googleLoading && (
+                <div style={{ textAlign: 'center', color: '#03BFFF', fontSize: '0.8rem', fontWeight: 600 }}>
+                  Đang xác thực với tài khoản Google...
+                </div>
+              )}
             </div>
 
             <div className="auth-mobile-toggle">
@@ -392,7 +460,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
             opacity: isLogin ? 0 : 1,
             x: isLogin ? '15%' : '0%',
           }}
-          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
         >
           <div style={{ maxWidth: '360px', width: '100%', margin: '0 auto' }}>
             {registerSuccessData.show ? (
@@ -650,39 +718,45 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
               <hr style={{ flex: 1, borderTop: '1px solid #E5E7EB' }} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => handleSocialLogin('Google')}
-                style={{
-                  padding: '10px',
-                  background: '#ffffff',
-                  border: '1.5px solid #E5E7EB',
-                  borderRadius: '12px',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  color: '#1B1D21',
-                  cursor: 'pointer',
-                }}
-              >
-                Google
-              </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', alignItems: 'center' }}>
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                  theme="outline"
+                  size="large"
+                  text="signup_with"
+                  shape="pill"
+                  width="360"
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => handleSocialLogin('LinkedIn')}
                 style={{
-                  padding: '10px',
+                  padding: '9px 16px',
                   background: '#ffffff',
-                  border: '1.5px solid #E5E7EB',
-                  borderRadius: '12px',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  color: '#1B1D21',
+                  border: '1px solid #747775',
+                  borderRadius: '24px',
+                  fontWeight: 500,
+                  fontSize: '0.88rem',
+                  color: '#1f1f1f',
                   cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
                 }}
               >
-                LinkedIn
+                <span style={{ color: '#0A66C2', fontWeight: 700, fontSize: '1rem' }}>in</span> Đăng ký với LinkedIn
               </button>
+              {googleLoading && (
+                <div style={{ textAlign: 'center', color: '#03BFFF', fontSize: '0.8rem', fontWeight: 600 }}>
+                  Đang xác thực với tài khoản Google...
+                </div>
+              )}
             </div>
 
             <div className="auth-mobile-toggle">
@@ -719,7 +793,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
             borderTopRightRadius: isLogin ? '32px' : '0px',
             borderBottomRightRadius: isLogin ? '32px' : '0px',
           }}
-          transition={{ duration: 0.6, ease: 'easeInOut' }}
+          transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
         >
           {/* Decorative ice blue background glows inside overlay */}
           <div
@@ -759,7 +833,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
             }}
             initial={false}
             animate={{ x: isLogin ? '-50%' : '0%' }}
-            transition={{ duration: 0.6, ease: 'easeInOut' }}
+            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
           >
             {/* Overlay Left Side (Shown when user is looking at Register form) */}
             <div

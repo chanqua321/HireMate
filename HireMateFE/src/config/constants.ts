@@ -8,6 +8,10 @@ export const STORAGE_KEYS = {
   THEME: 'hm_theme',
 } as const;
 
+export const GOOGLE_CLIENT_ID =
+  (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
+  '880378565694-upeoqhh7hnn1souk68uargs9q7fnjoji.apps.googleusercontent.com';
+
 export const DEFAULT_PROFILE: Profile = {
   name: '',
   role: 'Lập trình viên Frontend',

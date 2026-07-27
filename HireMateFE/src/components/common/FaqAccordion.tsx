@@ -19,7 +19,14 @@ export const FaqAccordion: React.FC<FaqAccordionProps> = ({ items }) => {
   };
 
   return (
-    <div className="faq-list">
+    <div
+      className="faq-list"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+      }}
+    >
       {items.map((item, i) => {
         const isOpen = openIndex === i;
         return (
@@ -27,8 +34,16 @@ export const FaqAccordion: React.FC<FaqAccordionProps> = ({ items }) => {
             key={i}
             className={`faq-item ${isOpen ? 'open' : ''}`}
             style={{
-              borderBottom: '1px solid var(--border)',
-              padding: '16px 0',
+              border: isOpen
+                ? '1px solid var(--primary)'
+                : '1px solid var(--border)',
+              borderRadius: '16px',
+              background: 'var(--surface)',
+              boxShadow: isOpen
+                ? 'var(--sh-md)'
+                : '0 2px 8px rgba(16, 24, 40, 0.04)',
+              overflow: 'hidden',
+              transition: 'all 0.25s ease',
             }}
           >
             <button
@@ -46,22 +61,27 @@ export const FaqAccordion: React.FC<FaqAccordionProps> = ({ items }) => {
                 textAlign: 'left',
                 fontSize: '1.05rem',
                 fontWeight: 600,
-                color: 'var(--ink)',
+                color: isOpen ? 'var(--primary-strong)' : 'var(--secondary)',
                 cursor: 'pointer',
-                padding: '8px 0',
+                padding: '20px 28px',
+                gap: '16px',
+                transition: 'color 0.2s ease',
               }}
             >
               <span>{item.q}</span>
-              <span
+              <motion.span
                 className={`accordion-arrow ${isOpen ? 'open' : ''}`}
+                animate={{ rotate: isOpen ? 180 : 0 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  color: 'var(--muted)',
+                  color: isOpen ? 'var(--primary-strong)' : 'var(--muted)',
+                  flexShrink: 0,
                 }}
               >
                 <ChevronDown size={20} />
-              </span>
+              </motion.span>
             </button>
 
             <AnimatePresence initial={false}>
@@ -72,8 +92,8 @@ export const FaqAccordion: React.FC<FaqAccordionProps> = ({ items }) => {
                   animate="open"
                   exit="collapsed"
                   variants={{
-                    open: { opacity: 1, height: 'auto', marginTop: 12 },
-                    collapsed: { opacity: 0, height: 0, marginTop: 0 },
+                    open: { opacity: 1, height: 'auto' },
+                    collapsed: { opacity: 0, height: 0 },
                   }}
                   transition={{
                     duration: 0.28,
@@ -85,8 +105,10 @@ export const FaqAccordion: React.FC<FaqAccordionProps> = ({ items }) => {
                     className="faq-a"
                     style={{
                       margin: 0,
+                      padding: '0 28px 24px 28px',
                       color: 'var(--muted)',
-                      lineHeight: 1.6,
+                      lineHeight: 1.7,
+                      fontSize: '0.98rem',
                     }}
                   >
                     {item.a}
