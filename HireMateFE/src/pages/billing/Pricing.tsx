@@ -96,16 +96,7 @@ export const Pricing: React.FC = () => {
       {/* ── Cards ── */}
       <section className="section" style={{ paddingTop: '24px', paddingBottom: '64px' }}>
         <div className="container">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '24px',
-              alignItems: 'stretch',
-              maxWidth: '960px',
-              margin: '0 auto',
-            }}
-          >
+          <div className="pricing-grid">
             {PLANS.map((plan, i) => (
               <motion.div
                 key={plan.id}

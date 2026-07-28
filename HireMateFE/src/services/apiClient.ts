@@ -23,7 +23,7 @@ const getAuthHeaders = (skipAuth = false): Record<string, string> => {
   };
 
   if (!skipAuth) {
-    const token = localStorage.getItem('hm_access_token');
+    const token = sessionStorage.getItem('hm_access_token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -70,6 +70,7 @@ const handleResponse = async <T>(response: Response): Promise<ApiResponse<T>> =>
 
   if (response.status === 401) {
     // Optionally clear invalid access token
+    sessionStorage.removeItem('hm_access_token');
     localStorage.removeItem('hm_access_token');
   }
 
@@ -196,7 +197,7 @@ export const apiClient = {
     const url = buildUrl(endpoint, params);
     
     // Do NOT set Content-Type header when uploading FormData so browser sets multipart/form-data boundary
-    const token = localStorage.getItem('hm_access_token');
+    const token = sessionStorage.getItem('hm_access_token');
     const headers: Record<string, string> = {
       'Accept': 'application/json',
     };

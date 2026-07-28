@@ -259,7 +259,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
       <div className="auth-split-box">
         {/* ==================== LOGIN FORM PANEL ==================== */}
         <motion.div
-          className="auth-panel auth-panel--login"
+          className={`auth-panel auth-panel--login ${isLogin ? 'active' : ''}`}
           style={{
             zIndex: isLogin ? 20 : 10,
             pointerEvents: isLogin ? 'auto' : 'none',
@@ -447,7 +447,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
 
         {/* ==================== REGISTER FORM PANEL ==================== */}
         <motion.div
-          className="auth-panel auth-panel--register"
+          className={`auth-panel auth-panel--register ${!isLogin ? 'active' : ''}`}
           style={{
             zIndex: isLogin ? 10 : 20,
             pointerEvents: isLogin ? 'none' : 'auto',
