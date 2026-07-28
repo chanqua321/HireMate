@@ -94,6 +94,10 @@ export const InterviewRoom: React.FC = () => {
     const baseScore = 75 + Math.floor(Math.random() * 18);
     const today = new Date().toISOString().split('T')[0];
 
+    // Lấy các câu trả lời của user từ messages
+    const userAnswers = messages.filter(m => m.sender === 'user').map(m => m.text);
+    const userMessagesCount = userAnswers.length;
+
     return {
       overall: baseScore,
       role: interviewConfig.role || 'Lập trình viên Frontend',
@@ -105,8 +109,28 @@ export const InterviewRoom: React.FC = () => {
         R: Math.min(baseScore + 6, 98),
       },
       date: today,
+      feedbacks: questions.map((q, idx) => {
+        const userAnswer = idx < userMessagesCount ? userAnswers[idx] : '(Không có câu trả lời)';
+        
+        let feedbackText = '';
+        const score = baseScore + Math.floor(Math.random() * 10 - 5);
+        if (score >= 85) {
+          feedbackText = 'Câu trả lời rất tốt, thể hiện rõ ràng kỹ năng và kinh nghiệm. Bạn đã đi đúng trọng tâm và cung cấp đủ thông tin cần thiết.';
+        } else if (score >= 70) {
+          feedbackText = 'Câu trả lời khá tốt, tuy nhiên cần bổ sung thêm dẫn chứng cụ thể bằng số liệu để tăng tính thuyết phục.';
+        } else {
+          feedbackText = 'Câu trả lời còn chung chung. Bạn nên tập trung vào cấu trúc STAR (Đặc biệt là phần Kết quả) để cải thiện điểm số.';
+        }
+
+        return {
+          question: q.q,
+          answer: userAnswer,
+          feedback: feedbackText,
+          score: Math.min(score, 100)
+        };
+      })
     };
-  }, [interviewConfig.role]);
+  }, [interviewConfig.role, questions, messages]);
 
   const handleNextQuestion = () => {
     const userAnswer = inputVal.trim()
@@ -120,7 +144,7 @@ export const InterviewRoom: React.FC = () => {
     ];
 
     // Synchronize current answer to Backend AI API non-blockingly
-    if (localStorage.getItem('hm_access_token')) {
+    if (sessionStorage.getItem('hm_access_token')) {
       interviewService.submitAnswer('current-session', {
         questionIndex: currentIndex,
         questionText: questions[currentIndex]?.q || '',
@@ -132,7 +156,7 @@ export const InterviewRoom: React.FC = () => {
       // Complete interview
       const result = calculateScore();
       saveLastResult(result);
-      if (localStorage.getItem('hm_access_token')) {
+      if (sessionStorage.getItem('hm_access_token')) {
         interviewService.completeSession('current-session').catch(() => {});
       }
       navigate('/feedback');

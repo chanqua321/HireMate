@@ -71,8 +71,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    const p = safeReadJSON<Profile>(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE);
-    return Boolean(p.name && p.name.trim().length > 0);
+    return Boolean(sessionStorage.getItem('hm_access_token'));
   });
 
   const updateProfile = useCallback((updates: Partial<Profile>) => {
@@ -83,7 +82,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsLoggedIn(true);
       }
       // Non-blocking BE sync if logged in
-      if (localStorage.getItem('hm_access_token')) {
+      if (sessionStorage.getItem('hm_access_token')) {
         profileService.updateProfile(updates).catch(() => {});
       }
       return next;
@@ -134,8 +133,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     document.documentElement.removeAttribute('data-theme');
     document.documentElement.classList.add('js');
 
-    // Automatically sync profile from backend API if JWT token is stored
-    if (localStorage.getItem('hm_access_token')) {
+    // Clear legacy persistent auth tokens from localStorage so browser closing logs out
+    localStorage.removeItem('hm_access_token');
+    localStorage.removeItem('hm_refresh_token');
+
+    // Automatically sync profile from backend API if JWT token is stored in sessionStorage
+    if (sessionStorage.getItem('hm_access_token')) {
       profileService.getProfile().then((res) => {
         if (res.ok && res.data) {
           const beData: any = res.data;
@@ -149,7 +152,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setIsLoggedIn(true);
         }
       }).catch(() => {
-        // Fallback silently to localStorage if backend is offline
+        // Fallback silently if backend is offline
       });
     }
   }, []);

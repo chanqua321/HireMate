@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { Award, RotateCcw, Home, LayoutDashboard, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -9,6 +9,10 @@ import { useConfetti } from '../../hooks/useConfetti';
 export const Feedback: React.FC = () => {
   const { lastResult } = useApp();
   const { triggerConfetti } = useConfetti();
+
+  const [userRating, setUserRating] = useState(0);
+  const [userFeedbackText, setUserFeedbackText] = useState('');
+  const [isFeedbackSubmitted, setIsFeedbackSubmitted] = useState(false);
 
   const r = lastResult || {
     overall: 85,
@@ -275,6 +279,108 @@ export const Feedback: React.FC = () => {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Question Feedbacks */}
+      {r.feedbacks && r.feedbacks.length > 0 && (
+        <div className="card" style={{ padding: '32px', marginTop: '36px' }}>
+          <h3 style={{ marginBottom: '24px' }}>Nhận xét từng câu hỏi</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {r.feedbacks.map((fb, idx) => (
+              <motion.div 
+                key={idx} 
+                style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: idx * 0.1 }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--secondary)', lineHeight: 1.4 }}>
+                    Câu {idx + 1}: {fb.question}
+                  </h4>
+                  <span className={`badge ${fb.score >= 80 ? 'badge--success' : (fb.score >= 65 ? 'badge--warning' : 'badge--error')}`} style={{ flexShrink: 0, marginLeft: '12px' }}>
+                    {fb.score}/100
+                  </span>
+                </div>
+                
+                <div style={{ background: 'var(--bg-app)', padding: '16px', borderRadius: '10px', marginBottom: '16px', border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Câu trả lời của bạn</span>
+                  <p style={{ margin: '8px 0 0 0', fontSize: '0.95rem', color: 'var(--ink)' }}>{fb.answer}</p>
+                </div>
+
+                <div style={{ background: 'var(--primary-soft)', padding: '16px', borderRadius: '10px', borderLeft: '4px solid var(--primary)' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary-strong)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Nhận xét</span>
+                  <p style={{ margin: '8px 0 0 0', fontSize: '0.95rem', color: 'var(--ink)' }}>{fb.feedback}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* User Feedback Form */}
+      <div className="card" style={{ padding: '32px', marginTop: '36px', marginBottom: '36px' }}>
+        {!isFeedbackSubmitted ? (
+          <>
+            <h3 style={{ marginBottom: '16px' }}>Đánh giá chất lượng phỏng vấn</h3>
+            <p className="muted" style={{ marginBottom: '24px' }}>
+              Ý kiến của bạn giúp chúng tôi cải thiện chất lượng câu hỏi của AI trong tương lai.
+            </p>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setUserRating(star)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      color: userRating >= star ? '#F59E0B' : 'var(--border)'
+                    }}
+                  >
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill={userRating >= star ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label">Nhận xét chi tiết (Không bắt buộc)</label>
+              <textarea
+                className="textarea"
+                placeholder="Câu hỏi có sát với thực tế không? AI có phản hồi tự nhiên không?"
+                value={userFeedbackText}
+                onChange={(e) => setUserFeedbackText(e.target.value)}
+              />
+            </div>
+
+            <button 
+              className="btn btn-primary" 
+              onClick={() => setIsFeedbackSubmitted(true)}
+              disabled={userRating === 0}
+            >
+              Gửi đánh giá
+            </button>
+          </>
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            style={{ textAlign: 'center', padding: '24px 0' }}
+          >
+            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--success-soft)', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <CheckCircle2 size={32} />
+            </div>
+            <h3 style={{ marginBottom: '8px' }}>Cảm ơn bạn đã góp ý!</h3>
+            <p className="muted">Đánh giá của bạn đã được ghi nhận để giúp HireMate ngày càng hoàn thiện hơn.</p>
+          </motion.div>
+        )}
       </div>
     </div>
   );

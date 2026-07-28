@@ -29,12 +29,20 @@ export interface STARBreakdown {
   R: number;
 }
 
+export interface QuestionFeedback {
+  question: string;
+  answer: string;
+  feedback: string;
+  score: number;
+}
+
 export interface InterviewResult {
   overall: number;
   role: string;
   clarity: number;
   subs: STARBreakdown;
   date: string;
+  feedbacks?: QuestionFeedback[];
 }
 
 export interface HistoryItem {
