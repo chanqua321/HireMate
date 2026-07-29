@@ -41,6 +41,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
     show: boolean;
     email: string;
     confirmLinkDev?: string;
+    emailConfirmed?: boolean;
   }>({ show: false, email: '' });
 
   // Sync mode with URL pathname or initialMode without unmounting
@@ -147,13 +148,29 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
       });
       if (res.ok || (res as any).status > 0) {
         const rawDevLink = res.data?.confirmLinkDev || (res as any).data?.confirmLinkDev || (res as any).confirmLinkDev;
-        const devLink = rawDevLink
-          ? rawDevLink.replace('http://localhost:5080', 'https://localhost:7080')
-          : undefined;
+        const emailConfirmed = !!(
+          res.data?.emailConfirmed ??
+          (res as any).data?.emailConfirmed ??
+          (res as any).emailConfirmed
+        );
+        const requireConfirm = res.data?.requireEmailConfirmation ?? (res as any).data?.requireEmailConfirmation;
+        const skipConfirm = emailConfirmed || requireConfirm === false;
+
+        if (skipConfirm) {
+          // Demo: bỏ bước xác thực email → chuyển thẳng sang đăng nhập
+          setRegisterForm({ name: '', email: '', password: '', confirm: '' });
+          setLoginForm({ email: registerForm.email.trim(), password: '' });
+          setRegisterSuccessData({ show: false, email: '' });
+          triggerConfetti();
+          handleModeChange('login');
+          return;
+        }
+
         setRegisterSuccessData({
           show: true,
           email: registerForm.email.trim(),
-          confirmLinkDev: devLink,
+          confirmLinkDev: rawDevLink,
+          emailConfirmed: false,
         });
         triggerConfetti();
         return;

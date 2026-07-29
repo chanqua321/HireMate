@@ -14,9 +14,9 @@ public class PayOsOptions
     public string ApiKey { get; set; } = string.Empty;
     public string ChecksumKey { get; set; } = string.Empty;
     public string ApiBaseUrl { get; set; } = "https://api-merchant.payos.vn";
-    public string ReturnUrl { get; set; } = "http://localhost:3000/billing-result.html?status=success";
-    public string CancelUrl { get; set; } = "http://localhost:3000/billing-result.html?status=cancel";
-    public string FrontendReturnUrl { get; set; } = "http://localhost:3000/billing-result.html";
+    public string ReturnUrl { get; set; } = "http://localhost:3000/billing-result?status=success";
+    public string CancelUrl { get; set; } = "http://localhost:3000/billing-result?status=cancel";
+    public string FrontendReturnUrl { get; set; } = "http://localhost:3000/billing-result";
 }
 
 public class PayOsCreateResult

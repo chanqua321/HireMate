@@ -37,19 +37,24 @@ public class AuthService(
     private bool ExposeDevTokens =>
         string.Equals(_configuration["EmailSettings:ExposeDevTokens"], "true", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Demo: false = bỏ bước xác nhận email khi đăng ký/đăng nhập.</summary>
+    private bool RequireEmailConfirmation =>
+        !string.Equals(_configuration["EmailSettings:RequireEmailConfirmation"], "false", StringComparison.OrdinalIgnoreCase);
+
     public async Task<IServiceResult> RegisterAsync(RegisterDto dto)
     {
         var existing = await _userManager.FindByEmailAsync(dto.Email);
         if (existing != null)
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Email đã được đăng ký");
 
+        var skipConfirm = !RequireEmailConfirmation;
         var user = new UserAccount
         {
             Id = Guid.NewGuid(),
             UserName = dto.Email,
             Email = dto.Email,
             FullName = dto.FullName,
-            EmailConfirmed = false,
+            EmailConfirmed = skipConfirm,
             OnboardingCompleted = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -63,12 +68,24 @@ public class AuthService(
         if (!roleResult.Succeeded)
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Gán vai trò thất bại", roleResult.Errors.Select(e => e.Description).ToList());
 
+        if (skipConfirm)
+        {
+            return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Đăng ký thành công. Bạn có thể đăng nhập ngay.", new Dictionary<string, object?>
+            {
+                ["email"] = user.Email,
+                ["emailConfirmed"] = true,
+                ["requireEmailConfirmation"] = false,
+                ["message"] = "Tài khoản đã sẵn sàng — bỏ qua xác thực email (demo)."
+            });
+        }
+
         var confirmLink = await SendConfirmEmailAsync(user);
 
         var data = new Dictionary<string, object?>
         {
             ["email"] = user.Email,
             ["emailConfirmed"] = false,
+            ["requireEmailConfirmation"] = true,
             ["message"] = "Vui lòng kiểm tra hộp thư để xác nhận email trước khi đăng nhập."
         };
         if (ExposeDevTokens)
@@ -85,7 +102,19 @@ public class AuthService(
             return new ServiceResult(Const.FAIL_READ_CODE, "Email hoặc mật khẩu không đúng");
 
         if (!user.EmailConfirmed)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Email chưa được xác nhận. Vui lòng kiểm tra hộp thư hoặc gửi lại email xác nhận.");
+        {
+            if (!RequireEmailConfirmation)
+            {
+                // Demo: tự xác nhận tài khoản cũ chưa confirm
+                user.EmailConfirmed = true;
+                user.UpdatedAt = DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
+            }
+            else
+            {
+                return new ServiceResult(Const.FAIL_READ_CODE, "Email chưa được xác nhận. Vui lòng kiểm tra hộp thư hoặc gửi lại email xác nhận.");
+            }
+        }
 
         var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
@@ -304,7 +333,7 @@ public class AuthService(
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var encoded = Uri.EscapeDataString(token);
-        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "http://localhost:5080").TrimEnd('/');
+        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "https://localhost:7080").TrimEnd('/');
         var frontUrl = (_configuration["EmailSettings:FrontendUrl"] ?? apiUrl).TrimEnd('/');
         var resetFrontLink = $"{frontUrl}/reset-password.html?email={Uri.EscapeDataString(user.Email!)}&token={encoded}";
 
@@ -357,7 +386,7 @@ public class AuthService(
     {
         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
         var encoded = Uri.EscapeDataString(token);
-        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "http://localhost:5080").TrimEnd('/');
+        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "https://localhost:7080").TrimEnd('/');
         var link = $"{apiUrl}/api/Auth/confirm-email?userId={user.Id}&token={encoded}";
 
         var html = $"""

@@ -19,3 +19,11 @@ Thumbs.db
 # Local / media scratch (not part of app)
 tvc/
 tvc-ref-frames/
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+HireMateFE/.env
+HireMateFE/.env.*
+

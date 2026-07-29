@@ -12,9 +12,9 @@ public class VnPayOptions
     public string TmnCode { get; set; } = string.Empty;
     public string HashSecret { get; set; } = string.Empty;
     public string PaymentUrl { get; set; } = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
-    public string ReturnUrl { get; set; } = "http://localhost:5080/api/Billing/vnpay-return";
-    public string IpnUrl { get; set; } = "http://localhost:5080/api/Billing/vnpay-ipn";
-    public string FrontendReturnUrl { get; set; } = "http://localhost:3000/billing-result.html";
+    public string ReturnUrl { get; set; } = "https://localhost:7080/api/Billing/vnpay-return";
+    public string IpnUrl { get; set; } = "https://localhost:7080/api/Billing/vnpay-ipn";
+    public string FrontendReturnUrl { get; set; } = "http://localhost:3000/billing-result";
 }
 
 public static class VnPayHelper

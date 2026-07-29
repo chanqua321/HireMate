@@ -248,7 +248,8 @@ export const Checkout: React.FC = () => {
                   <p className="muted" style={{ fontSize: '0.9rem' }}>
                     Chuyển tới{' '}
                     <strong>sandbox.vnpayment.vn</strong>. Cần set{' '}
-                    <code>VnPay:TmnCode</code> + <code>VnPay:HashSecret</code> (user-secrets) trên BE.
+                    <code>VnPay:TmnCode</code> + <code>VnPay:HashSecret</code> trong{' '}
+                    <code>appsettings.Development.json</code> trên BE.
                   </p>
                 </motion.div>
               )}
