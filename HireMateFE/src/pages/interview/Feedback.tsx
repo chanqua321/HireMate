@@ -1,24 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { Award, RotateCcw, Home, LayoutDashboard, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AnimatedCounter } from '../../components/common/AnimatedCounter';
 import { useConfetti } from '../../hooks/useConfetti';
+import { interviewService, mapDetailToResult } from '../../services/interview.service';
+import { InterviewResult } from '../../types';
 
 export const Feedback: React.FC = () => {
-  const { lastResult } = useApp();
+  const { lastResult, saveLastResult } = useApp();
   const { triggerConfetti } = useConfetti();
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get('sessionId') || sessionStorage.getItem('hm_last_session_id') || '';
 
+  const [apiResult, setApiResult] = useState<InterviewResult | null>(null);
+  const [summary, setSummary] = useState<string>('');
   const [userRating, setUserRating] = useState(0);
   const [userFeedbackText, setUserFeedbackText] = useState('');
   const [isFeedbackSubmitted, setIsFeedbackSubmitted] = useState(false);
 
-  const r = lastResult || {
-    overall: 85,
-    role: 'Lập trình viên Frontend',
-    clarity: 82,
-    subs: { S: 88, T: 85, A: 80, R: 87 },
+  useEffect(() => {
+    if (!sessionId || !sessionStorage.getItem('hm_access_token')) return;
+    interviewService.getDetail(sessionId).then((res) => {
+      if (res.ok && res.data) {
+        const mapped = mapDetailToResult(res.data);
+        setApiResult(mapped);
+        setSummary(res.data.feedbackSummary || '');
+        saveLastResult(mapped);
+      }
+    }).catch(() => {});
+  }, [sessionId, saveLastResult]);
+
+  const r = apiResult || lastResult || {
+    overall: 0,
+    role: '—',
+    clarity: 0,
+    subs: { S: 0, T: 0, A: 0, R: 0 },
     date: new Date().toLocaleDateString('vi-VN'),
   };
 
@@ -96,6 +114,9 @@ export const Feedback: React.FC = () => {
           </h2>
           <p className="muted" style={{ marginBottom: '20px', fontSize: '1.05rem' }}>
             {getMessage(r.overall)}
+            {summary && (
+              <p className="muted" style={{ marginTop: 12, whiteSpace: 'pre-wrap' }}>{summary}</p>
+            )}
           </p>
 
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>

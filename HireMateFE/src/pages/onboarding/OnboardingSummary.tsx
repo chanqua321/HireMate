@@ -1,12 +1,81 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { CheckCircle2, ArrowRight, Edit3 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { onboardingService, profileService } from '../../services';
+import { ONBOARDING_REDIRECT_KEY } from '../../components/common/RequirePremium';
 
 export const OnboardingSummary: React.FC = () => {
-  const { profile } = useApp();
+  const { profile, updateProfile } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const r = searchParams.get('redirect');
+    if (r && r.startsWith('/')) {
+      sessionStorage.setItem(ONBOARDING_REDIRECT_KEY, r);
+    }
+  }, [searchParams]);
+
+  const finish = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      if (sessionStorage.getItem('hm_access_token')) {
+        // Đồng bộ lại từ state local trước khi confirm (phòng dữ liệu BE bị ghi đè null)
+        const year = new Date().getFullYear() + 1;
+        if (profile.name) {
+          await onboardingService.savePersonal({
+            fullName: profile.name,
+            university: 'Chưa cập nhật',
+            major: 'Chưa cập nhật',
+            graduationYear: year,
+          });
+        }
+        if (profile.field && profile.role) {
+          await onboardingService.saveGoal({
+            desiredIndustry: profile.field,
+            desiredPosition: profile.role,
+            experienceLevel: profile.exp || '1-3 năm',
+          });
+        }
+        if (profile.bio || (profile.hobbies && profile.hobbies.length)) {
+          await profileService.updateProfile({
+            name: profile.name || 'Người dùng HireMate',
+            bio: profile.bio,
+            hobbies: profile.hobbies,
+            field: profile.field,
+            role: profile.role,
+            exp: profile.exp,
+            university: 'Chưa cập nhật',
+            major: 'Chưa cập nhật',
+            graduationYear: year,
+          });
+        }
+
+        const res = await onboardingService.confirm();
+        if (!res.ok) {
+          setError(res.message || 'Không xác nhận được onboarding');
+          setLoading(false);
+          return;
+        }
+        updateProfile({ onboardingCompleted: true }, { skipApi: true });
+        sessionStorage.setItem('hm_onboarding_done', '1');
+      }
+      const next =
+        searchParams.get('redirect') ||
+        sessionStorage.getItem(ONBOARDING_REDIRECT_KEY) ||
+        '/dashboard';
+      sessionStorage.removeItem(ONBOARDING_REDIRECT_KEY);
+      navigate(next.startsWith('/') ? next : '/dashboard');
+    } catch (e: any) {
+      setError(e?.message || 'Lỗi kết nối API');
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="section container" style={{ maxWidth: '640px', margin: '30px auto' }}>
@@ -86,13 +155,13 @@ export const OnboardingSummary: React.FC = () => {
             <div>
               <span className="muted" style={{ fontSize: '0.85rem' }}>Ngành nghề</span>
               <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
-                {profile.field || 'Công nghệ thông tin'}
+                {profile.field || '—'}
               </div>
             </div>
             <div>
               <span className="muted" style={{ fontSize: '0.85rem' }}>Vị trí ứng tuyển</span>
               <div style={{ fontWeight: 600, color: 'var(--primary)' }}>
-                {profile.role || 'Lập trình viên Frontend'}
+                {profile.role || '—'}
               </div>
             </div>
           </div>
@@ -155,13 +224,17 @@ export const OnboardingSummary: React.FC = () => {
           )}
         </div>
 
+        {error && (
+          <p style={{ color: '#EF4444', marginBottom: 12, fontSize: '0.9rem' }}>{error}</p>
+        )}
         <button
           type="button"
-          onClick={() => navigate('/dashboard')}
+          onClick={finish}
+          disabled={loading}
           className="btn btn-primary btn-lg"
           style={{ width: '100%', justifyContent: 'center' }}
         >
-          Bắt đầu sử dụng HireMate <ArrowRight size={18} />
+          {loading ? 'Đang lưu…' : 'Bắt đầu sử dụng HireMate'} <ArrowRight size={18} />
         </button>
       </motion.div>
     </div>

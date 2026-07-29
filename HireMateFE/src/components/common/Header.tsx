@@ -11,6 +11,12 @@ export const Header: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const isPremium =
+    profile.isPremium === true || sessionStorage.getItem('hm_is_premium') === '1';
+  const interviewHref = isLoggedIn && !isPremium ? '/pricing' : '/interview-setup';
+  const planCode = sessionStorage.getItem('hm_plan_code') || (isPremium ? 'premium' : 'free');
+  const planBadge =
+    planCode === 'combo' ? 'Cao cấp' : planCode === 'premium' ? 'Tiêu chuẩn' : 'Miễn phí';
 
   useEffect(() => {
     const onScroll = () => {
@@ -76,10 +82,11 @@ export const Header: React.FC = () => {
               Bảng giá
             </Link>
             <Link
-              to="/interview-setup"
+              to={interviewHref}
               className={isActive('/interview-setup') ? 'active' : ''}
+              title={isLoggedIn && !isPremium ? 'Cần mua gói để vào phỏng vấn' : undefined}
             >
-              Phỏng vấn
+              Phỏng vấn{isLoggedIn && !isPremium ? ' 🔒' : ''}
             </Link>
             <Link
               to="/questions"
@@ -138,6 +145,19 @@ export const Header: React.FC = () => {
                     {initials}
                   </span>
                   <span>{profile.name || 'Hồ sơ'}</span>
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      background: isPremium ? 'rgba(3,191,255,0.15)' : 'rgba(107,114,128,0.12)',
+                      color: isPremium ? '#0284C7' : '#6B7280',
+                    }}
+                  >
+                    {planBadge}
+                  </span>
                 </button>
 
                 <AnimatePresence>
@@ -257,10 +277,11 @@ export const Header: React.FC = () => {
                 Bảng giá
               </Link>
               <Link
-                to="/interview-setup"
+                to={interviewHref}
                 className={isActive('/interview-setup') ? 'active' : ''}
+                onClick={() => setMobileOpen(false)}
               >
-                Phỏng vấn
+                Phỏng vấn{isLoggedIn && !isPremium ? ' 🔒' : ''}
               </Link>
               <Link
                 to="/questions"

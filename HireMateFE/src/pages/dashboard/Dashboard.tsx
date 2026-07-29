@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
@@ -14,6 +14,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedCounter } from '../../components/common/AnimatedCounter';
 import { DashboardCharts } from './DashboardCharts';
+import { dashboardService } from '../../services';
+import { interviewService, mapSummaryToHistory } from '../../services/interview.service';
 
 export const Dashboard: React.FC = () => {
   const { profile, updateProfile, history, lastResult } = useApp();
@@ -23,6 +25,48 @@ export const Dashboard: React.FC = () => {
   const [field, setField] = useState(profile.field || 'Công nghệ thông tin');
   const [bio, setBio] = useState(profile.bio || '');
   const [savedMsg, setSavedMsg] = useState(false);
+  const [apiHistory, setApiHistory] = useState(history);
+  const [stats, setStats] = useState<{
+    sessionsCount: number;
+    interviewScore: number | null;
+    sessionsThisMonth: number;
+    remainingFree: number;
+    isPremium: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    setName(profile.name || '');
+    setRole(profile.role || '');
+    setField(profile.field || '');
+    setBio(profile.bio || '');
+  }, [profile]);
+
+  useEffect(() => {
+    setApiHistory(history);
+  }, [history]);
+
+  useEffect(() => {
+    if (!sessionStorage.getItem('hm_access_token')) return;
+
+    dashboardService.getDashboardStats().then((res) => {
+      if (res.ok && res.data) {
+        const d: any = res.data;
+        setStats({
+          sessionsCount: d.sessionsCount ?? 0,
+          interviewScore: d.interviewScore ?? null,
+          sessionsThisMonth: d.sessionsThisMonth ?? 0,
+          remainingFree: d.remainingFreeSessionsThisMonth ?? 0,
+          isPremium: !!d.isPremium,
+        });
+      }
+    }).catch(() => {});
+
+    interviewService.getHistory().then((res) => {
+      if (res.ok && Array.isArray(res.data)) {
+        setApiHistory(mapSummaryToHistory(res.data));
+      }
+    }).catch(() => {});
+  }, []);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,16 +80,20 @@ export const Dashboard: React.FC = () => {
     setTimeout(() => setSavedMsg(false), 2200);
   };
 
+  const displayHistory = [...apiHistory].reverse().slice(0, 10);
+
   const avgScore =
-    history.length > 0
-      ? Math.round(
-          history.reduce((acc, cur) => acc + cur.score, 0) / history.length
-        )
-      : 82;
+    stats?.interviewScore != null
+      ? Math.round(stats.interviewScore)
+      : apiHistory.length > 0
+      ? Math.round(apiHistory.reduce((acc, cur) => acc + cur.score, 0) / apiHistory.length)
+      : 0;
 
-  const latestScore = lastResult?.overall || (history.length ? history[history.length - 1].score : 85);
+  const latestScore =
+    lastResult?.overall ||
+    (apiHistory.length ? apiHistory[apiHistory.length - 1].score : 0);
 
-  const displayHistory = [...history].reverse().slice(0, 10);
+  const sessionCount = stats?.sessionsCount ?? apiHistory.length;
 
   return (
     <div className="section container" style={{ maxWidth: '1080px', margin: '20px auto' }}>
@@ -77,11 +125,11 @@ export const Dashboard: React.FC = () => {
 
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <Link
-            to="/interview-setup"
+            to={profile.isPremium || sessionStorage.getItem('hm_is_premium') === '1' ? '/interview-setup' : '/pricing'}
             className="btn btn-primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
           >
-            <Play size={16} /> Luyện phỏng vấn mới
+            <Play size={16} /> {profile.isPremium || sessionStorage.getItem('hm_is_premium') === '1' ? 'Luyện phỏng vấn mới' : 'Mua gói để phỏng vấn'}
           </Link>
           <Link
             to="/questions"
@@ -105,10 +153,12 @@ export const Dashboard: React.FC = () => {
             </span>
           </div>
           <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--ink)' }}>
-            <AnimatedCounter value={history.length || 3} />
+            <AnimatedCounter value={sessionCount} />
           </div>
           <span className="muted" style={{ fontSize: '0.8rem' }}>
-            Trong tháng này
+            {stats?.isPremium
+              ? 'Gói Premium'
+              : `Còn ${stats?.remainingFree ?? '—'} buổi free tháng này`}
           </span>
         </div>
 

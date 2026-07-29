@@ -14,12 +14,25 @@ import { OnboardingSummary } from '../pages/onboarding/OnboardingSummary';
 import { Pricing } from '../pages/billing/Pricing';
 import { Checkout } from '../pages/billing/Checkout';
 import { PaymentSuccess } from '../pages/billing/PaymentSuccess';
+import { BillingResult } from '../pages/billing/BillingResult';
 import { Invoice } from '../pages/billing/Invoice';
 import { InterviewSetup } from '../pages/interview/InterviewSetup';
 import { InterviewRoom } from '../pages/interview/InterviewRoom';
 import { Feedback } from '../pages/interview/Feedback';
 import { Questions } from '../pages/interview/Questions';
 import { Dashboard } from '../pages/dashboard/Dashboard';
+
+import AdminLayout from '../pages/admin/AdminLayout';
+import AdminDashboard from '../pages/admin/AdminDashboard';
+import AdminUsers from '../pages/admin/AdminUsers';
+import AdminInterviews from '../pages/admin/AdminInterviews';
+import AdminRevenue from '../pages/admin/AdminRevenue';
+import AdminPlans from '../pages/admin/AdminPlans';
+import AdminPromos from '../pages/admin/AdminPromos';
+import AdminTickets from '../pages/admin/AdminTickets';
+import AdminBlog from '../pages/admin/AdminBlog';
+import AdminFaq from '../pages/admin/AdminFaq';
+import AdminResources from '../pages/admin/AdminResources';
 
 export const AppRouter: React.FC = () => {
   const location = useLocation();
@@ -63,6 +76,8 @@ export const AppRouter: React.FC = () => {
           <Route path="checkout.html" element={<Checkout />} />
           <Route path="payment-success" element={<PaymentSuccess />} />
           <Route path="payment-success.html" element={<PaymentSuccess />} />
+          <Route path="billing-result" element={<BillingResult />} />
+          <Route path="billing-result.html" element={<BillingResult />} />
           <Route path="invoice" element={<Invoice />} />
           <Route path="invoice.html" element={<Invoice />} />
 
@@ -79,6 +94,20 @@ export const AppRouter: React.FC = () => {
           {/* Dashboard */}
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="dashboard.html" element={<Dashboard />} />
+
+          {/* Admin (cần role Admin trên BE) */}
+          <Route path="admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="interviews" element={<AdminInterviews />} />
+            <Route path="revenue" element={<AdminRevenue />} />
+            <Route path="plans" element={<AdminPlans />} />
+            <Route path="promos" element={<AdminPromos />} />
+            <Route path="tickets" element={<AdminTickets />} />
+            <Route path="blog" element={<AdminBlog />} />
+            <Route path="faq" element={<AdminFaq />} />
+            <Route path="resources" element={<AdminResources />} />
+          </Route>
 
           {/* Wildcard redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />

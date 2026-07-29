@@ -161,8 +161,23 @@ public class ProfileService(
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
-        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG,
-            OnboardingService.MapProfile(user, profile));
+        var dto = OnboardingService.MapProfile(user, profile);
+        dto.CurrentPlanCode = await ResolveCurrentPlanCodeAsync(userId, user.IsPremium);
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, dto);
+    }
+
+    private async Task<string> ResolveCurrentPlanCodeAsync(Guid userId, bool isPremium)
+    {
+        var paid = await _unitOfWork.InvoiceRepository.GetQueryable().AsNoTracking()
+            .Include(i => i.Plan)
+            .Where(i => i.UserId == userId && i.Status == "Paid")
+            .OrderByDescending(i => i.PaidAt ?? i.CreatedAt)
+            .Select(i => i.Plan != null ? i.Plan.Code : null)
+            .FirstOrDefaultAsync();
+
+        if (!string.IsNullOrWhiteSpace(paid))
+            return PlanTier.Normalize(paid);
+        return isPremium ? "premium" : "free";
     }
 
     public async Task<IServiceResult> UpdateAsync(Guid userId, UpdateProfileDto dto)
@@ -189,13 +204,22 @@ public class ProfileService(
             await _unitOfWork.CareerProfileRepository.CreateAsync(profile);
         }
 
-        profile.DesiredIndustry = dto.DesiredIndustry;
-        profile.DesiredPosition = dto.DesiredPosition;
-        profile.ExperienceLevel = dto.ExperienceLevel;
-        profile.University = dto.University;
-        profile.Major = dto.Major;
-        profile.GraduationYear = dto.GraduationYear;
-        profile.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
+        // Partial update: chỉ ghi đè field được gửi — tránh xóa University/mục tiêu
+        // khi FE chỉ cập nhật name/bio/hobbies trong onboarding.
+        if (dto.DesiredIndustry != null)
+            profile.DesiredIndustry = dto.DesiredIndustry;
+        if (dto.DesiredPosition != null)
+            profile.DesiredPosition = dto.DesiredPosition;
+        if (dto.ExperienceLevel != null)
+            profile.ExperienceLevel = dto.ExperienceLevel;
+        if (dto.University != null)
+            profile.University = dto.University;
+        if (dto.Major != null)
+            profile.Major = dto.Major;
+        if (dto.GraduationYear.HasValue)
+            profile.GraduationYear = dto.GraduationYear;
+        if (dto.Bio != null)
+            profile.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
         if (dto.Hobbies != null)
             profile.HobbiesJson = OnboardingService.SerializeHobbies(dto.Hobbies);
         profile.UpdatedAt = DateTime.UtcNow;

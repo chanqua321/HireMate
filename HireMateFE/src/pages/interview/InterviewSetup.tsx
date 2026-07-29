@@ -17,6 +17,8 @@ import {
   Flame,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { interviewService, mapDifficultyToApi, SESSION_STORAGE_KEY } from '../../services/interview.service';
+import { RequirePremium } from '../../components/common/RequirePremium';
 
 interface CustomSelectProps {
   label: string;
@@ -109,9 +111,11 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   );
 };
 
-export const InterviewSetup: React.FC = () => {
+export const InterviewSetupInner: React.FC = () => {
   const { profile, interviewConfig, updateInterviewConfig } = useApp();
   const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const industries = Object.keys(INDUSTRY_ROLES);
   const initialField =
@@ -145,15 +149,58 @@ export const InterviewSetup: React.FC = () => {
     }
   }, [field, role]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     updateInterviewConfig({
       field,
       role,
       difficulty,
       mode,
     });
-    navigate('/interview-room');
+
+    if (!sessionStorage.getItem('hm_access_token')) {
+      navigate(`/login?redirect=${encodeURIComponent('/interview-setup')}`);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await interviewService.createSession({
+        industry: field,
+        position: role,
+        difficulty: mapDifficultyToApi(difficulty),
+        mode: mode === 'Voice' ? 'Voice' : 'Text',
+        questionCount: 5,
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          navigate(`/login?redirect=${encodeURIComponent('/interview-setup')}`);
+          return;
+        }
+        const msg = (res.message || '').toLowerCase();
+        if (msg.includes('onboarding')) {
+          sessionStorage.setItem('hm_post_onboarding', '/interview-setup');
+          navigate(`/onboarding/profile?redirect=${encodeURIComponent('/interview-setup')}`);
+          return;
+        }
+        setError(res.message || 'Không tạo được phiên phỏng vấn');
+        return;
+      }
+
+      const sessionId = res.data?.id;
+      if (!sessionId) {
+        setError('API không trả session id');
+        return;
+      }
+      sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+      navigate(`/interview-room?sessionId=${encodeURIComponent(sessionId)}`);
+    } catch (err: any) {
+      setError(err?.message || 'Lỗi kết nối API');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const currentRoles = INDUSTRY_ROLES[field] || [];
@@ -484,9 +531,12 @@ export const InterviewSetup: React.FC = () => {
               </div>
             </div>
 
-            {/* SUBMIT BUTTON */}
+            {error && (
+              <p style={{ color: '#EF4444', marginBottom: 12, fontSize: '0.9rem' }}>{error}</p>
+            )}
             <button
               type="submit"
+              disabled={submitting}
               className="btn btn-primary btn-lg"
               style={{
                 width: '100%',
@@ -499,7 +549,7 @@ export const InterviewSetup: React.FC = () => {
                 background: 'linear-gradient(135deg, #03BFFF 0%, #0088CC 100%)',
               }}
             >
-              Vào phòng phỏng vấn AI ngay <ArrowRight size={20} />
+              {submitting ? 'Đang tạo phiên…' : 'Vào phòng phỏng vấn AI ngay'} <ArrowRight size={20} />
             </button>
           </form>
         </div>
@@ -507,3 +557,10 @@ export const InterviewSetup: React.FC = () => {
     </div>
   );
 };
+
+export const InterviewSetup: React.FC = () => (
+  <RequirePremium>
+    <InterviewSetupInner />
+  </RequirePremium>
+);
+

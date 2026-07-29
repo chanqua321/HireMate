@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle, ArrowRight, FileText, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useConfetti } from '../../hooks/useConfetti';
+import { authService } from '../../services';
+import { persistPlanCode, toPlanCode } from '../../services/billing.service';
 
 const PLAN_SUCCESS_MAP: Record<
   string,
@@ -13,18 +15,28 @@ const PLAN_SUCCESS_MAP: Record<
   }
 > = {
   free: {
-    title: 'Chào mừng bạn đến với Gói Miễn phí!',
-    packageName: 'Gói Miễn phí - 1 tháng',
+    title: 'Chào mừng bạn đến với gói Miễn phí!',
+    packageName: 'Miễn phí - 1 tháng',
     price: '0đ',
   },
   basic: {
-    title: 'Chào mừng bạn đến với Gói Cơ Bản!',
-    packageName: 'Gói Cơ Bản - 1 tháng',
+    title: 'Chào mừng bạn đến với gói Tiêu chuẩn!',
+    packageName: 'Tiêu chuẩn - 1 tháng',
+    price: '79.000đ',
+  },
+  premium: {
+    title: 'Chào mừng bạn đến với gói Tiêu chuẩn!',
+    packageName: 'Tiêu chuẩn - 1 tháng',
     price: '79.000đ',
   },
   pro: {
-    title: 'Chào mừng bạn đến với Gói Nâng Cao!',
-    packageName: 'Gói Nâng Cao - 1 tháng',
+    title: 'Chào mừng bạn đến với gói Cao cấp!',
+    packageName: 'Cao cấp - 1 tháng',
+    price: '149.000đ',
+  },
+  combo: {
+    title: 'Chào mừng bạn đến với gói Cao cấp!',
+    packageName: 'Cao cấp - 1 tháng',
     price: '149.000đ',
   },
 };
@@ -34,10 +46,18 @@ export const PaymentSuccess: React.FC = () => {
   const [searchParams] = useSearchParams();
   const planKey = searchParams.get('plan') || 'pro';
   const planInfo = PLAN_SUCCESS_MAP[planKey] || PLAN_SUCCESS_MAP.pro;
+  const invoiceNumber = searchParams.get('invoiceNumber') || searchParams.get('invoiceId') || '—';
 
   useEffect(() => {
     triggerConfetti();
-  }, [triggerConfetti]);
+    if (sessionStorage.getItem('hm_access_token')) {
+      authService.getMe().catch(() => {});
+    }
+    const plan = searchParams.get('plan');
+    if (plan) {
+      persistPlanCode(toPlanCode(plan));
+    }
+  }, [triggerConfetti, searchParams]);
 
   return (
     <div className="section container" style={{ maxWidth: '580px', margin: '40px auto' }}>
@@ -87,7 +107,7 @@ export const PaymentSuccess: React.FC = () => {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span className="muted">Mã đơn hàng</span>
-            <strong>#HM2026-9843</strong>
+            <strong>#{invoiceNumber}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span className="muted">Gói cước</span>

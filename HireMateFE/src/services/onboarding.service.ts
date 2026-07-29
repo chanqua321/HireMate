@@ -1,16 +1,16 @@
 import { apiClient, ApiResponse } from './apiClient';
 
 export interface OnboardingGoalDto {
-  targetRole?: string;
-  targetField?: string;
-  targetLevel?: string;
+  desiredIndustry: string;
+  desiredPosition: string;
+  experienceLevel: string;
 }
 
 export interface OnboardingPersonalDto {
-  fullName?: string;
-  bio?: string;
-  experienceYears?: string;
-  skills?: string[];
+  fullName: string;
+  university: string;
+  major: string;
+  graduationYear: number;
 }
 
 export const onboardingService = {

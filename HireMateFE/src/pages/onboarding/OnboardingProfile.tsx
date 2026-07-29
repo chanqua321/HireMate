@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { User, ArrowRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { onboardingService, profileService } from '../../services';
+import { ONBOARDING_REDIRECT_KEY } from '../../components/common/RequirePremium';
 
 export const OnboardingProfile: React.FC = () => {
   const { profile, updateProfile } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [name, setName] = useState(profile.name || '');
 
@@ -15,6 +18,13 @@ export const OnboardingProfile: React.FC = () => {
       setName(profile.name);
     }
   }, [profile.name]);
+
+  useEffect(() => {
+    const r = searchParams.get('redirect');
+    if (r && r.startsWith('/')) {
+      sessionStorage.setItem(ONBOARDING_REDIRECT_KEY, r);
+    }
+  }, [searchParams]);
 
   const [bio, setBio] = useState(
     profile.bio ||
@@ -42,13 +52,58 @@ export const OnboardingProfile: React.FC = () => {
     setHobbies(hobbies.filter((tag) => tag !== tagToRemove));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile({
-      name: name.trim() || profile.name,
+    setError(null);
+    const fullName = name.trim() || profile.name || 'Người dùng HireMate';
+    const next = {
+      name: fullName,
       bio: bio.trim(),
       hobbies,
-    });
+    };
+    // Chỉ cập nhật local — tránh AppContext gọi PUT /Profile đè mất University
+    updateProfile(next, { skipApi: true });
+
+    if (sessionStorage.getItem('hm_access_token')) {
+      setSaving(true);
+      try {
+        const year = new Date().getFullYear() + 1;
+        const personal = await onboardingService.savePersonal({
+          fullName,
+          university: 'Chưa cập nhật',
+          major: 'Chưa cập nhật',
+          graduationYear: year,
+        });
+        if (!personal.ok) {
+          setError(personal.message || 'Không lưu được thông tin cá nhân');
+          setSaving(false);
+          return;
+        }
+        // Bio/hobbies nằm ở Profile API (không có trong Onboarding/personal)
+        const profileRes = await profileService.updateProfile({
+          name: fullName,
+          bio: next.bio,
+          hobbies: next.hobbies,
+          university: 'Chưa cập nhật',
+          major: 'Chưa cập nhật',
+          graduationYear: year,
+        });
+        if (!profileRes.ok) {
+          setError(profileRes.message || 'Không lưu được hồ sơ');
+          setSaving(false);
+          return;
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Lỗi kết nối API');
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
+    }
+
     navigate('/onboarding/goal');
   };
 
@@ -153,12 +208,17 @@ export const OnboardingProfile: React.FC = () => {
             </div>
           </div>
 
+          {error && (
+            <p style={{ color: '#EF4444', marginBottom: 12, fontSize: '0.9rem' }}>{error}</p>
+          )}
+
           <button
             type="submit"
             className="btn btn-primary btn-lg"
             style={{ width: '100%', justifyContent: 'center' }}
+            disabled={saving}
           >
-            Tiếp tục <ArrowRight size={18} />
+            {saving ? 'Đang lưu…' : 'Tiếp tục'} <ArrowRight size={18} />
           </button>
         </form>
       </div>

@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { INDUSTRY_ROLES } from '../../data/questionBank';
 import { Target, ArrowRight } from 'lucide-react';
+import { onboardingService } from '../../services';
 
 export const OnboardingGoal: React.FC = () => {
   const { profile, updateProfile, updateInterviewConfig } = useApp();
   const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const industries = Object.keys(INDUSTRY_ROLES);
   const initialField = profile.field && INDUSTRY_ROLES[profile.field]
@@ -30,17 +33,33 @@ export const OnboardingGoal: React.FC = () => {
     }
   }, [field, role]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile({
-      field,
-      role,
-      exp,
-    });
-    updateInterviewConfig({
-      field,
-      role,
-    });
+    setError(null);
+    updateProfile({ field, role, exp }, { skipApi: true });
+    updateInterviewConfig({ field, role });
+
+    if (sessionStorage.getItem('hm_access_token')) {
+      setSaving(true);
+      try {
+        const res = await onboardingService.saveGoal({
+          desiredIndustry: field,
+          desiredPosition: role,
+          experienceLevel: exp,
+        });
+        if (!res.ok) {
+          setError(res.message || 'Không lưu được mục tiêu nghề nghiệp');
+          setSaving(false);
+          return;
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Lỗi kết nối API');
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
+    }
+
     navigate('/onboarding/summary');
   };
 
@@ -127,12 +146,17 @@ export const OnboardingGoal: React.FC = () => {
             </select>
           </div>
 
+          {error && (
+            <p style={{ color: '#EF4444', marginBottom: 12, fontSize: '0.9rem' }}>{error}</p>
+          )}
+
           <button
             type="submit"
             className="btn btn-primary btn-lg"
             style={{ width: '100%', justifyContent: 'center' }}
+            disabled={saving}
           >
-            Tiếp tục <ArrowRight size={18} />
+            {saving ? 'Đang lưu…' : 'Tiếp tục'} <ArrowRight size={18} />
           </button>
         </form>
       </div>

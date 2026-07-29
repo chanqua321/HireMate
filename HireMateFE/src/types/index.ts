@@ -5,6 +5,8 @@ export interface Profile {
   bio: string;
   exp: string;
   hobbies: string[];
+  isPremium?: boolean;
+  onboardingCompleted?: boolean;
 }
 
 export interface Question {

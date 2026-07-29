@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { CreditCard, QrCode, Building2, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { billingService, toPlanCode, planTier, persistPlanCode, readStoredPlanCode } from '../../services/billing.service';
+
+const hasAccessToken = () =>
+  Boolean(sessionStorage.getItem('hm_access_token') || localStorage.getItem('hm_access_token'));
 
 const PLAN_INFO_MAP: Record<
   string,
@@ -15,30 +19,50 @@ const PLAN_INFO_MAP: Record<
   }
 > = {
   free: {
-    name: 'Gói Miễn phí (HireMate Free)',
+    name: 'Miễn phí',
     price: '0đ',
     origPrice: '0đ',
-    period: 'Thanh toán 0đ',
-    desc: 'Lý tưởng để bắt đầu hành trình tìm kiếm công việc đầu tiên (3 buổi/tháng).',
+    period: 'Thanh toán theo tháng',
+    desc: 'Cho người mới bắt đầu — 3 lượt phỏng vấn AI mỗi tháng.',
     savings: '0đ',
   },
   basic: {
-    name: 'Gói Cơ Bản (HireMate Basic)',
+    name: 'Tiêu chuẩn',
     price: '79.000đ',
     origPrice: '99.000đ',
     period: 'Thanh toán theo tháng',
-    desc: 'Mở khóa tiềm AI để chiếm ưu thế trong mọi cuộc phỏng vấn (15 buổi/tháng).',
+    desc: 'Cho người luyện tập đều đặn — 15 lượt/tháng, phân tích CV ATS.',
+    savings: '-20.000đ',
+  },
+  premium: {
+    name: 'Tiêu chuẩn',
+    price: '79.000đ',
+    origPrice: '99.000đ',
+    period: 'Thanh toán theo tháng',
+    desc: 'Cho người luyện tập đều đặn — 15 lượt/tháng, phân tích CV ATS.',
     savings: '-20.000đ',
   },
   pro: {
-    name: 'Gói Nâng Cao (HireMate Pro)',
+    name: 'Cao cấp',
     price: '149.000đ',
     origPrice: '189.000đ',
     period: 'Thanh toán theo tháng',
-    desc: 'Mở khóa toàn bộ tiềm năng AI, tối ưu CV chuẩn ATS chuyên sâu (50 buổi/tháng).',
+    desc: 'Cho ứng viên nghiêm túc — 50 lượt/tháng, STAR chi tiết, ưu tiên Beta.',
+    savings: '-40.000đ',
+  },
+  combo: {
+    name: 'Cao cấp',
+    price: '149.000đ',
+    origPrice: '189.000đ',
+    period: 'Thanh toán theo tháng',
+    desc: 'Cho ứng viên nghiêm túc — 50 lượt/tháng, STAR chi tiết, ưu tiên Beta.',
     savings: '-40.000đ',
   },
 };
+
+type UiMethod = 'sandbox' | 'vnpay' | 'qr';
+
+const envPayment = ((import.meta as any).env?.VITE_PAYMENT_METHOD as string | undefined)?.trim();
 
 export const Checkout: React.FC = () => {
   const navigate = useNavigate();
@@ -46,16 +70,97 @@ export const Checkout: React.FC = () => {
   const planKey = searchParams.get('plan') || 'pro';
   const planInfo = PLAN_INFO_MAP[planKey] || PLAN_INFO_MAP.pro;
 
-  const [method, setMethod] = useState<'credit' | 'atm' | 'qr'>('credit');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvc, setCvc] = useState('');
-  const [name, setName] = useState('');
+  const [method, setMethod] = useState<UiMethod>(
+    envPayment?.toLowerCase() === 'vnpay' ? 'vnpay' : 'sandbox'
+  );
+  const [promoCode, setPromoCode] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentPlan, setCurrentPlan] = useState(readStoredPlanCode());
+  const loginRedirect = `/login?redirect=${encodeURIComponent(`/checkout?plan=${planKey}`)}`;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!hasAccessToken()) {
+      setError('Cần đăng nhập trước khi thanh toán. Đang chuyển tới trang login…');
+      const t = window.setTimeout(() => navigate(loginRedirect), 600);
+      return () => window.clearTimeout(t);
+    }
+
+    billingService.getCurrentPlanCode().then((code) => {
+      setCurrentPlan(code);
+      const current = planTier(code);
+      const target = planTier(planKey);
+      if (target <= current) {
+        setError(
+          target === current
+            ? `Bạn đang dùng gói ${planKey === 'pro' ? 'Cao cấp' : planKey === 'basic' ? 'Tiêu chuẩn' : 'Miễn phí'}. Chỉ được nâng cấp lên gói cao hơn.`
+            : 'Không thể mua gói thấp hơn gói hiện tại.'
+        );
+      }
+    }).catch(() => {});
+  }, [loginRedirect, navigate, planKey]);
+
+  const resolvePaymentMethod = (): string => {
+    if (method === 'vnpay' || method === 'qr') return 'VNPay';
+    return 'Mock';
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate checkout success
-    navigate(`/payment-success?plan=${planKey}`);
+    setError(null);
+
+    if (!hasAccessToken()) {
+      setError('Bạn cần đăng nhập trước khi thanh toán.');
+      navigate(loginRedirect);
+      return;
+    }
+
+    const current = planTier(currentPlan);
+    const target = planTier(planKey);
+    if (target <= current) {
+      setError('Chỉ được nâng cấp lên gói cao hơn gói đang dùng. Quay lại Bảng giá để chọn.');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const planCode = toPlanCode(planKey);
+      const paymentMethod = resolvePaymentMethod();
+      const res = await billingService.checkout({
+        planCode,
+        promoCode: promoCode.trim() || undefined,
+        paymentMethod,
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+          sessionStorage.removeItem('hm_access_token');
+          navigate(loginRedirect);
+          return;
+        }
+        setError(res.message || 'Checkout thất bại');
+        return;
+      }
+
+      const data = res.data || {};
+      if (data.plan) persistPlanCode(data.plan);
+      else persistPlanCode(toPlanCode(planKey));
+
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+        return;
+      }
+
+      navigate(
+        `/payment-success?plan=${encodeURIComponent(planKey)}&invoiceId=${encodeURIComponent(data.id || '')}&invoiceNumber=${encodeURIComponent(data.invoiceNumber || '')}`
+      );
+    } catch (err: any) {
+      setError(err?.message || 'Không kết nối được API thanh toán');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -63,16 +168,15 @@ export const Checkout: React.FC = () => {
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
         <h2>Thanh toán an toàn</h2>
         <p className="muted">
-          Hoàn tất đơn hàng để kích hoạt quyền lợi gói Chuyên nghiệp (Pro).
+          Local: AI Heuristic (mock). Payment mặc định Mock sandbox; VNPay dùng cổng sandbox khi đã cấu hình
+          TmnCode/HashSecret.
         </p>
       </div>
 
       <div className="grid grid-2" style={{ gap: '32px', alignItems: 'flex-start' }}>
-        {/* Payment Form Column */}
         <div className="card" style={{ padding: '32px' }}>
           <h3 style={{ marginBottom: '20px' }}>Chọn phương thức thanh toán</h3>
 
-          {/* Payment Method Tabs */}
           <div
             style={{
               display: 'grid',
@@ -82,16 +186,16 @@ export const Checkout: React.FC = () => {
             }}
           >
             {[
-              { id: 'credit', label: 'Thẻ tín dụng', icon: <CreditCard size={18} /> },
-              { id: 'atm', label: 'Thẻ ATM', icon: <Building2 size={18} /> },
-              { id: 'qr', label: 'VietQR', icon: <QrCode size={18} /> },
+              { id: 'sandbox' as const, label: 'Sandbox Mock', icon: <CreditCard size={18} /> },
+              { id: 'vnpay' as const, label: 'VNPay Sandbox', icon: <Building2 size={18} /> },
+              { id: 'qr' as const, label: 'VNPay QR', icon: <QrCode size={18} /> },
             ].map((t) => {
               const active = method === t.id;
               return (
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setMethod(t.id as 'credit' | 'atm' | 'qr')}
+                  onClick={() => setMethod(t.id)}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -99,12 +203,8 @@ export const Checkout: React.FC = () => {
                     gap: '6px',
                     padding: '12px 8px',
                     borderRadius: '10px',
-                    border: active
-                      ? '2px solid var(--primary)'
-                      : '1px solid var(--border)',
-                    background: active
-                      ? 'rgba(3, 191, 255, 0.08)'
-                      : 'var(--surface)',
+                    border: active ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: active ? 'rgba(3, 191, 255, 0.08)' : 'var(--surface)',
                     color: active ? 'var(--primary)' : 'var(--ink)',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -120,146 +220,65 @@ export const Checkout: React.FC = () => {
 
           <form onSubmit={handleSubmit}>
             <AnimatePresence mode="wait">
-              {method === 'credit' && (
+              {method === 'sandbox' && (
                 <motion.div
-                  key="credit"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-                      Số thẻ
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="4532 •••• •••• ••••"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-                      Tên chủ thẻ
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="NGUYEN VAN A"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-                        Ngày hết hạn
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="MM/YY (tháng/năm)"
-                        value={expiry}
-                        onChange={(e) => setExpiry(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-                        Mã CVC
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="123"
-                        value={cvc}
-                        onChange={(e) => setCvc(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {method === 'atm' && (
-                <motion.div
-                  key="atm"
+                  key="sandbox"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.2 }}
                   style={{ marginBottom: '24px' }}
                 >
-                  <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
-                      Chọn Ngân hàng
-                    </label>
-                    <select className="form-control" required>
-                      <option value="vcb">Vietcombank</option>
-                      <option value="tcb">Techcombank</option>
-                      <option value="mb">MB Bank (Quân Đội)</option>
-                      <option value="bidv">BIDV</option>
-                      <option value="acb">ACB Bank</option>
-                    </select>
-                  </div>
-                  <p className="muted" style={{ fontSize: '0.85rem' }}>
-                    Bạn sẽ được chuyển hướng tới cổng thanh toán Napas an toàn của ngân hàng để hoàn tất.
+                  <p className="muted" style={{ fontSize: '0.9rem' }}>
+                    Mock local: gọi API <code>/Billing/checkout</code> với <code>paymentMethod=Mock</code>,
+                    kích hoạt Premium ngay — không cần cổng thật.
                   </p>
                 </motion.div>
               )}
 
-              {method === 'qr' && (
+              {(method === 'vnpay' || method === 'qr') && (
                 <motion.div
-                  key="qr"
+                  key="vnpay"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.2 }}
-                  style={{ textAlign: 'center', marginBottom: '24px' }}
+                  style={{ marginBottom: '24px' }}
                 >
-                  <div
-                    style={{
-                      background: '#ffffff',
-                      padding: '16px',
-                      borderRadius: '12px',
-                      border: '1px dashed var(--border)',
-                      display: 'inline-block',
-                      marginBottom: '12px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '180px',
-                        height: '180px',
-                        background: 'var(--ink)',
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: '8px',
-                        fontWeight: 700,
-                      }}
-                    >
-                      MÃ VIETQR
-                    </div>
-                  </div>
-                  <p className="muted" style={{ fontSize: '0.85rem' }}>
-                    Mở ứng dụng Ngân hàng trên điện thoại và quét mã QR để chuyển khoản nhanh.
+                  <p className="muted" style={{ fontSize: '0.9rem' }}>
+                    Chuyển tới{' '}
+                    <strong>sandbox.vnpayment.vn</strong>. Cần set{' '}
+                    <code>VnPay:TmnCode</code> + <code>VnPay:HashSecret</code> (user-secrets) trên BE.
                   </p>
                 </motion.div>
               )}
             </AnimatePresence>
 
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
+                Mã khuyến mãi (tuỳ chọn)
+              </label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="HIREMATE10"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+              />
+            </div>
+
+            {error && (
+              <p style={{ color: '#EF4444', marginBottom: '12px', fontSize: '0.9rem' }}>{error}</p>
+            )}
+
             <button
               type="submit"
               className="btn btn-primary btn-lg"
               style={{ width: '100%', justifyContent: 'center' }}
+              disabled={submitting}
             >
-              <Lock size={16} /> Thanh toán {planInfo.price} <ArrowRight size={18} />
+              <Lock size={16} />{' '}
+              {submitting ? 'Đang xử lý…' : `Thanh toán ${planInfo.price}`} <ArrowRight size={18} />
             </button>
           </form>
 
@@ -274,11 +293,15 @@ export const Checkout: React.FC = () => {
               fontSize: '0.8rem',
             }}
           >
-            <ShieldCheck size={16} /> Bảo mật SSL 256-bit chuẩn quốc tế
+            <ShieldCheck size={16} /> BE local · sandbox payment
           </div>
+          <p style={{ textAlign: 'center', marginTop: 12 }}>
+            <Link to="/pricing" className="muted" style={{ fontSize: '0.85rem' }}>
+              ← Quay lại bảng giá
+            </Link>
+          </p>
         </div>
 
-        {/* Order Summary Column */}
         <div className="card" style={{ padding: '32px' }}>
           <h3 style={{ marginBottom: '20px' }}>Tóm tắt đơn hàng</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -300,7 +323,7 @@ export const Checkout: React.FC = () => {
               fontWeight: 600,
             }}
           >
-            <div>Ưu đãi ưu tiên AI</div>
+            <div>Ưu đãi</div>
             <div>{planInfo.savings}</div>
           </div>
 
@@ -329,10 +352,13 @@ export const Checkout: React.FC = () => {
             }}
           >
             <h4 style={{ fontSize: '0.95rem', marginBottom: '6px', color: 'var(--ink)' }}>
-              Quyền lợi đi kèm gói cước
+              Quyền lợi đi kèm
             </h4>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)', lineHeight: 1.5 }}>
               {planInfo.desc}
+            </p>
+            <p className="muted" style={{ marginTop: 8, fontSize: '0.8rem' }}>
+              BE planCode: <code>{toPlanCode(planKey)}</code>
             </p>
           </div>
         </div>

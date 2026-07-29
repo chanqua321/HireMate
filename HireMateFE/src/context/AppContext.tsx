@@ -10,12 +10,17 @@ import {
   DEFAULT_PROFILE,
   DEFAULT_INTERVIEW_CONFIG,
 } from '../config/constants';
-import { SAMPLE_HISTORY, SAMPLE_LAST_RESULT } from '../data/sampleHistory';
-import { authService, profileService } from '../services';
+import { authService, profileService, interviewService } from '../services';
+import { mapSummaryToHistory } from '../services/interview.service';
+
+interface UpdateProfileOptions {
+  /** Khi true: chỉ cập nhật state/localStorage, không gọi PUT /Profile */
+  skipApi?: boolean;
+}
 
 interface AppContextType {
   profile: Profile;
-  updateProfile: (updates: Partial<Profile>) => void;
+  updateProfile: (updates: Partial<Profile>, options?: UpdateProfileOptions) => void;
   interviewConfig: InterviewConfig;
   updateInterviewConfig: (config: Partial<InterviewConfig>) => void;
   history: HistoryItem[];
@@ -60,29 +65,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 
   const [history, setHistoryState] = useState<HistoryItem[]>(() =>
-    safeReadJSON<HistoryItem[]>(STORAGE_KEYS.HISTORY, SAMPLE_HISTORY)
+    safeReadJSON<HistoryItem[]>(STORAGE_KEYS.HISTORY, [])
   );
 
   const [lastResult, setLastResultState] = useState<InterviewResult | null>(() =>
-    safeReadJSON<InterviewResult | null>(
-      STORAGE_KEYS.LAST_RESULT,
-      SAMPLE_LAST_RESULT
-    )
+    safeReadJSON<InterviewResult | null>(STORAGE_KEYS.LAST_RESULT, null)
   );
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     return Boolean(sessionStorage.getItem('hm_access_token'));
   });
 
-  const updateProfile = useCallback((updates: Partial<Profile>) => {
+  const updateProfile = useCallback((updates: Partial<Profile>, options?: UpdateProfileOptions) => {
     setProfileState((prev) => {
       const next = { ...prev, ...updates };
       safeStoreJSON(STORAGE_KEYS.PROFILE, next);
       if (next.name && next.name.trim().length > 0) {
         setIsLoggedIn(true);
       }
-      // Non-blocking BE sync if logged in
-      if (sessionStorage.getItem('hm_access_token')) {
+      // Non-blocking BE sync if logged in (onboarding dùng API riêng → skipApi)
+      if (!options?.skipApi && sessionStorage.getItem('hm_access_token')) {
         profileService.updateProfile(updates).catch(() => {});
       }
       return next;
@@ -137,23 +139,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('hm_access_token');
     localStorage.removeItem('hm_refresh_token');
 
-    // Automatically sync profile from backend API if JWT token is stored in sessionStorage
+    // Sync profile + interview history from BE when logged in
     if (sessionStorage.getItem('hm_access_token')) {
       profileService.getProfile().then((res) => {
         if (res.ok && res.data) {
-          const beData: any = res.data;
-          setProfileState((prev) => ({
-            ...prev,
-            ...beData,
-            name: beData.fullName || beData.name || prev.name,
-            role: beData.desiredPosition || beData.role || prev.role,
-            field: beData.desiredIndustry || beData.field || prev.field,
-          }));
+          setProfileState((prev) => {
+            const next = { ...prev, ...res.data! };
+            safeStoreJSON(STORAGE_KEYS.PROFILE, next);
+            return next;
+          });
           setIsLoggedIn(true);
         }
-      }).catch(() => {
-        // Fallback silently if backend is offline
-      });
+      }).catch(() => {});
+
+      interviewService.getHistory().then((res) => {
+        if (res.ok && Array.isArray(res.data)) {
+          const mapped = mapSummaryToHistory(res.data);
+          setHistoryState(mapped);
+          safeStoreJSON(STORAGE_KEYS.HISTORY, mapped);
+        }
+      }).catch(() => {});
     }
   }, []);
 

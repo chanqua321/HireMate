@@ -1,65 +1,92 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { QUESTION_BANK } from '../../data/questionBank';
-import { Question, InterviewResult } from '../../types';
+import { InterviewResult } from '../../types';
 import { Mic, Send, Clock, Sparkles, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { interviewService } from '../../services';
+import {
+  interviewService,
+  mapDetailToResult,
+  SESSION_STORAGE_KEY,
+  InterviewQuestionDto,
+} from '../../services/interview.service';
+import { RequirePremium } from '../../components/common/RequirePremium';
 
 interface ChatMessage {
   sender: 'ai' | 'user';
   text: string;
 }
 
-export const InterviewRoom: React.FC = () => {
+export const InterviewRoomInner: React.FC = () => {
   const { interviewConfig, saveLastResult } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const sessionId =
+    searchParams.get('sessionId') || sessionStorage.getItem(SESSION_STORAGE_KEY) || '';
+
+  const [questions, setQuestions] = useState<InterviewQuestionDto[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputVal, setInputVal] = useState('');
   const [recording, setRecording] = useState(false);
   const [timeLeft, setTimeLeft] = useState(120);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const questionStartedAt = useRef<number>(Date.now());
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Initialize questions
   useEffect(() => {
-    const hrQuestions = QUESTION_BANK.filter(
-      (q) => q.cat === 'Hành vi (HR)'
-    );
-    const otherQuestions = QUESTION_BANK.filter(
-      (q) => q.cat !== 'Hành vi (HR)'
-    );
+    let cancelled = false;
 
-    const pickRandom = (arr: Question[], count: number) => {
-      const shuffled = [...arr].sort(() => 0.5 - Math.random());
-      return shuffled.slice(0, count);
+    const boot = async () => {
+      if (!sessionId) {
+        setError('Thiếu session. Hãy bắt đầu từ trang thiết lập phỏng vấn.');
+        setLoading(false);
+        return;
+      }
+      if (!sessionStorage.getItem('hm_access_token')) {
+        navigate(`/login?redirect=${encodeURIComponent(`/interview-room?sessionId=${sessionId}`)}`);
+        return;
+      }
+
+      const res = await interviewService.getQuestions(sessionId);
+      if (cancelled) return;
+
+      if (!res.ok || !Array.isArray(res.data) || res.data.length === 0) {
+        setError(res.message || 'Không tải được câu hỏi từ API');
+        setLoading(false);
+        return;
+      }
+
+      const qs = [...res.data].sort((a, b) => a.orderIndex - b.orderIndex);
+      setQuestions(qs);
+      setCurrentIndex(0);
+      questionStartedAt.current = Date.now();
+      const firstQ = qs[0]?.content || 'Bạn hãy giới thiệu về bản thân?';
+      setMessages([
+        {
+          sender: 'ai',
+          text: `Chào bạn! Tôi là trợ lý AI HireMate. Hôm nay chúng ta sẽ phỏng vấn thử cho vị trí "${interviewConfig.role || 'Ứng viên'}".\n\n${firstQ}`,
+        },
+      ]);
+      setLoading(false);
     };
 
-    const hrPicked = pickRandom(hrQuestions, 2);
-    const techPicked = pickRandom(otherQuestions, 3);
-    const combined = [...hrPicked, ...techPicked];
+    boot().catch((e) => {
+      if (!cancelled) {
+        setError(e?.message || 'Lỗi tải phòng phỏng vấn');
+        setLoading(false);
+      }
+    });
 
-    if (combined.length === 0) {
-      combined.push(QUESTION_BANK[0]);
-    }
-    setQuestions(combined);
-    setCurrentIndex(0);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, interviewConfig.role, navigate]);
 
-    // Initial AI greeting and first question
-    const firstQ = combined[0]?.q || 'Bạn hãy giới thiệu về bản thân và kinh nghiệm liên quan?';
-    setMessages([
-      {
-        sender: 'ai',
-        text: `Chào bạn! Tôi là trợ lý AI HireMate. Hôm nay chúng ta sẽ phỏng vấn thử cho vị trí "${interviewConfig.role || 'Lập trình viên'}". Hãy bắt đầu với câu hỏi đầu tiên:\n\n${firstQ}`,
-      },
-    ]);
-  }, [interviewConfig.role]);
-
-  // Set duration based on difficulty
   const perQuestionDuration =
     interviewConfig.difficulty === 'Khó'
       ? 90
@@ -71,16 +98,9 @@ export const InterviewRoom: React.FC = () => {
     setTimeLeft(perQuestionDuration);
   }, [currentIndex, perQuestionDuration]);
 
-  // Timer countdown
   useEffect(() => {
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          // Time expired
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
     return () => clearInterval(timer);
   }, [currentIndex]);
@@ -89,94 +109,89 @@ export const InterviewRoom: React.FC = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const calculateScore = useCallback((): InterviewResult => {
-    // Generate realistic STAR score based on difficulty and number of answers
-    const baseScore = 75 + Math.floor(Math.random() * 18);
-    const today = new Date().toISOString().split('T')[0];
+  const finishInterview = async () => {
+    const complete = await interviewService.completeSession(sessionId);
+    let result: InterviewResult;
 
-    // Lấy các câu trả lời của user từ messages
-    const userAnswers = messages.filter(m => m.sender === 'user').map(m => m.text);
-    const userMessagesCount = userAnswers.length;
+    if (complete.ok && complete.data) {
+      result = mapDetailToResult(complete.data);
+    } else {
+      const detail = await interviewService.getDetail(sessionId);
+      result = detail.ok && detail.data
+        ? mapDetailToResult(detail.data)
+        : {
+            overall: 0,
+            role: interviewConfig.role || '',
+            clarity: 0,
+            subs: { S: 0, T: 0, A: 0, R: 0 },
+            date: new Date().toISOString().slice(0, 10),
+          };
+    }
 
-    return {
-      overall: baseScore,
-      role: interviewConfig.role || 'Lập trình viên Frontend',
-      clarity: Math.min(baseScore + 4, 98),
-      subs: {
-        S: Math.min(baseScore + 5, 96),
-        T: Math.min(baseScore + 2, 95),
-        A: Math.max(baseScore - 4, 70),
-        R: Math.min(baseScore + 6, 98),
-      },
-      date: today,
-      feedbacks: questions.map((q, idx) => {
-        const userAnswer = idx < userMessagesCount ? userAnswers[idx] : '(Không có câu trả lời)';
-        
-        let feedbackText = '';
-        const score = baseScore + Math.floor(Math.random() * 10 - 5);
-        if (score >= 85) {
-          feedbackText = 'Câu trả lời rất tốt, thể hiện rõ ràng kỹ năng và kinh nghiệm. Bạn đã đi đúng trọng tâm và cung cấp đủ thông tin cần thiết.';
-        } else if (score >= 70) {
-          feedbackText = 'Câu trả lời khá tốt, tuy nhiên cần bổ sung thêm dẫn chứng cụ thể bằng số liệu để tăng tính thuyết phục.';
-        } else {
-          feedbackText = 'Câu trả lời còn chung chung. Bạn nên tập trung vào cấu trúc STAR (Đặc biệt là phần Kết quả) để cải thiện điểm số.';
-        }
+    saveLastResult(result);
+    sessionStorage.setItem('hm_last_session_id', sessionId);
+    navigate(`/feedback?sessionId=${encodeURIComponent(sessionId)}`);
+  };
 
-        return {
-          question: q.q,
-          answer: userAnswer,
-          feedback: feedbackText,
-          score: Math.min(score, 100)
-        };
-      })
-    };
-  }, [interviewConfig.role, questions, messages]);
+  const handleNextQuestion = async () => {
+    if (busy || !sessionId || questions.length === 0) return;
+    setBusy(true);
+    setError(null);
 
-  const handleNextQuestion = () => {
     const userAnswer = inputVal.trim()
       ? inputVal.trim()
       : '(Câu trả lời được mô tả qua ghi âm lời nói)';
 
-    // Add user message
     const updatedMessages: ChatMessage[] = [
       ...messages,
       { sender: 'user', text: userAnswer },
     ];
+    setMessages(updatedMessages);
 
-    // Synchronize current answer to Backend AI API non-blockingly
-    if (sessionStorage.getItem('hm_access_token')) {
-      interviewService.submitAnswer('current-session', {
-        questionIndex: currentIndex,
-        questionText: questions[currentIndex]?.q || '',
-        answerText: userAnswer,
-      }).catch(() => {});
+    const q = questions[currentIndex];
+    const durationSec = Math.max(
+      1,
+      Math.round((Date.now() - questionStartedAt.current) / 1000)
+    );
+
+    const submitRes = await interviewService.submitAnswer(sessionId, {
+      orderIndex: q.orderIndex,
+      questionId: q.questionId,
+      questionText: q.content,
+      answerText: userAnswer,
+      durationSec,
+    });
+
+    if (!submitRes.ok) {
+      setError(submitRes.message || 'Gửi câu trả lời thất bại');
+      setBusy(false);
+      return;
     }
 
     if (currentIndex >= questions.length - 1) {
-      // Complete interview
-      const result = calculateScore();
-      saveLastResult(result);
-      if (sessionStorage.getItem('hm_access_token')) {
-        interviewService.completeSession('current-session').catch(() => {});
+      try {
+        await finishInterview();
+      } catch (e: any) {
+        setError(e?.message || 'Hoàn tất phiên thất bại');
+        setBusy(false);
       }
-      navigate('/feedback');
       return;
     }
 
     const nextIdx = currentIndex + 1;
     const nextQ = questions[nextIdx];
-
-    const aiFeedback =
-      'Cảm ơn bạn đã trả lời. Hãy tiếp tục với câu hỏi tiếp theo:\n\n' +
-      nextQ.q;
-
     setMessages([
       ...updatedMessages,
-      { sender: 'ai', text: aiFeedback },
+      {
+        sender: 'ai',
+        text: 'Cảm ơn bạn đã trả lời. Hãy tiếp tục với câu hỏi tiếp theo:\n\n' + nextQ.content,
+      },
     ]);
     setCurrentIndex(nextIdx);
     setInputVal('');
     setRecording(false);
+    questionStartedAt.current = Date.now();
+    setBusy(false);
   };
 
   const handleRecordToggle = () => {
@@ -198,172 +213,103 @@ export const InterviewRoom: React.FC = () => {
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${('0' + m).slice(-2)}:${('0' + s).slice(-2)}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
+
+  if (loading) {
+    return (
+      <div className="section container" style={{ maxWidth: 720, margin: '40px auto', textAlign: 'center' }}>
+        <p className="muted">Đang tải câu hỏi từ API…</p>
+      </div>
+    );
+  }
+
+  if (error && questions.length === 0) {
+    return (
+      <div className="section container" style={{ maxWidth: 720, margin: '40px auto', textAlign: 'center' }}>
+        <p style={{ color: '#EF4444' }}>{error}</p>
+        <button type="button" className="btn btn-primary" onClick={() => navigate('/interview-setup')}>
+          Quay lại thiết lập
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="section container" style={{ maxWidth: '900px', margin: '20px auto' }}>
-      {/* Header Bar */}
-      <div
-        className="card"
-        style={{
-          padding: '20px 24px',
-          marginBottom: '20px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px',
-        }}
-      >
-        <div>
-          <span className="eyebrow" style={{ marginBottom: '4px' }}>
-            <Sparkles size={14} /> Phỏng vấn AI mô phỏng
-          </span>
-          <h2 style={{ margin: 0, fontSize: '1.3rem' }}>
-            {interviewConfig.role || 'Lập trình viên Frontend'}
-          </h2>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '999px',
-              background: timeLeft < 30 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-subtle)',
-              color: timeLeft < 30 ? '#EF4444' : 'var(--ink)',
-              fontWeight: 700,
-              fontSize: '0.95rem',
-            }}
-          >
-            <Clock size={16} />
-            <span>{formatTime(timeLeft)}</span>
+      <div className="card" style={{ padding: '20px 24px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <span className="eyebrow"><Sparkles size={14} /> Phòng phỏng vấn AI</span>
+            <div style={{ fontWeight: 700 }}>
+              {interviewConfig.role || 'Ứng viên'} · Câu {currentIndex + 1}/{questions.length}
+            </div>
           </div>
-
-          <span className="badge badge--success">
-            Câu {currentIndex + 1} / {questions.length || 5}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+            <Clock size={18} /> {formatTime(timeLeft)}
+          </div>
         </div>
+        {error && <p style={{ color: '#EF4444', marginTop: 8, marginBottom: 0 }}>{error}</p>}
       </div>
 
-      {/* Chat Messages Box */}
-      <div
-        className="card"
-        style={{
-          padding: '24px',
-          height: '460px',
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-          marginBottom: '20px',
-          background: 'var(--bg-subtle, #F8FAFC)',
-        }}
-      >
-        <AnimatePresence>
-          {messages.map((msg, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.25 }}
-              style={{
-                alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '78%',
-                background:
-                  msg.sender === 'user'
-                    ? 'var(--primary)'
-                    : '#ffffff',
-                color: msg.sender === 'user' ? '#ffffff' : 'var(--ink)',
-                padding: '16px 20px',
-                borderRadius: '16px',
-                borderBottomRightRadius: msg.sender === 'user' ? '4px' : '16px',
-                borderBottomLeftRadius: msg.sender === 'ai' ? '4px' : '16px',
-                boxShadow: '0 4px 12px rgba(16,24,40,0.08)',
-                border: msg.sender === 'ai' ? '1px solid var(--border)' : 'none',
-                whiteSpace: 'pre-line',
-                lineHeight: 1.6,
-              }}
-            >
-              {msg.text}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        <div ref={chatEndRef} />
-      </div>
+      <div className="card" style={{ padding: 20, minHeight: 420, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <AnimatePresence initial={false}>
+            {messages.map((m, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  alignSelf: m.sender === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%',
+                  padding: '12px 14px',
+                  borderRadius: 14,
+                  background: m.sender === 'user' ? 'rgba(3,191,255,0.12)' : 'var(--bg-subtle, #F8FAFC)',
+                  border: '1px solid var(--border)',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {m.sender === 'ai' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, fontWeight: 600, fontSize: '0.85rem' }}>
+                    <CheckCircle2 size={14} color="#03BFFF" /> HireMate AI
+                  </div>
+                )}
+                {m.text}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          <div ref={chatEndRef} />
+        </div>
 
-      {/* Input / Controls */}
-      <div>
-        <div className="interview-input-wrap">
-          <textarea
-            className="interview-textarea"
-            rows={3}
-            placeholder="Nhập câu trả lời theo chuẩn STAR (Bối cảnh -> Nhiệm vụ -> Hành động -> Kết quả)..."
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn btn-ghost" onClick={handleRecordToggle} disabled={busy}>
+            <Mic size={16} /> {recording ? 'Dừng' : 'Mic'}
+          </button>
+          <input
+            className="form-control"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
+            placeholder="Nhập câu trả lời theo STAR…"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleNextQuestion();
+              }
+            }}
+            disabled={busy}
           />
-
-          <div className="interview-input-toolbar">
-            <div className="interview-toolbar-hint">
-              <Sparkles size={16} color="#03BFFF" />
-              <span>Cố vấn AI: Mở đầu bằng Bối cảnh (S) & kết thúc bằng Kết quả (R)</span>
-            </div>
-
-            <div className="interview-toolbar-actions">
-              <button
-                type="button"
-                onClick={handleRecordToggle}
-                className={`btn-record-pill ${recording ? 'is-recording' : ''}`}
-                title="Ghi âm câu trả lời qua micro"
-              >
-                <Mic size={18} />
-                <span>{recording ? 'Đang ghi âm...' : 'Giọng nói'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleNextQuestion}
-                className="btn-send-pill"
-              >
-                <span>
-                  {currentIndex === (questions.length || 5) - 1
-                    ? 'Hoàn tất & Chấm điểm'
-                    : 'Câu tiếp theo'}
-                </span>
-                <Send size={16} />
-              </button>
-            </div>
-          </div>
+          <button type="button" className="btn btn-primary" onClick={handleNextQuestion} disabled={busy}>
+            <Send size={16} /> {busy ? '…' : 'Gửi'}
+          </button>
         </div>
-
-        {/* Current question hint tooltip */}
-        {questions[currentIndex]?.hint && (
-          <div className="star-hint-card">
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '12px',
-                background: 'rgba(3, 191, 255, 0.16)',
-                color: '#03BFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <Sparkles size={20} />
-            </div>
-            <div>
-              <b style={{ color: '#03BFFF', marginRight: '6px' }}>Gợi ý STAR từ trợ lý AI:</b>
-              <span>{questions[currentIndex].hint}</span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
 };
+
+export const InterviewRoom: React.FC = () => (
+  <RequirePremium>
+    <InterviewRoomInner />
+  </RequirePremium>
+);

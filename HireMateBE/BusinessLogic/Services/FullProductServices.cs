@@ -437,6 +437,19 @@ public class BillingService(
             .FirstOrDefaultAsync(p => p.Code == dto.PlanCode && p.IsActive);
         if (plan == null) return new ServiceResult(Const.FAIL_CREATE_CODE, "Không tìm thấy gói");
 
+        var currentCode = await ResolveCurrentPlanCodeAsync(userId, user.IsPremium);
+        var currentRank = PlanTier.Rank(currentCode);
+        var targetRank = PlanTier.Rank(plan.Code);
+        if (targetRank <= currentRank)
+        {
+            var currentName = PlanTier.DisplayName(currentCode);
+            var targetName = PlanTier.DisplayName(plan.Code);
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                targetRank == currentRank
+                    ? $"Bạn đang dùng gói {currentName}. Không thể mua lại cùng cấp — hãy nâng cấp lên gói cao hơn nếu cần."
+                    : $"Bạn đang dùng gói {currentName} (cao hơn {targetName}). Chỉ được nâng cấp lên gói cao hơn.");
+        }
+
         decimal amount = plan.PriceVnd;
         if (!string.IsNullOrWhiteSpace(dto.PromoCode))
         {
@@ -731,6 +744,20 @@ public class BillingService(
         return inv == null
             ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy hóa đơn")
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, inv);
+    }
+
+    private async Task<string> ResolveCurrentPlanCodeAsync(Guid userId, bool isPremium)
+    {
+        var paid = await uow.InvoiceRepository.GetQueryable().AsNoTracking()
+            .Include(i => i.Plan)
+            .Where(i => i.UserId == userId && i.Status == "Paid")
+            .OrderByDescending(i => i.PaidAt ?? i.CreatedAt)
+            .Select(i => i.Plan != null ? i.Plan.Code : null)
+            .FirstOrDefaultAsync();
+
+        if (!string.IsNullOrWhiteSpace(paid))
+            return PlanTier.Normalize(paid);
+        return isPremium ? "premium" : "free";
     }
 }
 

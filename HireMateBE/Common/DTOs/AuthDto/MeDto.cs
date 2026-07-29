@@ -8,4 +8,6 @@ public class MeDto
     public IList<string> Roles { get; set; } = [];
     public bool OnboardingCompleted { get; set; }
     public bool IsPremium { get; set; }
+    /// <summary>free | premium | combo — gói đang kích hoạt.</summary>
+    public string CurrentPlanCode { get; set; } = "free";
 }

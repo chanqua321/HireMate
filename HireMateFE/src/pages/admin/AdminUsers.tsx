@@ -1,34 +1,57 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, UserCheck, UserX, Shield, Edit2, X, Check } from 'lucide-react';
 import './admin.css';
+import { adminService } from '../../services';
 
-// ---- Fake data ----
-const ALL_USERS = [
-  { id: '1', name: 'Nguyễn Văn An', email: 'an.nguyen@email.com', role: 'User', plan: 'Pro', interviews: 24, joinDate: '2026-05-12', status: 'active', emailConfirmed: true },
-  { id: '2', name: 'Trần Thị Bích', email: 'bich.tran@email.com', role: 'User', plan: 'Free', interviews: 7, joinDate: '2026-06-03', status: 'active', emailConfirmed: true },
-  { id: '3', name: 'Lê Minh Cường', email: 'cuong.le@email.com', role: 'User', plan: 'Premium', interviews: 51, joinDate: '2026-04-18', status: 'active', emailConfirmed: true },
-  { id: '4', name: 'Phạm Thu Dung', email: 'dung.pham@email.com', role: 'User', plan: 'Pro', interviews: 12, joinDate: '2026-07-01', status: 'banned', emailConfirmed: false },
-  { id: '5', name: 'Hoàng Đức Em', email: 'em.hoang@email.com', role: 'Admin', plan: 'Premium', interviews: 0, joinDate: '2026-01-15', status: 'active', emailConfirmed: true },
-  { id: '6', name: 'Vũ Thị Fong', email: 'fong.vu@email.com', role: 'User', plan: 'Free', interviews: 3, joinDate: '2026-07-20', status: 'active', emailConfirmed: false },
-  { id: '7', name: 'Đặng Văn Giang', email: 'giang.dang@email.com', role: 'User', plan: 'Pro', interviews: 18, joinDate: '2026-06-28', status: 'active', emailConfirmed: true },
-  { id: '8', name: 'Bùi Thị Hoa', email: 'hoa.bui@email.com', role: 'User', plan: 'Free', interviews: 9, joinDate: '2026-07-10', status: 'banned', emailConfirmed: true },
-  { id: '9', name: 'Tô Minh Khoa', email: 'khoa.to@email.com', role: 'User', plan: 'Premium', interviews: 67, joinDate: '2026-03-22', status: 'active', emailConfirmed: true },
-  { id: '10', name: 'Ngô Thị Lan', email: 'lan.ngo@email.com', role: 'User', plan: 'Free', interviews: 1, joinDate: '2026-07-27', status: 'active', emailConfirmed: false },
-];
-
-type User = typeof ALL_USERS[0];
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  plan: string;
+  interviews: number;
+  joinDate: string;
+  status: string;
+  emailConfirmed: boolean;
+};
 
 const planColor = (plan: string) => plan === 'Premium' ? 'purple' : plan === 'Pro' ? 'info' : 'neutral';
 const roleColor = (role: string) => role === 'Admin' ? 'warning' : 'neutral';
 
 const AdminUsers: React.FC = () => {
-  const [users, setUsers] = useState<User[]>(ALL_USERS);
+  const [users, setUsers] = useState<User[]>([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPlan, setFilterPlan] = useState('all');
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    const res = await adminService.getUsers(search || undefined);
+    if (!res.ok) {
+      setError(res.message || 'Không tải users');
+      return;
+    }
+    const mapped: User[] = (res.data || []).map((u: any) => ({
+      id: String(u.id),
+      name: u.fullName || u.name || '—',
+      email: u.email || '',
+      role: (u.roles && u.roles[0]) || u.role || 'User',
+      plan: u.isPremium ? 'Premium' : 'Free',
+      interviews: u.interviewCount ?? 0,
+      joinDate: (u.createdAt || '').slice(0, 10),
+      status: u.isDeleted || u.lockoutEnd ? 'banned' : 'active',
+      emailConfirmed: !!u.emailConfirmed,
+    }));
+    setUsers(mapped);
+    setError(null);
+  };
+
+  useEffect(() => {
+    load().catch((e) => setError(e?.message || 'Lỗi API'));
+  }, []);
 
   const filtered = users.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -38,10 +61,18 @@ const AdminUsers: React.FC = () => {
     return matchSearch && matchStatus && matchPlan;
   });
 
-  const toggleBan = (id: string) => {
-    setUsers(prev => prev.map(u =>
-      u.id === id ? { ...u, status: u.status === 'active' ? 'banned' : 'active' } : u
-    ));
+  const toggleBan = async (id: string) => {
+    const target = users.find((u) => u.id === id);
+    if (!target) return;
+    const nextActive = target.status !== 'active';
+    const res = await adminService.patchUser(id, { isActive: nextActive });
+    if (res.ok) {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, status: nextActive ? 'active' : 'banned' } : u))
+      );
+    } else {
+      setError(res.message || 'Patch user thất bại');
+    }
   };
 
   const openEdit = (u: User) => {
@@ -50,11 +81,21 @@ const AdminUsers: React.FC = () => {
     setEditStatus(u.status);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editUser) return;
-    setUsers(prev => prev.map(u =>
-      u.id === editUser.id ? { ...u, role: editRole, status: editStatus } : u
-    ));
+    const res = await adminService.patchUser(editUser.id, {
+      role: editRole,
+      isActive: editStatus === 'active',
+    });
+    if (!res.ok) {
+      setError(res.message || 'Lưu user thất bại');
+      return;
+    }
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === editUser.id ? { ...u, role: editRole, status: editStatus } : u
+      )
+    );
     setEditUser(null);
   };
 
@@ -62,7 +103,8 @@ const AdminUsers: React.FC = () => {
     <div>
       <div className="admin-page-header">
         <h1 className="admin-page-title">👥 Quản lý Users</h1>
-        <p className="admin-page-subtitle">Xem, tìm kiếm và quản lý toàn bộ tài khoản người dùng.</p>
+        <p className="admin-page-subtitle">Xem, tìm kiếm và quản lý toàn bộ tài khoản người dùng (API).</p>
+        {error && <p style={{ color: '#EF4444' }}>{error}</p>}
       </div>
 
       {/* Summary stats */}

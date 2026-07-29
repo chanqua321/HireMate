@@ -23,7 +23,8 @@ const getAuthHeaders = (skipAuth = false): Record<string, string> => {
   };
 
   if (!skipAuth) {
-    const token = sessionStorage.getItem('hm_access_token');
+    const token =
+      sessionStorage.getItem('hm_access_token') || localStorage.getItem('hm_access_token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }

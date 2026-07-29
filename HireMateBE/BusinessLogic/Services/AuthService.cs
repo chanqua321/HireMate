@@ -234,6 +234,7 @@ public class AuthService(
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, Const.WARNING_NO_DATA_MSG);
 
         var roles = await _userManager.GetRolesAsync(user);
+        var planCode = await ResolveCurrentPlanCodeAsync(user.Id, user.IsPremium);
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new MeDto
         {
             Id = user.Id,
@@ -241,8 +242,23 @@ public class AuthService(
             FullName = user.FullName,
             Roles = roles,
             OnboardingCompleted = user.OnboardingCompleted,
-            IsPremium = user.IsPremium
+            IsPremium = user.IsPremium,
+            CurrentPlanCode = planCode
         });
+    }
+
+    private async Task<string> ResolveCurrentPlanCodeAsync(Guid userId, bool isPremium)
+    {
+        var paid = await _unitOfWork.InvoiceRepository.GetQueryable().AsNoTracking()
+            .Include(i => i.Plan)
+            .Where(i => i.UserId == userId && i.Status == "Paid")
+            .OrderByDescending(i => i.PaidAt ?? i.CreatedAt)
+            .Select(i => i.Plan != null ? i.Plan.Code : null)
+            .FirstOrDefaultAsync();
+
+        if (!string.IsNullOrWhiteSpace(paid))
+            return PlanTier.Normalize(paid);
+        return isPremium ? "premium" : "free";
     }
 
     public async Task<IServiceResult> ConfirmEmailAsync(string userId, string token)

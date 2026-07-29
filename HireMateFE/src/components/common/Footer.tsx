@@ -19,7 +19,7 @@ export const Footer: React.FC = () => {
             <h4>Sản phẩm</h4>
             <Link to="/">Trang chủ</Link>
             <Link to="/pricing">Bảng giá</Link>
-            <Link to="/interview-setup">Phỏng vấn</Link>
+            <Link to="/pricing">Phỏng vấn</Link>
             <Link to="/questions">Ngân hàng câu hỏi</Link>
           </div>
 

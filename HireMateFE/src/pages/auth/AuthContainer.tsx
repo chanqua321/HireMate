@@ -12,11 +12,29 @@ interface AuthContainerProps {
 }
 
 export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => {
-  const { login } = useApp();
+  const { login, isLoggedIn } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const { triggerConfetti } = useConfetti();
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
+
+  const getPostAuthPath = () => {
+    const params = new URLSearchParams(location.search);
+    const redirect = params.get('redirect');
+    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+      return redirect;
+    }
+    return '/';
+  };
+
+  // Đã đăng nhập mà vẫn vào /login|/register → về trang chủ (hoặc redirect)
+  useEffect(() => {
+    const hasToken = Boolean(sessionStorage.getItem('hm_access_token'));
+    if (isLoggedIn || hasToken) {
+      navigate(getPostAuthPath(), { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]);
 
   // Register success animation state
   const [registerSuccessData, setRegisterSuccessData] = useState<{
@@ -65,7 +83,8 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
     setIsLogin(targetMode === 'login');
     setLoginError('');
     setRegisterError('');
-    const targetUrl = targetMode === 'login' ? '/login' : '/register';
+    const qs = location.search || '';
+    const targetUrl = (targetMode === 'login' ? '/login' : '/register') + qs;
     window.history.pushState(null, '', targetUrl);
     document.title = targetMode === 'login' ? 'HireMate - Đăng nhập' : 'HireMate - Đăng ký';
   };
@@ -83,11 +102,11 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
         email: loginForm.email.trim(),
         password: loginForm.password.trim(),
       });
-      if (res.ok && res.data) {
+      if (res.ok && res.data?.accessToken) {
         const fullNameFromDb = res.data.user?.fullName;
         const fallbackName = fullNameFromDb || loginForm.email.split('@')[0] || 'Người dùng';
         login(fallbackName);
-        navigate('/dashboard');
+        navigate(getPostAuthPath());
         return;
       } else if (res.status !== 0 && res.message) {
         setLoginError(res.message);
@@ -100,13 +119,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
       }
     }
 
-    // Fallback khi network offline
-    const prefix = loginForm.email.split('@')[0] || 'Người dùng';
-    const displayName =
-      prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
-
-    login(displayName);
-    navigate('/dashboard');
+    setLoginError('Đăng nhập thất bại. Kiểm tra BE local hoặc thử lại.');
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -180,12 +193,12 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
 
     try {
       const res = await authService.loginWithGoogle(idToken);
-      if (res.ok && res.data) {
+      if (res.ok && res.data?.accessToken) {
         const fullNameFromDb = res.data.user?.fullName;
         const fallbackName = fullNameFromDb || 'Người dùng Google';
         login(fallbackName);
         triggerConfetti();
-        navigate('/dashboard');
+        navigate(getPostAuthPath());
         return;
       } else {
         const msg = res.message || 'Đăng nhập Google thất bại.';
@@ -208,8 +221,8 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
   };
 
   const handleSocialLogin = (provider: string) => {
-    login(`Người dùng ${provider}`);
-    navigate('/dashboard');
+    // Social mock không có JWT — không dùng cho checkout/API.
+    setLoginError(`Đăng nhập ${provider} demo không có token. Dùng email/password hoặc Google.`);
   };
 
   return (

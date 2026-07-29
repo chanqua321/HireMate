@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Printer, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { billingService } from '../../services';
 
 const PLAN_INVOICE_MAP: Record<
   string,
@@ -22,14 +23,28 @@ const PLAN_INVOICE_MAP: Record<
   },
   basic: {
     name: 'Gói Cơ Bản - 1 Tháng',
-    desc: 'Luyện phỏng vấn AI, 15 lượt/tháng, feedback STAR chi tiết',
+    desc: 'Luyện phỏng vấn AI, Premium 30 ngày',
+    origPrice: '99.000đ',
+    discount: '-20.000đ',
+    finalPrice: '79.000đ',
+  },
+  premium: {
+    name: 'Premium - 1 Tháng',
+    desc: 'Premium 30 ngày',
     origPrice: '99.000đ',
     discount: '-20.000đ',
     finalPrice: '79.000đ',
   },
   pro: {
-    name: 'Gói Nâng Cao - 1 Tháng',
-    desc: 'Luyện phỏng vấn AI, 50 lượt/tháng, tối ưu CV ATS chuyên sâu, tính năng Beta',
+    name: 'Gói Nâng Cao - Combo',
+    desc: 'Combo 2 tháng',
+    origPrice: '189.000đ',
+    discount: '-40.000đ',
+    finalPrice: '149.000đ',
+  },
+  combo: {
+    name: 'Combo 2 tháng',
+    desc: 'Premium 60 ngày',
     origPrice: '189.000đ',
     discount: '-40.000đ',
     finalPrice: '149.000đ',
@@ -40,13 +55,39 @@ export const Invoice: React.FC = () => {
   const { profile } = useApp();
   const [searchParams] = useSearchParams();
   const planKey = searchParams.get('plan') || 'pro';
+  const invoiceId = searchParams.get('invoiceId') || '';
+  const invoiceNumberParam = searchParams.get('invoiceNumber') || '';
   const planInvoice = PLAN_INVOICE_MAP[planKey] || PLAN_INVOICE_MAP.pro;
+
+  const [apiInvoice, setApiInvoice] = useState<any>(null);
+
+  useEffect(() => {
+    if (!sessionStorage.getItem('hm_access_token')) return;
+    if (invoiceId) {
+      billingService.getInvoiceDetail(invoiceId).then((res) => {
+        if (res.ok) setApiInvoice(res.data);
+      }).catch(() => {});
+      return;
+    }
+    billingService.getInvoices().then((res) => {
+      if (res.ok && Array.isArray(res.data) && res.data.length) {
+        setApiInvoice(res.data[0]);
+      }
+    }).catch(() => {});
+  }, [invoiceId]);
 
   const handlePrint = () => {
     window.print();
   };
 
   const today = new Date().toLocaleDateString('vi-VN');
+  const invoiceNumber =
+    apiInvoice?.invoiceNumber || invoiceNumberParam || apiInvoice?.id || 'INV-LOCAL';
+  const amount =
+    apiInvoice?.amountVnd != null
+      ? `${Number(apiInvoice.amountVnd).toLocaleString('vi-VN')}đ`
+      : planInvoice.finalPrice;
+  const status = apiInvoice?.status || 'Paid';
 
   return (
     <div className="section container" style={{ maxWidth: '800px', margin: '30px auto' }}>
@@ -100,13 +141,13 @@ export const Invoice: React.FC = () => {
           <div style={{ textAlign: 'right' }}>
             <h2 style={{ margin: '0 0 6px', color: 'var(--ink)' }}>HÓA ĐƠN</h2>
             <div className="muted" style={{ fontSize: '0.9rem' }}>
-              <strong>Số hóa đơn:</strong> INV-2026-9843
+              <strong>Số hóa đơn:</strong> {invoiceNumber}
               <br />
               <strong>Ngày lập:</strong> {today}
             </div>
             <div style={{ marginTop: '10px' }}>
-              <span className="badge badge--success">
-                <CheckCircle2 size={14} /> ĐÃ THANH TOÁN
+              <span className={`badge ${status === 'Paid' || status === 'Success' ? 'badge--success' : 'badge--warning'}`}>
+                <CheckCircle2 size={14} /> {status}
               </span>
             </div>
           </div>
@@ -204,7 +245,7 @@ export const Invoice: React.FC = () => {
           <div style={{ width: '280px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="muted">Cộng tiền hàng:</span>
-              <span>{planInvoice.finalPrice}</span>
+              <span>{amount}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="muted">Thuế VAT (0%):</span>
@@ -221,7 +262,7 @@ export const Invoice: React.FC = () => {
               }}
             >
               <span>Tổng thanh toán:</span>
-              <span>{planInvoice.finalPrice}</span>
+              <span>{amount}</span>
             </div>
           </div>
         </div>
