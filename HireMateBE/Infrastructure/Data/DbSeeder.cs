@@ -1,8 +1,8 @@
+using System.Text.RegularExpressions;
 using Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -21,19 +21,25 @@ public static class DbSeeder
 
         await EnsureRoleAsync(roleManager, "User", "Default HireMate user");
         await EnsureRoleAsync(roleManager, "Admin", "System administrator");
-        await EnsureRoleAsync(roleManager, "UniversityAdmin", "University portal admin");
-        await EnsureRoleAsync(roleManager, "EnterpriseAdmin", "Enterprise portal admin");
+        await CleanupLegacyB2BDataAsync(context, roleManager, scope.ServiceProvider);
         await SeedQuestionsAsync(context);
         await SeedCmsAndPlansAsync(context);
         await SeedBadgesAsync(context);
-        await SeedAdminAndOrgsAsync(scope.ServiceProvider);
+        await SeedAdminAsync(scope.ServiceProvider);
     }
 
     /// <summary>
-    /// Tạo database nếu chưa có, rồi apply toàn bộ EF migrations. Retry khi SQL Server/LocalDB chưa sẵn sàng.
+    /// Lần đầu: tạo database + apply migrations. Lần sau: nếu DB đã có và schema đúng thì bỏ qua.
+    /// Chỉ chạy Migrate khi còn migration pending hoặc chưa kết nối được (DB chưa tồn tại).
+    /// Retry khi SQL Server/LocalDB chưa sẵn sàng.
+    /// LocalDB đôi khi giữ catalog HireMateDB trong khi file .mdf đã mất — EF coi là chưa có DB,
+    /// gọi CREATE DATABASE rồi dính lỗi 1801. Trường hợp đó drop catalog mồ côi rồi tạo lại.
     /// </summary>
     private static async Task EnsureDatabaseCreatedAndMigratedAsync(HireMateContext context, ILogger? logger)
     {
+        if (await TrySkipWhenDatabaseReadyAsync(context, logger))
+            return;
+
         const int maxAttempts = 8;
         Exception? last = null;
 
@@ -41,18 +47,27 @@ public static class DbSeeder
         {
             try
             {
-                var creator = context.Database.GetService<IRelationalDatabaseCreator>();
-                var existed = await creator.ExistsAsync();
-
-                // MigrateAsync: tạo DB nếu chưa có + cập nhật schema theo migrations
                 await context.Database.MigrateAsync();
-
-                logger?.LogInformation(
-                    existed
-                        ? "Database ready (created if missing + migrations applied)."
-                        : "Database was missing — auto-created and migrated.");
-
+                logger?.LogInformation("Database ready (created if missing + migrations applied).");
                 return;
+            }
+            catch (Exception ex) when (HasSqlNumber(ex, 1801) && attempt < maxAttempts)
+            {
+                last = ex;
+                try
+                {
+                    if (await TryDropOrphanedDatabaseAsync(context, logger))
+                        continue;
+                }
+                catch (Exception dropEx)
+                {
+                    logger?.LogWarning(dropEx, "Failed to drop orphaned HireMateDB catalog.");
+                }
+
+                logger?.LogWarning(ex,
+                    "Ensure database attempt {Attempt}/{Max}: HireMateDB already exists but EF could not open it. Retrying...",
+                    attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(Math.Min(2 * attempt, 10)));
             }
             catch (Exception ex)
             {
@@ -66,8 +81,112 @@ public static class DbSeeder
         }
 
         throw new InvalidOperationException(
-            "Cannot create/migrate HireMate database. Check ConnectionStrings:DefaultConnection and that SQL Server/LocalDB is running.",
+            "Cannot create/migrate HireMate database. Check ConnectionStrings:DefaultConnection and that SQL Server/LocalDB is running. If error 1801: HireMateDB exists in the server catalog but cannot be opened (missing .mdf files or no permission).",
             last);
+    }
+
+    /// <returns>true nếu DB đã tồn tại và không còn migration pending.</returns>
+    private static async Task<bool> TrySkipWhenDatabaseReadyAsync(HireMateContext context, ILogger? logger)
+    {
+        try
+        {
+            if (!await context.Database.CanConnectAsync())
+                return false;
+
+            var pending = (await context.Database.GetPendingMigrationsAsync()).ToList();
+            if (pending.Count > 0)
+            {
+                logger?.LogInformation(
+                    "Database exists. Applying {Count} pending migration(s): {Names}",
+                    pending.Count,
+                    string.Join(", ", pending));
+                await context.Database.MigrateAsync();
+                logger?.LogInformation("Pending migrations applied.");
+                return true;
+            }
+
+            logger?.LogInformation("Database exists and schema is up to date. Skipping create/migrate.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogDebug(ex, "Database readiness check failed; will run full create/migrate flow.");
+            return false;
+        }
+    }
+
+    private static bool HasSqlNumber(Exception ex, int number)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is SqlException sql && sql.Errors.Cast<SqlError>().Any(err => err.Number == number))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Drop DB khi catalog SQL còn tên nhưng file vật lý không còn (LocalDB orphan). Không drop khi file vẫn tồn tại.
+    /// </summary>
+    private static async Task<bool> TryDropOrphanedDatabaseAsync(HireMateContext context, ILogger? logger)
+    {
+        var connectionString = context.Database.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return false;
+
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        var dbName = builder.InitialCatalog;
+        if (string.IsNullOrWhiteSpace(dbName) || !Regex.IsMatch(dbName, @"^[\w$-]+$"))
+            return false;
+
+        builder.InitialCatalog = "master";
+        await using var conn = new SqlConnection(builder.ConnectionString);
+        await conn.OpenAsync();
+
+        var files = new List<string>();
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID(@name)";
+            cmd.Parameters.AddWithValue("@name", dbName);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                files.Add(reader.GetString(0));
+        }
+
+        if (files.Count == 0)
+            return false;
+
+        var missing = files.Where(f => !File.Exists(f)).ToList();
+        if (missing.Count == 0)
+            return false;
+
+        logger?.LogWarning(
+            "Orphaned database {Database}: catalog exists but files are missing ({Files}). Dropping catalog entry.",
+            dbName, string.Join(", ", missing));
+
+        SqlConnection.ClearAllPools();
+        await using (var drop = conn.CreateCommand())
+        {
+            drop.CommandText = $"DROP DATABASE [{dbName}]";
+            try
+            {
+                await drop.ExecuteNonQueryAsync();
+            }
+            catch (SqlException ex) when (HasSqlNumber(ex, 5120))
+            {
+                // LocalDB still warns that .mdf is missing; catalog may already be gone.
+                await using var check = conn.CreateCommand();
+                check.CommandText = "SELECT DB_ID(@name)";
+                check.Parameters.AddWithValue("@name", dbName);
+                var id = await check.ExecuteScalarAsync();
+                if (id is not null && id is not DBNull)
+                    throw;
+            }
+        }
+
+        SqlConnection.ClearAllPools();
+        return true;
     }
 
     private static async Task EnsureRoleAsync(RoleManager<Role> roleManager, string name, string description)
@@ -153,12 +272,13 @@ public static class DbSeeder
 
     private static async Task SeedCmsAndPlansAsync(HireMateContext context)
     {
+        await EnsurePlansAndSettingsAsync(context);
         if (!await context.ContentPages.AnyAsync())
         {
             await context.ContentPages.AddRangeAsync(
                 new ContentPage { Id = Guid.NewGuid(), Slug = "privacy", Title = "Chính sách bảo mật", Body = "Nội dung chính sách bảo mật HireMate." },
                 new ContentPage { Id = Guid.NewGuid(), Slug = "terms", Title = "Điều khoản sử dụng", Body = "Nội dung điều khoản sử dụng HireMate." },
-                new ContentPage { Id = Guid.NewGuid(), Slug = "about", Title = "Về chúng tôi", Body = "HireMate — AI Career Coach cho Gen Z Việt Nam." });
+                new ContentPage { Id = Guid.NewGuid(), Slug = "about", Title = "Về chúng tôi", Body = "HireMate - AI Career Coach cho Gen Z Việt Nam." });
         }
 
         if (!await context.BlogPosts.AnyAsync())
@@ -179,7 +299,7 @@ public static class DbSeeder
             await context.FaqItems.AddRangeAsync(
                 new FaqItem { Id = Guid.NewGuid(), Category = "Tài khoản", Question = "Làm sao đăng ký?", Answer = "Vào /register với email và mật khẩu.", SortOrder = 1 },
                 new FaqItem { Id = Guid.NewGuid(), Category = "Phỏng vấn", Question = "Free có bao nhiêu phiên?", Answer = "3 phiên/tháng.", SortOrder = 2 },
-                new FaqItem { Id = Guid.NewGuid(), Category = "Thanh toán", Question = "Premium giá bao nhiêu?", Answer = "79.000 VND/tháng.", SortOrder = 3 });
+                new FaqItem { Id = Guid.NewGuid(), Category = "Thanh toán", Question = "Các gói giá thế nào?", Answer = "Miễn phí 0đ/tháng, Tiêu chuẩn 79.000đ/tháng, Cao cấp 149.000đ/tháng. Admin có thể chỉnh trên hệ thống.", SortOrder = 3 });
         }
 
         if (!await context.ResourceItems.AnyAsync())
@@ -187,14 +307,6 @@ public static class DbSeeder
             await context.ResourceItems.AddRangeAsync(
                 new ResourceItem { Id = Guid.NewGuid(), Category = "Interview", Title = "Checklist trước phỏng vấn", Summary = "Chuẩn bị 24h", Body = "Nghiên cứu công ty, luyện STAR..." },
                 new ResourceItem { Id = Guid.NewGuid(), Category = "CV", Title = "Mẫu CV ATS", Summary = "Template chuẩn", Body = "Header, Summary, Experience, Skills..." });
-        }
-
-        if (!await context.SubscriptionPlans.AnyAsync())
-        {
-            await context.SubscriptionPlans.AddRangeAsync(
-                new SubscriptionPlan { Id = Guid.NewGuid(), Code = "free", Name = "Free", PriceVnd = 0, DurationDays = 3650, Description = "3 phiên/tháng, chỉ văn bản" },
-                new SubscriptionPlan { Id = Guid.NewGuid(), Code = "premium", Name = "Premium", PriceVnd = 79000, DurationDays = 30, Description = "Không giới hạn + Voice + phản hồi đầy đủ" },
-                new SubscriptionPlan { Id = Guid.NewGuid(), Code = "combo", Name = "Combo 2 tháng", PriceVnd = 149000, DurationDays = 60, Description = "Premium 2 tháng" });
         }
 
         if (!await context.PromoCodes.AnyAsync())
@@ -223,10 +335,67 @@ public static class DbSeeder
         await context.SaveChangesAsync();
     }
 
-    private static async Task SeedAdminAndOrgsAsync(IServiceProvider sp)
+    private const string AdminEmail = "admin@gmail.com";
+
+    private static async Task CleanupLegacyB2BDataAsync(
+        HireMateContext context,
+        RoleManager<Role> roleManager,
+        IServiceProvider sp)
     {
         var users = sp.GetRequiredService<UserManager<UserAccount>>();
-        var context = sp.GetRequiredService<HireMateContext>();
+
+        if (await context.OrganizationMembers.AnyAsync())
+        {
+            context.OrganizationMembers.RemoveRange(await context.OrganizationMembers.ToListAsync());
+            await context.SaveChangesAsync();
+        }
+
+        if (await context.Organizations.AnyAsync())
+        {
+            context.Organizations.RemoveRange(await context.Organizations.ToListAsync());
+            await context.SaveChangesAsync();
+        }
+
+        foreach (var email in new[] { "uni@hiremate.local", "enterprise@hiremate.local", "student@hiremate.local" })
+        {
+            var u = await users.FindByEmailAsync(email);
+            if (u != null)
+                await users.DeleteAsync(u);
+        }
+
+        foreach (var legacyRole in new[] { "UniversityAdmin", "EnterpriseAdmin" })
+        {
+            if (!await roleManager.RoleExistsAsync(legacyRole))
+                continue;
+
+            var members = await users.GetUsersInRoleAsync(legacyRole);
+            foreach (var member in members)
+            {
+                await users.RemoveFromRoleAsync(member, legacyRole);
+                if (!await users.IsInRoleAsync(member, "User"))
+                    await users.AddToRoleAsync(member, "User");
+            }
+
+            var roleEntity = await roleManager.FindByNameAsync(legacyRole);
+            if (roleEntity != null)
+                await roleManager.DeleteAsync(roleEntity);
+        }
+
+        var admins = await users.GetUsersInRoleAsync("Admin");
+        foreach (var adminUser in admins)
+        {
+            if (!string.Equals(adminUser.Email, AdminEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                await users.RemoveFromRoleAsync(adminUser, "Admin");
+                if (!await users.IsInRoleAsync(adminUser, "User"))
+                    await users.AddToRoleAsync(adminUser, "User");
+            }
+        }
+    }
+
+    private static async Task SeedAdminAsync(IServiceProvider sp)
+    {
+        var users = sp.GetRequiredService<UserManager<UserAccount>>();
 
         async Task<UserAccount> EnsureUser(string email, string name, string password, string role)
         {
@@ -244,8 +413,6 @@ public static class DbSeeder
                 UpdatedAt = DateTime.UtcNow
             };
 
-            // Prefer Identity CreateAsync(password); if policy rejects (e.g. short demo pass),
-            // create user then set hash directly so seed accounts still work.
             var create = await users.CreateAsync(u, password);
             if (!create.Succeeded)
             {
@@ -262,23 +429,129 @@ public static class DbSeeder
             return u;
         }
 
-        var admin = await EnsureUser("admin@gmail.com", "Admin", "12345", "Admin");
-        var uniAdmin = await EnsureUser("uni@hiremate.local", "University Admin", "Admin123!", "UniversityAdmin");
-        var entAdmin = await EnsureUser("enterprise@hiremate.local", "Enterprise Admin", "Admin123!", "EnterpriseAdmin");
-        var student = await EnsureUser("student@hiremate.local", "Demo Student", "Password1", "User");
-
-        if (!await context.Organizations.AnyAsync())
+        var admin = await users.FindByEmailAsync(AdminEmail);
+        if (admin == null)
         {
-            var uni = new Organization { Id = Guid.NewGuid(), Name = "FPT University Demo", Type = "University" };
-            var ent = new Organization { Id = Guid.NewGuid(), Name = "TechCorp Demo", Type = "Enterprise" };
-            await context.Organizations.AddRangeAsync(uni, ent);
-            await context.OrganizationMembers.AddRangeAsync(
-                new OrganizationMember { Id = Guid.NewGuid(), OrganizationId = uni.Id, UserId = uniAdmin.Id, Role = "UniversityAdmin" },
-                new OrganizationMember { Id = Guid.NewGuid(), OrganizationId = uni.Id, UserId = student.Id, Role = "Member" },
-                new OrganizationMember { Id = Guid.NewGuid(), OrganizationId = ent.Id, UserId = entAdmin.Id, Role = "EnterpriseAdmin" });
-            await context.SaveChangesAsync();
+            admin = await EnsureUser(AdminEmail, "Admin", "12345", "Admin");
+        }
+        else
+        {
+            admin.PasswordHash = users.PasswordHasher.HashPassword(admin, "12345");
+            admin.EmailConfirmed = true;
+            admin.UpdatedAt = DateTime.UtcNow;
+            await users.UpdateAsync(admin);
+
+            var roles = await users.GetRolesAsync(admin);
+            await users.RemoveFromRolesAsync(admin, roles);
+            await users.AddToRoleAsync(admin, "Admin");
         }
 
-        _ = admin;
+        await EnsureSystemAdminUnlockedAsync(users, admin);
+    }
+
+    private static async Task EnsureSystemAdminUnlockedAsync(UserManager<UserAccount> users, UserAccount admin)
+    {
+        admin.LockoutEnd = null;
+        admin.AccessFailedCount = 0;
+        await users.UpdateAsync(admin);
+        await users.ResetAccessFailedCountAsync(admin);
+        await users.SetLockoutEnabledAsync(admin, false);
+    }
+
+    private static async Task EnsurePlansAndSettingsAsync(HireMateContext context)
+    {
+        var desired = new (string Code, string Name, string Tagline, decimal Price, int Days, string Desc, int Order, bool Popular, int OutChars, int Budget)[]
+        {
+            ("free", "Miễn phí", "Cho người mới bắt đầu", 0, 30, "Hoàn thiện hồ sơ CV (1 lần phân tích). Không phỏng vấn AI / match JD.", 1, false, 900, 80_000),
+            ("premium", "Tiêu chuẩn", "Cho người luyện tập đều đặn", 79_000, 30, "Phỏng vấn AI, Voice, match JD. Hạn mức ký tự AI theo tháng.", 2, true, 1400, 500_000),
+            ("combo", "Cao cấp", "Cho ứng viên nghiêm túc", 149_000, 30, "Toàn bộ tính năng, hạn mức AI cao hơn.", 3, false, 2000, 1_200_000)
+        };
+
+        foreach (var d in desired)
+        {
+            var e = await context.SubscriptionPlans.FirstOrDefaultAsync(p => p.Code == d.Code);
+            if (e == null)
+            {
+                await context.SubscriptionPlans.AddAsync(new SubscriptionPlan
+                {
+                    Id = Guid.NewGuid(),
+                    Code = d.Code,
+                    Name = d.Name,
+                    Tagline = d.Tagline,
+                    PriceVnd = d.Price,
+                    DurationDays = d.Days,
+                    Description = d.Desc,
+                    SortOrder = d.Order,
+                    IsPopular = d.Popular,
+                    IsActive = true,
+                    MaxAiOutputChars = d.OutChars,
+                    MonthlyAiCharBudget = d.Budget
+                });
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(e.Tagline))
+                {
+                    e.Tagline = d.Tagline;
+                    e.SortOrder = d.Order;
+                    e.IsPopular = d.Popular;
+                    e.Description = d.Desc;
+                    e.MaxAiOutputChars = d.OutChars;
+                    e.MonthlyAiCharBudget = d.Budget;
+                }
+
+                // Một lần: gói cũ "Combo 2 tháng" / tên Premium → bảng giá 0 / 79k / 149k mỗi tháng
+                if (d.Code == "free" && (e.Name == "Free" || e.DurationDays > 30))
+                {
+                    e.Name = d.Name;
+                    e.PriceVnd = d.Price;
+                    e.DurationDays = d.Days;
+                    e.Description = d.Desc;
+                }
+                if (d.Code == "premium" && (e.Name == "Premium" || e.Name == "premium"))
+                {
+                    e.Name = d.Name;
+                    e.PriceVnd = d.Price;
+                    e.DurationDays = d.Days;
+                    e.Description = d.Desc;
+                    e.IsPopular = true;
+                }
+                if (d.Code == "combo" && (e.DurationDays != 30 || e.Name.Contains("Combo", StringComparison.OrdinalIgnoreCase)))
+                {
+                    e.Name = d.Name;
+                    e.PriceVnd = d.Price;
+                    e.DurationDays = d.Days;
+                    e.Description = d.Desc;
+                }
+            }
+        }
+
+        await UpsertSettingAsync(context, "payments.allow_mock", "false", "Cho phép thanh toán Mock. Tắt = chỉ VNPay/PayOS (tiền thật).");
+        await UpsertSettingAsync(context, "payments.default_provider", "VNPay", "Cổng mặc định khi user không chọn: VNPay | PayOS");
+        await UpsertSettingAsync(context, "ai.max_output_chars", "1400", "Trần ký tự câu trả lời AI toàn cục (plan có thể thấp hơn).");
+        await UpsertSettingAsync(context, "ai.cv_analyze_max_output_chars", "1800", "Trần JSON phân tích CV (đủ extract + điểm, không văn dài).");
+        await UpsertSettingAsync(context, "ai.interview_max_output_chars", "1000", "Trần feedback một câu phỏng vấn.");
+
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task UpsertSettingAsync(HireMateContext context, string key, string value, string description)
+    {
+        var e = await context.SystemSettings.FindAsync(key);
+        if (e == null)
+        {
+            await context.SystemSettings.AddAsync(new SystemSetting
+            {
+                Key = key,
+                Value = value,
+                Description = description,
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+        else if (string.IsNullOrWhiteSpace(e.Description))
+        {
+            e.Description = description;
+        }
     }
 }
+

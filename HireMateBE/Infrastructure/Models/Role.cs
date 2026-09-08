@@ -17,3 +17,4 @@ public class Role : IdentityRole<Guid>
 
     public bool IsDeleted { get; set; } = false;
 }
+

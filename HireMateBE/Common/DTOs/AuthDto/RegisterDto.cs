@@ -13,3 +13,4 @@ public class RegisterDto
     [Required, MaxLength(255)]
     public string FullName { get; set; } = string.Empty;
 }
+

@@ -6,3 +6,4 @@ namespace Infrastructure.IRepositories;
 public interface IUserAccountRepository : IGenericRepository<UserAccount>
 {
 }
+

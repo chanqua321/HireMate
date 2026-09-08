@@ -25,3 +25,5 @@ public class SupportTicketRepository(HireMateContext c) : GenericRepository<Supp
 public class OrganizationRepository(HireMateContext c) : GenericRepository<Organization>(c), IOrganizationRepository { }
 public class OrganizationMemberRepository(HireMateContext c) : GenericRepository<OrganizationMember>(c), IOrganizationMemberRepository { }
 public class RefreshTokenRepository(HireMateContext c) : GenericRepository<RefreshToken>(c), IRefreshTokenRepository { }
+public class SystemSettingRepository(HireMateContext c) : GenericRepository<SystemSetting>(c), ISystemSettingRepository { }
+

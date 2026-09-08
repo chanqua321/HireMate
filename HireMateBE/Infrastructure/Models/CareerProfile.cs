@@ -37,6 +37,21 @@ public class CareerProfile
     [MaxLength(500)]
     public string? HobbiesJson { get; set; }
 
+    /// <summary>JSON array of skill strings, e.g. ["React","SQL"].</summary>
+    [MaxLength(2000)]
+    public string? SkillsJson { get; set; }
+
+    /// <summary>JSON array of { title, org, period, description }.</summary>
+    public string? ExperiencesJson { get; set; }
+
+    public DateTime? ConfirmedAt { get; set; }
+
+    public Guid? ConfirmedCvDocumentId { get; set; }
+
+    [ForeignKey(nameof(ConfirmedCvDocumentId))]
+    public CvDocument? ConfirmedCv { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
+

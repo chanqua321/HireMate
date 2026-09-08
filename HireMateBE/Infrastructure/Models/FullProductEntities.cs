@@ -60,17 +60,28 @@ public class CvDocument
     [Key] public Guid Id { get; set; }
     public Guid UserId { get; set; }
     [ForeignKey(nameof(UserId))] public UserAccount? User { get; set; }
+
+    /// <summary>Upload | Wizard</summary>
+    [MaxLength(20)]
+    public string Source { get; set; } = "Upload";
+
     [MaxLength(255)] public string FileName { get; set; } = string.Empty;
     [MaxLength(500)] public string StoragePath { get; set; } = string.Empty;
     [MaxLength(100)] public string ContentType { get; set; } = string.Empty;
     public long FileSize { get; set; }
     public string? ExtractedText { get; set; }
+    public bool ParseSucceeded { get; set; }
     public int? FormatScore { get; set; }
     public int? KeywordsScore { get; set; }
     public int? ReadabilityScore { get; set; }
     public int? ProfessionalismScore { get; set; }
+    public int? ReadinessScore { get; set; }
+    public int? FitT1Score { get; set; }
     public string? AnalysisJson { get; set; }
     public string? AiProvider { get; set; }
+    public string? WizardAnswersJson { get; set; }
+    public bool IsConfirmed { get; set; }
+    public DateTime? ConfirmedAt { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public DateTime? AnalyzedAt { get; set; }
 }
@@ -105,10 +116,25 @@ public class SubscriptionPlan
     [Key] public Guid Id { get; set; }
     [MaxLength(80)] public string Code { get; set; } = string.Empty;
     [MaxLength(120)] public string Name { get; set; } = string.Empty;
+    [MaxLength(200)] public string? Tagline { get; set; }
     public decimal PriceVnd { get; set; }
-    public int DurationDays { get; set; }
+    public int DurationDays { get; set; } = 30;
     [MaxLength(500)] public string? Description { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsPopular { get; set; }
     public bool IsActive { get; set; } = true;
+    /// <summary>Giới hạn độ dài câu trả lời AI (ký tự), đủ JSON/gợi ý, cắt chi phí.</summary>
+    public int MaxAiOutputChars { get; set; } = 1400;
+    /// <summary>Ngân sách ký tự AI (input+output) mỗi chu kỳ DurationDays. 0 = không giới hạn.</summary>
+    public int MonthlyAiCharBudget { get; set; }
+}
+
+public class SystemSetting
+{
+    [Key, MaxLength(80)] public string Key { get; set; } = string.Empty;
+    [MaxLength(2000)] public string Value { get; set; } = string.Empty;
+    [MaxLength(300)] public string? Description { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Invoice
@@ -212,3 +238,4 @@ public class OrganizationMember
     [ForeignKey(nameof(UserId))] public UserAccount? User { get; set; }
     [MaxLength(40)] public string Role { get; set; } = "Member";
 }
+

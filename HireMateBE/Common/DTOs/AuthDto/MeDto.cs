@@ -8,6 +8,15 @@ public class MeDto
     public IList<string> Roles { get; set; } = [];
     public bool OnboardingCompleted { get; set; }
     public bool IsPremium { get; set; }
-    /// <summary>free | premium | combo — gói đang kích hoạt.</summary>
     public string CurrentPlanCode { get; set; } = "free";
+    public DateTime? PlanSelectedAt { get; set; }
+    public bool HasSelectedPlan { get; set; }
+    public bool HasCv { get; set; }
+    public int MonthlyAiCharBudget { get; set; }
+    public int UsedAiChars { get; set; }
+    /// <summary>-1 = không giới hạn (budget gói = 0).</summary>
+    public int RemainingAiChars { get; set; }
+    public DateTime? PlanExpiresAt { get; set; }
+    public bool PlanExpired { get; set; }
 }
+

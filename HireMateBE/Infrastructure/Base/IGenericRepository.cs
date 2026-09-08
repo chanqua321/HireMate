@@ -16,3 +16,4 @@ public interface IGenericRepository<T> where T : class
     Task RemoveAsync(T entity);
     IQueryable<T> GetQueryable();
 }
+
