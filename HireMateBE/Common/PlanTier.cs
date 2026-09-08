@@ -2,7 +2,7 @@ namespace Common;
 
 public static class PlanTier
 {
-    /// <summary>free = 0, premium (Tiêu chuẩn) = 1, combo (Cao cấp) = 2</summary>
+    /// <summary>free = 0, premium/Tiêu chuẩn = 1, combo/Cao cấp = 2. Tên và giá lấy từ DB (SubscriptionPlan), không hard-code.</summary>
     public static int Rank(string? planCode)
     {
         var code = (planCode ?? "free").Trim().ToLowerInvariant();
@@ -32,3 +32,4 @@ public static class PlanTier
         _ => "Miễn phí"
     };
 }
+

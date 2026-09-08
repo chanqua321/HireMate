@@ -66,3 +66,4 @@ public sealed class VietnameseIdentityErrorDescriber : IdentityErrorDescriber
     public override IdentityError PasswordRequiresUpper() =>
         new() { Code = nameof(PasswordRequiresUpper), Description = "Mật khẩu phải có ít nhất một chữ hoa (A-Z)." };
 }
+

@@ -80,3 +80,4 @@ public class InterviewAnswerViewDto
     public bool Skipped { get; set; }
     public int DurationSec { get; set; }
 }
+

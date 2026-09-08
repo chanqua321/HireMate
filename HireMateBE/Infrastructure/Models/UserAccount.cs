@@ -12,6 +12,13 @@ public class UserAccount : IdentityUser<Guid>
 
     public bool IsPremium { get; set; } = false;
 
+    /// <summary>free | premium | combo. Null = chưa chọn gói (T1).</summary>
+    [MaxLength(20)]
+    public string? CurrentPlanCode { get; set; }
+
+    /// <summary>Đã qua bước chọn Free hoặc thanh toán.</summary>
+    public DateTime? PlanSelectedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -24,3 +31,4 @@ public class UserAccount : IdentityUser<Guid>
     public ICollection<InterviewSession> InterviewSessions { get; set; } = [];
     public ICollection<CareerMemoryEvent> CareerMemoryEvents { get; set; } = [];
 }
+

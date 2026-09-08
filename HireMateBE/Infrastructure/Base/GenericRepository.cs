@@ -60,3 +60,4 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
 
     public IQueryable<T> GetQueryable() => _context.Set<T>();
 }
+

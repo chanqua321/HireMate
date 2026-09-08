@@ -32,6 +32,7 @@ public interface IUnitOfWork : IDisposable
     IOrganizationRepository OrganizationRepository { get; }
     IOrganizationMemberRepository OrganizationMemberRepository { get; }
     IRefreshTokenRepository RefreshTokenRepository { get; }
+    ISystemSettingRepository SystemSettingRepository { get; }
     Task<int> SaveChangesAsync();
 }
 
@@ -65,6 +66,7 @@ public class UnitOfWork(HireMateContext context) : IUnitOfWork
     private IOrganizationRepository? _org;
     private IOrganizationMemberRepository? _orgMember;
     private IRefreshTokenRepository? _refreshToken;
+    private ISystemSettingRepository? _settings;
 
     public IUserAccountRepository UserAccountRepository => _userAccountRepository ??= new UserAccountRepository(_context);
     public ICareerProfileRepository CareerProfileRepository => _careerProfileRepository ??= new CareerProfileRepository(_context);
@@ -92,6 +94,7 @@ public class UnitOfWork(HireMateContext context) : IUnitOfWork
     public IOrganizationRepository OrganizationRepository => _org ??= new OrganizationRepository(_context);
     public IOrganizationMemberRepository OrganizationMemberRepository => _orgMember ??= new OrganizationMemberRepository(_context);
     public IRefreshTokenRepository RefreshTokenRepository => _refreshToken ??= new RefreshTokenRepository(_context);
+    public ISystemSettingRepository SystemSettingRepository => _settings ??= new SystemSettingRepository(_context);
 
     public Task<int> SaveChangesAsync() => _context.SaveChangesAsync();
 
@@ -101,3 +104,4 @@ public class UnitOfWork(HireMateContext context) : IUnitOfWork
         GC.SuppressFinalize(this);
     }
 }
+

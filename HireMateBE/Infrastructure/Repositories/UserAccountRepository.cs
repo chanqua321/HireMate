@@ -9,3 +9,4 @@ public class UserAccountRepository(HireMateContext context)
     : GenericRepository<UserAccount>(context), IUserAccountRepository
 {
 }
+
