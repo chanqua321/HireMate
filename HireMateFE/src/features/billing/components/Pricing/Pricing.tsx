@@ -127,6 +127,7 @@ export const Pricing: React.FC = () => {
             badge: isFeatured ? 'Phổ biến nhất 🔥' : null,
           };
         });
+        mapped.sort((a, b) => a.monthlyPrice - b.monthlyPrice);
         if (mapped.length >= 2) {
           setPlans(mapped);
         }
