@@ -450,8 +450,8 @@ export const Dashboard: React.FC = () => {
     setSavingManual(true);
     const parsedGradYear = typeof graduationYear === 'number' ? graduationYear : (parseInt(String(graduationYear), 10) || 2026);
     const updated = {
-      name: name.trim() || 'Ứng viên',
-      fullName: name.trim() || 'Ứng viên',
+      name: name.trim(),
+      fullName: name.trim(),
       role: role.trim() || 'Lập trình viên Backend',
       desiredPosition: role.trim() || 'Lập trình viên Backend',
       field: field.trim(),
@@ -489,8 +489,8 @@ export const Dashboard: React.FC = () => {
     setOnboardingSaving(true);
     const parsedGradYear = typeof graduationYear === 'number' ? graduationYear : (parseInt(String(graduationYear), 10) || 2026);
     const updated = {
-      name: name.trim() || 'Ứng viên',
-      fullName: name.trim() || 'Ứng viên',
+      name: name.trim(),
+      fullName: name.trim(),
       education: education.trim(),
       university: education.trim(),
       graduationYear: parsedGradYear,
@@ -544,8 +544,8 @@ export const Dashboard: React.FC = () => {
     setOnboardingSaving(true);
     const parsedGradYear = typeof graduationYear === 'number' ? graduationYear : (parseInt(String(graduationYear), 10) || 2026);
     const updated = {
-      name: name.trim() || 'Ứng viên',
-      fullName: name.trim() || 'Ứng viên',
+      name: name.trim(),
+      fullName: name.trim(),
       role: role.trim() || 'Lập trình viên Backend',
       desiredPosition: role.trim() || 'Lập trình viên Backend',
       field: field.trim(),

@@ -20,17 +20,24 @@ export const profileService = {
   },
 
   async updateProfile(updates: UpdateProfileDto | Partial<Profile>): Promise<ApiResponse<any>> {
-    const payload: UpdateProfileDto = {
-      fullName: (updates as any).fullName || (updates as any).name || 'Ứng viên',
-      desiredPosition: (updates as any).desiredPosition || (updates as any).role,
-      desiredIndustry: (updates as any).desiredIndustry || (updates as any).field,
-      experienceLevel: (updates as any).experienceLevel || (updates as any).exp,
-      university: (updates as any).university || (updates as any).education,
-      major: (updates as any).major || 'Công nghệ thông tin',
-      graduationYear: (updates as any).graduationYear || 2026,
-      bio: (updates as any).bio || '',
-      hobbies: (updates as any).hobbies || (updates as any).skills || [],
-    };
+    // Chỉ gửi field có giá trị thật — không dùng fallback cứng để tránh ghi đè dữ liệu user
+    const raw = updates as any;
+    const payload: UpdateProfileDto = {};
+    const fullName = raw.fullName?.trim() || raw.name?.trim();
+    if (fullName) payload.fullName = fullName;
+    const desiredPosition = raw.desiredPosition?.trim() || raw.role?.trim();
+    if (desiredPosition) payload.desiredPosition = desiredPosition;
+    const desiredIndustry = raw.desiredIndustry?.trim() || raw.field?.trim();
+    if (desiredIndustry) payload.desiredIndustry = desiredIndustry;
+    const experienceLevel = raw.experienceLevel?.trim() || raw.exp?.trim();
+    if (experienceLevel) payload.experienceLevel = experienceLevel;
+    const university = raw.university?.trim() || raw.education?.trim();
+    if (university) payload.university = university;
+    if (raw.major?.trim()) payload.major = raw.major.trim();
+    if (raw.graduationYear && raw.graduationYear > 0) payload.graduationYear = raw.graduationYear;
+    if (raw.bio?.trim()) payload.bio = raw.bio.trim();
+    const hobbies = raw.hobbies || raw.skills;
+    if (hobbies?.length) payload.hobbies = hobbies;
     return apiClient.put<any>('/Profile', payload);
   },
 };

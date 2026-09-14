@@ -52,9 +52,9 @@ export const OnboardingProfile: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = name.trim() || profile.name || 'Ứng viên';
+    const finalName = name.trim() || profile.name;
     updateProfile({
-      name: finalName,
+      name: finalName || '',
       education: education.trim(),
       bio: bio.trim(),
       skills,

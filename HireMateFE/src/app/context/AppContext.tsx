@@ -88,7 +88,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (localStorage.getItem('hm_access_token')) {
         profileService
           .updateProfile({
-            fullName: next.name || 'Ứng viên',
+            // Chỉ gửi fullName nếu có giá trị thật — tránh ghi đè tên thật bằng 'Ứng viên'
+            ...(next.name?.trim() ? { fullName: next.name.trim() } : {}),
             desiredPosition: next.role,
             desiredIndustry: next.field,
             experienceLevel: next.exp,
