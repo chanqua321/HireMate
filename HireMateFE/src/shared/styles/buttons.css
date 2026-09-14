@@ -1,0 +1,90 @@
+/* =====================================================================
+   HireMate — Design System
+   Global Buttons
+   ===================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: var(--fs-sm, 0.92rem);
+  line-height: 1.4;
+  padding: 12px 22px;
+  border-radius: var(--r-btn, 12px);
+  border: 1.5px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.btn-primary {
+  background: var(--grad-primary, linear-gradient(135deg, #03BFFF 0%, #0090FF 100%));
+  color: var(--navy, #001B3F);
+  font-weight: 700;
+  box-shadow: var(--sh-primary, 0 4px 14px rgba(3, 191, 255, 0.35));
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary:hover {
+  color: var(--navy, #001B3F);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(3, 191, 255, 0.45);
+}
+
+.btn-secondary {
+  background: var(--navy, #001B3F);
+  color: #ffffff;
+  box-shadow: var(--sh-sm, 0 2px 8px rgba(0, 27, 63, 0.15));
+}
+
+.btn-secondary:hover {
+  background: var(--navy-soft, #00285a);
+  transform: translateY(-2px);
+  color: #ffffff;
+  box-shadow: var(--sh-md, 0 4px 16px rgba(0, 27, 63, 0.25));
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--secondary, #475569);
+  border-color: var(--border, #E2E8F0);
+}
+
+.btn-ghost:hover {
+  border-color: var(--primary, #03BFFF);
+  color: var(--primary-strong, #0070E0);
+  background: var(--primary-soft, rgba(3, 191, 255, 0.08));
+  transform: translateY(-1px);
+}
+
+.btn:disabled,
+.btn.disabled {
+  background: var(--border, #E2E8F0);
+  color: var(--muted, #94A3B8);
+  box-shadow: none;
+  cursor: not-allowed;
+  pointer-events: none;
+  border-color: transparent;
+}
+
+.btn-lg {
+  padding: 14px 28px;
+  font-size: 1rem;
+}
+
+.btn-block {
+  width: 100%;
+}

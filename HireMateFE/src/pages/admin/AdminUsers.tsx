@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Search, UserCheck, UserX, Shield, Edit2, X, Check } from 'lucide-react';
 import './admin.css';
-import { adminService } from '../../services';
+import { adminService } from '../../shared/services';
 
 type User = {
   id: string;

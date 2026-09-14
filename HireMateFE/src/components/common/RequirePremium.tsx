@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Lock, ArrowRight, Sparkles } from 'lucide-react';
-import { authService } from '../../services';
+import { authService } from '../../features/auth';
 
 export function readPremiumFlag(): boolean {
   return sessionStorage.getItem('hm_is_premium') === '1';

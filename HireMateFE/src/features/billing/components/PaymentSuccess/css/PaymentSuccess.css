@@ -1,1 +1,166 @@
-/* Specific styles for PaymentSuccess component can be added here */
+/* =====================================================================
+   HIREMATE PAYMENT SUCCESS STYLES
+   ===================================================================== */
+
+.payment-success-page {
+  min-height: calc(100vh - 180px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: radial-gradient(circle at 50% 20%, rgba(3, 191, 255, 0.06), transparent 70%),
+              radial-gradient(circle at 80% 80%, rgba(34, 197, 94, 0.05), transparent 60%);
+}
+
+.payment-success-card {
+  max-width: 540px;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 20px 40px -15px rgba(0, 27, 63, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  padding: 44px 36px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.payment-success-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #22C55E, #03BFFF);
+}
+
+.payment-success-icon-wrap {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.12);
+  color: #16A34A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 8px rgba(34, 197, 94, 0.06);
+}
+
+.payment-success-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #16A34A;
+  background: rgba(34, 197, 94, 0.08);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  margin-bottom: 14px;
+}
+
+.payment-success-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #001B3F;
+  margin: 0 0 10px;
+  line-height: 1.3;
+}
+
+.payment-success-subtitle {
+  color: #64748B;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0 0 28px;
+}
+
+.payment-receipt-box {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 20px 24px;
+  text-align: left;
+  margin-bottom: 28px;
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 0.92rem;
+}
+
+.receipt-row:not(:last-child) {
+  border-bottom: 1px dashed #E2E8F0;
+}
+
+.receipt-label {
+  color: #64748B;
+  font-weight: 500;
+}
+
+.receipt-value {
+  color: #001B3F;
+  font-weight: 700;
+}
+
+.receipt-value--price {
+  color: #0284C7;
+  font-size: 1.05rem;
+}
+
+.payment-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #03BFFF 0%, #0090FF 100%);
+  color: #001B3F !important;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 12px;
+  text-decoration: none;
+  box-shadow: 0 6px 18px rgba(3, 191, 255, 0.35);
+  transition: all 0.2s ease;
+}
+
+.payment-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(3, 191, 255, 0.45);
+}
+
+.payment-btn-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 24px;
+  background: transparent;
+  color: #475569 !important;
+  border: 1.5px solid #E2E8F0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.payment-btn-ghost:hover {
+  border-color: #03BFFF;
+  color: #0284C7 !important;
+  background: rgba(3, 191, 255, 0.05);
+}

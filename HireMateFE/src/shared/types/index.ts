@@ -43,6 +43,12 @@ export interface InterviewResult {
   clarity: number;
   subs: STARBreakdown;
   date: string;
+  feedbacks?: Array<{
+    question: string;
+    answer: string;
+    feedback: string;
+    score: number;
+  }>;
 }
 
 export interface HistoryItem {

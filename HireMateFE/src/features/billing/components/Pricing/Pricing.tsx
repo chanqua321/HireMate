@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, HelpCircle, Check, X } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, HelpCircle, Check, X, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { FaqAccordion } from '../../../../shared/components';
+import { AuthRequiredModal } from '../../../../shared/components/AuthRequiredModal/AuthRequiredModal';
+import { useApp } from '../../../../app/context/AppContext';
 import { billingService } from '../../api/billing.service';
 import { publicService } from '../../../../shared/services';
 import './css/Pricing.css';
@@ -97,9 +99,26 @@ const COMPARISON_ROWS = [
 ];
 
 export const Pricing: React.FC = () => {
+  const { isLoggedIn } = useApp();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState(DEFAULT_PLANS);
   const [faqs, setFaqs] = useState(PRICING_FAQS);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authFeatureName, setAuthFeatureName] = useState('Bảng giá & Gói dịch vụ');
+
+  const handlePlanAction = (plan: (typeof DEFAULT_PLANS)[0]) => {
+    if (!isLoggedIn) {
+      setAuthFeatureName(plan.label);
+      setShowAuthModal(true);
+      return;
+    }
+    if (plan.monthlyPrice === 0 || plan.id === 'free') {
+      navigate('/dashboard');
+    } else {
+      navigate(`/checkout?plan=${plan.id}`);
+    }
+  };
 
   useEffect(() => {
     billingService.getPlans().then((res) => {
@@ -242,13 +261,16 @@ export const Pricing: React.FC = () => {
                     </ul>
 
                     {/* CTA Button */}
-                    <Link
-                      to={plan.ctaTo}
+                    <button
+                      type="button"
+                      onClick={() => handlePlanAction(plan)}
                       className={`plan-cta-btn ${plan.featured ? 'plan-cta-btn--primary' : 'plan-cta-btn--outline'}`}
+                      style={{ cursor: 'pointer', border: 'none', width: '100%', fontFamily: 'inherit' }}
                     >
+                      {!isLoggedIn && <Lock size={16} style={{ marginRight: '4px' }} />}
                       <span>{plan.cta}</span>
                       <ArrowRight size={18} />
-                    </Link>
+                    </button>
                   </div>
                 </motion.div>
               );
@@ -348,6 +370,12 @@ export const Pricing: React.FC = () => {
           <FaqAccordion items={faqs} />
         </div>
       </section>
+
+      <AuthRequiredModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        featureName={authFeatureName}
+      />
     </div>
   );
 };

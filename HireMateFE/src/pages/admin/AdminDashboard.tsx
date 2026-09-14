@@ -3,7 +3,7 @@ import {
   Users, TrendingUp, Briefcase, CreditCard, MessageSquare, GitBranch,
 } from 'lucide-react';
 import './admin.css';
-import { adminService } from '../../services';
+import { adminService } from '../../shared/services';
 
 const statusBadge = (s: string) => {
   const map: Record<string, string> = {
