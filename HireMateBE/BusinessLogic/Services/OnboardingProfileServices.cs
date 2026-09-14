@@ -160,8 +160,23 @@ public class ProfileService(
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.UserId == userId);
 
-        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG,
-            OnboardingService.MapProfile(user, profile));
+        var dto = OnboardingService.MapProfile(user, profile);
+        dto.CurrentPlanCode = await ResolveCurrentPlanCodeAsync(userId, user.IsPremium);
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, dto);
+    }
+
+    private async Task<string> ResolveCurrentPlanCodeAsync(Guid userId, bool isPremium)
+    {
+        var paid = await _unitOfWork.InvoiceRepository.GetQueryable().AsNoTracking()
+            .Include(i => i.Plan)
+            .Where(i => i.UserId == userId && i.Status == "Paid")
+            .OrderByDescending(i => i.PaidAt ?? i.CreatedAt)
+            .Select(i => i.Plan != null ? i.Plan.Code : null)
+            .FirstOrDefaultAsync();
+
+        if (!string.IsNullOrWhiteSpace(paid))
+            return PlanTier.Normalize(paid);
+        return isPremium ? "premium" : "free";
     }
 
     public async Task<IServiceResult> UpdateAsync(Guid userId, UpdateProfileDto dto)
