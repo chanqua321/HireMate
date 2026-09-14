@@ -216,7 +216,7 @@ public class ProfileService(
             profile.University = dto.University.Trim();
         if (!string.IsNullOrWhiteSpace(dto.Major))
             profile.Major = dto.Major.Trim();
-        if (dto.GraduationYear.HasValue)
+        if (dto.GraduationYear > 0)
             profile.GraduationYear = dto.GraduationYear;
         if (!string.IsNullOrWhiteSpace(dto.Bio))
             profile.Bio = dto.Bio.Trim();

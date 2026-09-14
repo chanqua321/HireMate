@@ -74,34 +74,17 @@ export const Invoice: React.FC = () => {
   const today = invoiceDate;
 
   return (
-    <div className="section container" style={{ maxWidth: '800px', margin: '30px auto' }}>
-      <div
-        className="no-print"
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '24px',
-        }}
-      >
-        <Link
-          to="/dashboard"
-          className="btn btn-ghost"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-        >
+    <div className="invoice-page-container">
+      <div className="invoice-toolbar no-print">
+        <Link to="/dashboard" className="invoice-back-btn">
           <ArrowLeft size={18} /> Quay lại
         </Link>
-        <button
-          type="button"
-          onClick={handlePrint}
-          className="btn btn-primary"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-        >
+        <button type="button" onClick={handlePrint} className="invoice-print-btn">
           <Printer size={18} /> In hóa đơn
         </button>
       </div>
 
-      <div className="card invoice-card" style={{ padding: '48px', background: '#ffffff' }}>
+      <div className="invoice-card">
         {/* Invoice Header */}
         <div
           style={{

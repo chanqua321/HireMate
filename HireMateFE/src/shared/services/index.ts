@@ -6,4 +6,5 @@ export * from './profile.service';
 export * from './cv.service';
 export * from './match.service';
 export * from './growth.service';
+export * from './admin.service';
 
