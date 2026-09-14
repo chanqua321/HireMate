@@ -1,0 +1,19 @@
+.main-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow: visible;
+}
+.main-layout > main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+.page-transition-wrapper {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}

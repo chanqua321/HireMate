@@ -1,0 +1,22 @@
+.star-widget {
+  display: inline-flex;
+  gap: 4px;
+}
+.star-btn {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.star-btn.readonly {
+  cursor: default;
+}
+.star-btn:not(.readonly) {
+  cursor: pointer;
+}
+.star-btn.active {
+  color: #F59E0B;
+}
+.star-btn.inactive {
+  color: #CBD5E1;
+}

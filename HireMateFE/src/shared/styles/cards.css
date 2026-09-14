@@ -1,0 +1,40 @@
+/* =====================================================================
+   HireMate — Design System
+   Cards / Badges / Misc
+   ===================================================================== */
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--sh-md); padding: var(--s3); }
+.card-pad-lg { padding: var(--s4); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 600;
+  padding: 5px 12px; border-radius: var(--r-pill); background: var(--primary-soft); color: var(--primary-strong);
+}
+.badge--success { background: var(--success-soft); color: #15803D; }
+.badge--warning { background: var(--warning-soft); color: #B45309; }
+.badge--error { background: var(--error-soft); color: #B91C1C; }
+.badge--navy { background: var(--navy); color: #fff; }
+
+/* Progress bar */
+.progress { width: 100%; height: 10px; background: var(--border); border-radius: var(--r-pill); overflow: hidden; }
+.progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-strong)); border-radius: var(--r-pill); transition: width .4s ease; }
+
+/* Icon chip */
+.icon-chip {
+  width: 52px; height: 52px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-soft); color: var(--primary-strong); flex-shrink: 0;
+}
+.icon-chip svg { width: 26px; height: 26px; }
+.icon-chip--navy { background: var(--navy); color: var(--primary); }
+
+/* Table */
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-card); }
+table.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+table.tbl th, table.tbl td { padding: 14px 18px; text-align: left; }
+table.tbl thead th { background: var(--bg-app); color: var(--muted); font-weight: 600; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; }
+table.tbl tbody tr { border-top: 1px solid var(--border); }
+table.tbl tbody tr:hover { background: var(--bg-app); }
+
+/* Divider */
+.divider { display: flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--fs-sm); margin: var(--s3) 0; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }

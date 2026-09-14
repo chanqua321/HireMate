@@ -1,0 +1,138 @@
+/* =====================================================================
+   HireMate — Design System
+   Tokens & Variables
+   ===================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Inter:wght@300..800&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap');
+
+:root {
+  /* Brand */
+  --primary: #03BFFF;
+  --primary-strong: #00A6E0;
+  --primary-soft: #E6F8FF;
+  --secondary: #001B3F;
+  --secondary-soft: #0A2A55;
+
+  /* Brand-dark constants */
+  --navy: #001B3F;
+  --navy-soft: #0A2A55;
+
+  /* Footer */
+  --footer-bg: #ACD9FF;
+  --footer-text: #46587a;
+  --footer-link: #51607f;
+  --footer-heading: #16306a;
+  --footer-border: #aec6ef;
+  --footer-social-bg: var(--secondary);
+  --footer-glow: 0;
+
+  /* Motion easing */
+  --ease-out: cubic-bezier(.22,.61,.36,1);
+  --ease-spring: cubic-bezier(.34,1.4,.5,1);
+
+  /* Surfaces */
+  --surface: #FFFFFF;
+  --surface-2: #FBFCFE;
+  --surface-glass: rgba(255,255,255,.72);
+  --surface-glass-border: rgba(255,255,255,.65);
+
+  /* Neutrals */
+  --ink: #1B1D21;
+  --white: #FFFFFF;
+  --bg-app: #F7F9FC;
+  --border: #E5E7EB;
+  --muted: #6B7280;
+
+  /* Status */
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --success-soft: #E9FBEF;
+  --warning-soft: #FEF6E7;
+  --error-soft: #FDECEC;
+
+  /* Gradients & glow */
+  --grad-primary: linear-gradient(135deg, #03BFFF 0%, #0085FF 100%);
+  --grad-brand: linear-gradient(135deg, #03BFFF 0%, #6A8BFF 55%, #001B3F 120%);
+  --grad-text: linear-gradient(120deg, #03BFFF 0%, #0085FF 50%, #5B6BFF 100%);
+  --glow-primary: 0 0 0 1px rgba(3,191,255,.25), 0 10px 30px rgba(3,191,255,.35);
+
+  /* Radii */
+  --r-card: 16px;
+  --r-btn: 12px;
+  --r-input: 12px;
+  --r-modal: 20px;
+  --r-pill: 999px;
+
+  /* Spacing */
+  --s1: 8px;
+  --s2: 16px;
+  --s3: 24px;
+  --s4: 32px;
+  --s5: 48px;
+  --s6: 64px;
+  --s7: 96px;
+
+  /* Shadows */
+  --sh-sm: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --sh-md: 0 4px 12px rgba(16,24,40,.06), 0 2px 6px rgba(16,24,40,.04);
+  --sh-lg: 0 12px 32px rgba(16,24,40,.10), 0 4px 12px rgba(16,24,40,.06);
+  --sh-primary: 0 8px 24px rgba(3,191,255,.30);
+
+  /* Layout */
+  --maxw: 1200px;
+  --header-h: 72px;
+
+  /* Type scale */
+  --fs-h1: clamp(2.2rem, 4.4vw, 3.4rem);
+  --fs-h2: clamp(1.7rem, 3vw, 2.4rem);
+  --fs-h3: 1.25rem;
+  --fs-body: 1rem;
+  --fs-sm: .875rem;
+  --fs-xs: .78rem;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --primary: #03BFFF;
+  --primary-strong: #5BD8FF;
+  --primary-soft: rgba(3,191,255,.16);
+  --secondary: #EAF1FB;
+  --secondary-soft: #C2D0E8;
+
+  --navy: #0B1B33;
+  --navy-soft: #12294A;
+
+  --footer-bg: #0C1D38;
+  --footer-text: #AEBCD4;
+  --footer-link: #93A2BC;
+  --footer-heading: #EAF1FB;
+  --footer-border: rgba(255,255,255,.1);
+  --footer-social-bg: rgba(255,255,255,.07);
+  --footer-glow: 1;
+
+  --surface: #0F1A2C;
+  --surface-2: #142235;
+  --surface-glass: rgba(20,32,52,.55);
+  --surface-glass-border: rgba(255,255,255,.08);
+
+  --ink: #DCE4F1;
+  --white: #070D18;
+  --bg-app: #0A1120;
+  --border: #223149;
+  --muted: #93A2B8;
+
+  --success-soft: rgba(34,197,94,.16);
+  --warning-soft: rgba(245,158,11,.16);
+  --error-soft: rgba(239,68,68,.16);
+
+  --sh-sm: 0 1px 2px rgba(0,0,0,.45);
+  --sh-md: 0 6px 18px rgba(0,0,0,.45);
+  --sh-lg: 0 18px 44px rgba(0,0,0,.55);
+  --sh-primary: 0 10px 30px rgba(3,191,255,.32);
+
+  --grad-text: linear-gradient(120deg, #4FD6FF 0%, #38B6FF 50%, #8AA0FF 100%);
+}

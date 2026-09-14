@@ -1,0 +1,537 @@
+/* =====================================================================
+   HireMate — Modern Dashboard Vibe (Clean, Tech, Glass & Polish)
+   ===================================================================== */
+
+.dashboard-vibe-container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 20px 60px 20px;
+  font-family: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #0f172a;
+}
+
+/* --- Hero Banner Section --- */
+.dashboard-hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.dashboard-hero-text h1 {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0c182c;
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-hero-subtitle {
+  color: #64748b;
+  font-size: 0.95rem;
+  margin: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.pro-member-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(3, 105, 161, 0.08);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.pro-member-pill:hover {
+  background: #bae6fd;
+  transform: translateY(-1px);
+}
+
+/* --- Quick Action Cards Row (3 Grid) --- */
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.quick-action-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-radius: 16px;
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
+}
+
+.quick-action-card:hover {
+  transform: translateY(-3px);
+}
+
+.quick-action-card.card-teal {
+  background: linear-gradient(135deg, #094b5c 0%, #0c5b70 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 20px -4px rgba(9, 75, 92, 0.35);
+}
+
+.quick-action-card.card-navy {
+  background: linear-gradient(135deg, #09182d 0%, #102644 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 20px -4px rgba(9, 24, 45, 0.35);
+}
+
+.quick-action-card.card-white {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.quick-action-card.card-white:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+.card-content-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.card-teal .card-tag {
+  color: #67e8f9;
+}
+
+.card-navy .card-tag {
+  color: #93c5fd;
+}
+
+.card-white .card-tag {
+  color: #64748b;
+}
+
+.card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.card-teal .card-title,
+.card-navy .card-title {
+  color: #ffffff;
+}
+
+.card-white .card-title {
+  color: #0f172a;
+}
+
+.card-icon-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.card-teal .card-icon-right {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.card-navy .card-icon-right {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.card-white .card-icon-right {
+  background: #f0f9ff;
+  color: #0284c7;
+}
+
+/* --- Main 2-Column Grid --- */
+.dashboard-main-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* --- Left Column: Recent Activity --- */
+.recent-activity-card {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #eef2f6;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+  padding: 24px 28px;
+}
+
+.activity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.activity-header h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.view-all-link {
+  color: #0284c7;
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.view-all-link:hover {
+  color: #0369a1;
+  text-decoration: underline;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
+}
+
+.activity-item:hover {
+  background: #f1f5f9;
+  transform: translateX(2px);
+}
+
+.activity-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.activity-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.activity-icon-box.blue {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.activity-icon-box.teal {
+  background: #ccfbf1;
+  color: #0d9488;
+}
+
+.activity-icon-box.amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.activity-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.activity-title {
+  font-weight: 700;
+  font-size: 0.96rem;
+  color: #0f172a;
+  margin: 0;
+}
+
+.activity-desc {
+  font-size: 0.83rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.activity-desc strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.activity-time {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.activity-badge-scheduled {
+  background: #fef3c7;
+  color: #b45309;
+  font-weight: 600;
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+/* Optional inline edit profile toggle inside left column */
+.profile-edit-toggle {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+/* --- Right Column: Career Readiness & AI Coach --- */
+.right-column-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Career Readiness Card */
+.career-readiness-card {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #eef2f6;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+  padding: 24px 24px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.readiness-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 18px;
+}
+
+.donut-gauge-wrapper {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-bottom: 16px;
+}
+
+.donut-gauge-svg {
+  transform: rotate(-90deg);
+  width: 100%;
+  height: 100%;
+}
+
+.donut-gauge-track {
+  fill: none;
+  stroke: #f1f5f9;
+  stroke-width: 10;
+}
+
+.donut-gauge-progress {
+  fill: none;
+  stroke: #00c2ff;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dasharray 1s ease;
+}
+
+.donut-gauge-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.donut-score-number {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.donut-score-max {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.readiness-summary-text {
+  font-size: 0.9rem;
+  color: #475569;
+  line-height: 1.45;
+  margin: 0 0 16px 0;
+}
+
+.readiness-summary-text strong {
+  color: #0284c7;
+  font-weight: 700;
+}
+
+.improve-score-btn {
+  width: 100%;
+  background: #f1f5f9;
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 0.92rem;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.improve-score-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+/* HireMate AI Coach Card */
+.ai-coach-card {
+  background: linear-gradient(145deg, #09182d 0%, #0d223f 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px rgba(9, 24, 45, 0.35);
+  padding: 22px 24px;
+  color: #ffffff;
+}
+
+.coach-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.coach-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #38bdf8;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.coach-lightbulb {
+  color: #38bdf8;
+  opacity: 0.8;
+}
+
+.coach-heading {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.01em;
+}
+
+.coach-quote {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  line-height: 1.55;
+  margin: 0;
+  font-style: normal;
+}
+
+/* Metric Counter Tiles Below AI Coach */
+.metric-tiles-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.metric-tile {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #eef2f6;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-tile-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.metric-tile-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.1;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 960px) {
+  .dashboard-main-grid {
+    grid-template-columns: 1fr;
+  }
+  .quick-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-hero-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .activity-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .activity-time {
+    align-self: flex-end;
+  }
+}

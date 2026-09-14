@@ -1,0 +1,368 @@
+/* =====================================================================
+   Interview Setup — Modern Educational Design & Polish
+   ===================================================================== */
+
+.setup-page-container {
+  max-width: 960px;
+  margin: 20px auto 60px auto;
+  padding: 0 20px;
+  font-family: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.setup-card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #eef2f6;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
+/* --- Banner Header --- */
+.setup-header-banner {
+  background: linear-gradient(135deg, #09182d 0%, #0d274c 60%, #094b5c 100%);
+  padding: 36px 40px;
+  color: #ffffff;
+  position: relative;
+  overflow: hidden;
+}
+
+.setup-header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+.setup-header-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.02em;
+}
+
+.setup-header-desc {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 680px;
+}
+
+/* --- Body Form --- */
+.setup-body {
+  padding: 36px 40px 40px 40px;
+}
+
+.setup-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.setup-label-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.setup-label-hint {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* --- Custom Select Dropdowns --- */
+.custom-select-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.custom-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.custom-select-trigger:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.custom-select-trigger.is-open {
+  border-color: #03bfff;
+  box-shadow: 0 0 0 3px rgba(3, 191, 255, 0.15);
+}
+
+.trigger-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.trigger-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #f0f9ff;
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.trigger-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.trigger-label-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trigger-label-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.custom-select-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 16px 36px -4px rgba(15, 23, 42, 0.12);
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 50;
+  padding: 6px;
+}
+
+.custom-select-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #1e293b;
+  font-size: 0.92rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.custom-select-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.custom-select-item.is-selected {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 700;
+}
+
+/* --- Options Grid (Difficulty & Mode) --- */
+.options-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.options-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.setup-option-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 18px 14px;
+  border-radius: 16px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  position: relative;
+}
+
+.setup-option-card:hover {
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+}
+
+.setup-option-card.is-active {
+  border-color: #03bfff;
+  background: #f0f9ff;
+  box-shadow: 0 8px 24px rgba(3, 191, 255, 0.18);
+}
+
+.option-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.setup-option-card.is-active .option-card-icon {
+  background: #03bfff;
+  color: #ffffff;
+}
+
+.option-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.option-card-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.setup-mode-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  text-align: left;
+}
+
+.setup-mode-card:hover {
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+}
+
+.setup-mode-card.is-active {
+  border-color: #03bfff;
+  background: #f0f9ff;
+  box-shadow: 0 8px 24px rgba(3, 191, 255, 0.18);
+}
+
+/* --- Educational Learning Objectives Box --- */
+.setup-educational-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 32px;
+}
+
+.edu-box-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0284c7;
+  font-weight: 700;
+  font-size: 0.92rem;
+  margin-bottom: 12px;
+}
+
+.edu-framework-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.edu-pill-item {
+  background: #ffffff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #eef2f6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edu-pill-item strong {
+  font-size: 0.88rem;
+  color: #0f172a;
+}
+
+.edu-pill-item span {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Submit Button */
+.setup-submit-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 24px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-radius: 14px;
+  border: none;
+  color: #ffffff;
+  background: linear-gradient(135deg, #03bfff 0%, #0088cc 100%);
+  box-shadow: 0 8px 24px rgba(3, 191, 255, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.setup-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(3, 191, 255, 0.45);
+}
+
+@media (max-width: 768px) {
+  .setup-body {
+    padding: 24px 20px;
+  }
+  .setup-header-banner {
+    padding: 24px 20px;
+  }
+  .options-grid-3,
+  .options-grid-2,
+  .edu-framework-grid {
+    grid-template-columns: 1fr;
+  }
+}
