@@ -11,6 +11,9 @@ export interface GeneratedEmailResult {
   subject?: string;
   body?: string;
   emailText?: string;
+  email?: string;
+  provider?: string;
+  usedFallback?: boolean;
   tips?: string[];
 }
 

@@ -11,14 +11,17 @@ export interface MatchRequestDto {
 
 export interface MatchResultDto {
   id: string;
-  matchScore: number;
-  atsCompatibility: number;
-  matchingSkills: string[];
-  missingSkills: string[];
-  strengths: string[];
-  recommendations: string[];
-  summary: string;
-  createdAt: string;
+  matchScore?: number;
+  overallScore?: number;
+  atsCompatibility?: number;
+  matchingSkills?: string[];
+  missingSkills?: string[];
+  strengths?: string[];
+  recommendations?: string[];
+  summary?: string;
+  createdAt?: string;
+  resultJson?: string;
+  aiProvider?: string;
 }
 
 export const matchService = {

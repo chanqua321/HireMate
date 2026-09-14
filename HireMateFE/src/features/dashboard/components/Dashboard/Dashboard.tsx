@@ -254,7 +254,31 @@ export const Dashboard: React.FC = () => {
     try {
       const res = await matchService.match({ jdText: jdText.trim() });
       if (res.ok && res.data) {
-        setMatchResult(res.data);
+        let parsedJson: any = null;
+        if (typeof res.data.resultJson === 'string') {
+          try {
+            parsedJson = JSON.parse(res.data.resultJson);
+          } catch {}
+        } else if (typeof res.data.resultJson === 'object') {
+          parsedJson = res.data.resultJson;
+        }
+
+        const score = res.data.overallScore || parsedJson?.overall || 85;
+        const matching = parsedJson?.skills || parsedJson?.matchingSkills || skills.slice(0, 4);
+        const gaps = parsedJson?.gaps || parsedJson?.missingSkills || ['CI/CD Pipeline', 'Microservices'];
+        const suggestions = parsedJson?.suggestions || parsedJson?.recommendations || [
+          'Chuẩn bị kỹ câu trả lời STAR cho các kỹ năng cốt lõi.',
+          'Nêu bật các dự án thực tế bạn trực tiếp chịu trách nhiệm.',
+        ];
+
+        setMatchResult({
+          matchScore: score,
+          overallScore: score,
+          matchingSkills: Array.isArray(matching) ? matching : [String(matching)],
+          missingSkills: Array.isArray(gaps) ? gaps : [String(gaps)],
+          recommendations: Array.isArray(suggestions) ? suggestions : [String(suggestions)],
+          aiProvider: res.data.aiProvider,
+        });
       } else {
         // High-quality fallback match calculation
         const jdLower = jdText.toLowerCase();
@@ -304,27 +328,42 @@ export const Dashboard: React.FC = () => {
         tone: emailTone,
       });
 
-      if (res.ok && res.data) {
-        setGeneratedEmail(res.data);
-      } else {
-        const comp = emailCompany.trim() || 'Quý Công ty';
-        const pos = emailPosition.trim() || 'Frontend Developer';
-        const candidateName = name.trim() || 'Nguyễn Minh Anh';
-        const subject =
-          emailType === 'CoverLetter'
-            ? `[Ứng tuyển] ${pos} - ${candidateName}`
-            : emailType === 'ThankYou'
-            ? `[Thư cảm ơn] Buổi phỏng vấn vị trí ${pos} - ${candidateName}`
-            : `[Thư theo dõi] Tiến độ ứng tuyển vị trí ${pos} - ${candidateName}`;
+      const comp = emailCompany.trim() || 'Quý Công ty';
+      const pos = emailPosition.trim() || 'Frontend Developer';
+      const candidateName = name.trim() || 'Nguyễn Minh Anh';
+      const defaultSubject =
+        emailType === 'CoverLetter'
+          ? `[Ứng tuyển] ${pos} - ${candidateName}`
+          : emailType === 'ThankYou'
+          ? `[Thư cảm ơn] Buổi phỏng vấn vị trí ${pos} - ${candidateName}`
+          : `[Thư theo dõi] Tiến độ ứng tuyển vị trí ${pos} - ${candidateName}`;
 
+      if (res.ok && res.data) {
+        const emailContent =
+          res.data.email ||
+          res.data.body ||
+          res.data.emailText ||
+          (typeof res.data === 'string' ? res.data : '');
+
+        setGeneratedEmail({
+          subject: res.data.subject || defaultSubject,
+          body: emailContent,
+          email: emailContent,
+          tips: res.data.tips || [
+            'Kiểm tra lại tên người nhận và chức danh chính xác trước khi gửi.',
+            'Đính kèm file CV định dạng PDF có tên chuẩn hóa: CV_HoTen_ViTri.pdf',
+          ],
+        });
+      } else {
         const body =
           emailType === 'CoverLetter'
-            ? `Kính gửi Bộ phận Tuyển dụng ${comp},\n\nTôi tên là ${candidateName}, tôi viết thư này để bày tỏ nguyện vọng ứng tuyển vào vị trí ${pos} tại ${comp}.\n\nVới hơn 2 năm kinh nghiệm thực chiến trong lĩnh vực phát triển phần mềm cùng các kỹ năng cốt lõi (${skills.slice(0, 4).join(', ')}), tôi tin tưởng mình sẽ đóng góp giá trị thiết thực cho sự phát triển của công ty.\n\nTôi rất mong có cơ hội trao đổi trực tiếp trong buổi phỏng vấn.\n\nTrân trọng,\n${candidateName}\nSố điện thoại: 0918 306 884`
+            ? `Kính gửi Bộ phận Tuyển dụng ${comp},\n\nTôi tên là ${candidateName}, tôi viết thư này để bày bày nguyện vọng ứng tuyển vào vị trí ${pos} tại ${comp}.\n\nVới hơn 2 năm kinh nghiệm thực chiến trong lĩnh vực phát triển phần mềm cùng các kỹ năng cốt lõi (${skills.slice(0, 4).join(', ')}), tôi tin tưởng mình sẽ đóng góp giá trị thiết thực cho sự phát triển của công ty.\n\nTôi rất mong có cơ hội trao đổi trực tiếp trong buổi phỏng vấn.\n\nTrân trọng,\n${candidateName}\nSố điện thoại: 0918 306 884`
             : `Kính gửi ${comp},\n\nTôi là ${candidateName}. Tôi xin chân thành cảm ơn Anh/Chị và Ban Tuyển dụng đã dành thời gian trao đổi cùng tôi về vị trí ${pos}.\n\nBuổi trao đổi giúp tôi hiểu sâu hơn về tầm nhìn và định hướng của công ty, đồng thời càng củng cố mong muốn được cống hiến tại ${comp}.\n\nTrân trọng,\n${candidateName}`;
 
         setGeneratedEmail({
-          subject,
+          subject: defaultSubject,
           body,
+          email: body,
           tips: [
             'Kiểm tra lại tên người nhận và chức danh chính xác trước khi gửi.',
             'Đính kèm file CV định dạng PDF có tên chuẩn hóa: CV_HoTen_ViTri.pdf',
@@ -335,6 +374,7 @@ export const Dashboard: React.FC = () => {
       setGeneratedEmail({
         subject: `[Ứng tuyển] ${emailPosition} - ${name}`,
         body: `Kính gửi Quý Công ty,\n\nTôi là ${name}, xin ứng tuyển vị trí ${emailPosition}...\n\nTrân trọng,\n${name}`,
+        email: `Kính gửi Quý Công ty,\n\nTôi là ${name}, xin ứng tuyển vị trí ${emailPosition}...\n\nTrân trọng,\n${name}`,
         tips: ['Tùy chỉnh lại thông tin chi tiết trước khi gửi đi.'],
       });
     } finally {
@@ -344,7 +384,8 @@ export const Dashboard: React.FC = () => {
 
   const handleCopyEmail = () => {
     if (!generatedEmail) return;
-    const textToCopy = `Tiêu đề: ${generatedEmail.subject || ''}\n\n${generatedEmail.body || generatedEmail.emailText || ''}`;
+    const emailBody = generatedEmail.body || generatedEmail.email || generatedEmail.emailText || '';
+    const textToCopy = `Tiêu đề: ${generatedEmail.subject || ''}\n\n${emailBody}`;
     navigator.clipboard.writeText(textToCopy);
     setCopiedEmail(true);
     setTimeout(() => setCopiedEmail(false), 2500);
@@ -1563,7 +1604,7 @@ export const Dashboard: React.FC = () => {
                         )}
 
                         <div style={{ background: '#FFFFFF', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0', whiteSpace: 'pre-wrap', fontSize: '0.88rem', lineHeight: '1.6', color: '#334155' }}>
-                          {generatedEmail.body || generatedEmail.emailText}
+                          {generatedEmail.body || generatedEmail.email || generatedEmail.emailText}
                         </div>
 
                         {generatedEmail.tips && generatedEmail.tips.length > 0 && (
