@@ -424,7 +424,7 @@ public class BillingService(
 
     public async Task<IServiceResult> GetPlansAsync()
     {
-        var plans = await uow.PlanRepository.GetQueryable().AsNoTracking().Where(p => p.IsActive).ToListAsync();
+        var plans = await uow.PlanRepository.GetQueryable().AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.PriceVnd).ToListAsync();
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, plans);
     }
 
