@@ -9,6 +9,8 @@ public class ProfileDto
     public string FullName { get; set; } = string.Empty;
     public bool OnboardingCompleted { get; set; }
     public bool IsPremium { get; set; }
+    /// <summary>free | premium | combo</summary>
+    public string CurrentPlanCode { get; set; } = "free";
     public string? DesiredIndustry { get; set; }
     public string? DesiredPosition { get; set; }
     public string? ExperienceLevel { get; set; }

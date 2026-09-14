@@ -31,15 +31,12 @@ public class InterviewService(
         if (!user.OnboardingCompleted)
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Vui lòng hoàn thành onboarding trước khi bắt đầu phỏng vấn");
 
+        if (!user.IsPremium)
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "Cần mua gói Premium/Combo trước khi vào phòng phỏng vấn AI. Vui lòng nâng cấp tại trang Bảng giá.");
+
         if (dto.Mode.Equals("Voice", StringComparison.OrdinalIgnoreCase) && !user.IsPremium)
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Chế độ giọng nói yêu cầu gói Premium");
-
-        if (!user.IsPremium)
-        {
-            var used = await CountCompletedThisMonthAsync(userId);
-            if (used >= FreeMonthlyLimit)
-                return new ServiceResult(Const.FAIL_QUOTA_CODE, Const.FAIL_QUOTA_MSG);
-        }
 
         var session = new InterviewSession
         {
