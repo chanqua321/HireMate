@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Printer, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../../../app/context/AppContext';
+import { billingService } from '../../api/billing.service';
 import './css/Invoice.css';
 
 const PLAN_INVOICE_MAP: Record<
@@ -35,19 +36,42 @@ const PLAN_INVOICE_MAP: Record<
     discount: '-40.000đ',
     finalPrice: '149.000đ',
   },
+  premium: {
+    name: 'Gói Cao Cấp - 1 Tháng',
+    desc: 'Luyện phỏng vấn AI, 50 lượt/tháng, tối ưu CV ATS chuyên sâu, cố vấn 1-1',
+    origPrice: '189.000đ',
+    discount: '-40.000đ',
+    finalPrice: '149.000đ',
+  },
 };
 
 export const Invoice: React.FC = () => {
   const { profile } = useApp();
   const [searchParams] = useSearchParams();
-  const planKey = searchParams.get('plan') || 'pro';
+  const planKey = (searchParams.get('plan') || 'pro').toLowerCase();
+  const invoiceParam = searchParams.get('invoice');
   const planInvoice = PLAN_INVOICE_MAP[planKey] || PLAN_INVOICE_MAP.pro;
+
+  const [invoiceNumber, setInvoiceNumber] = useState(invoiceParam || 'HM-20260726-3362');
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toLocaleDateString('vi-VN'));
+  const [amountDisplay, setAmountDisplay] = useState(planInvoice.finalPrice);
+
+  useEffect(() => {
+    billingService.getInvoices().then((res) => {
+      if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+        const latest = res.data[0];
+        if (latest.invoiceNumber) setInvoiceNumber(latest.invoiceNumber);
+        if (latest.createdAt) setInvoiceDate(new Date(latest.createdAt).toLocaleDateString('vi-VN'));
+        if (latest.amountVnd !== undefined) setAmountDisplay(`${latest.amountVnd.toLocaleString('vi-VN')}đ`);
+      }
+    }).catch(() => {});
+  }, []);
 
   const handlePrint = () => {
     window.print();
   };
 
-  const today = new Date().toLocaleDateString('vi-VN');
+  const today = invoiceDate;
 
   return (
     <div className="section container" style={{ maxWidth: '800px', margin: '30px auto' }}>
@@ -101,7 +125,7 @@ export const Invoice: React.FC = () => {
           <div style={{ textAlign: 'right' }}>
             <h2 style={{ margin: '0 0 6px', color: 'var(--ink)' }}>HÓA ĐƠN</h2>
             <div className="muted" style={{ fontSize: '0.9rem' }}>
-              <strong>Số hóa đơn:</strong> INV-2026-9843
+              <strong>Số hóa đơn:</strong> {invoiceNumber}
               <br />
               <strong>Ngày lập:</strong> {today}
             </div>
@@ -205,7 +229,7 @@ export const Invoice: React.FC = () => {
           <div style={{ width: '280px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="muted">Cộng tiền hàng:</span>
-              <span>{planInvoice.finalPrice}</span>
+              <span>{amountDisplay}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="muted">Thuế VAT (0%):</span>
@@ -222,7 +246,7 @@ export const Invoice: React.FC = () => {
               }}
             >
               <span>Tổng thanh toán:</span>
-              <span>{planInvoice.finalPrice}</span>
+              <span>{amountDisplay}</span>
             </div>
           </div>
         </div>

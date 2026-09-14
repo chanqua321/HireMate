@@ -17,27 +17,41 @@ public class ProfileController(IProfileService profileService) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Token không hợp lệ" });
+        try
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Token không hợp lệ" });
 
-        var result = await _profileService.GetAsync(userId);
-        if (result.Status == Const.WARNING_NO_DATA_CODE)
-            return NotFound(new { message = result.Message });
-        return Ok(new { data = result.Data, message = result.Message });
+            var result = await _profileService.GetAsync(userId);
+            if (result.Status == Const.WARNING_NO_DATA_CODE)
+                return NotFound(new { message = result.Message });
+            return Ok(new { data = result.Data, message = result.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message, details = ex.ToString() });
+        }
     }
 
     [HttpPut]
     public async Task<IActionResult> Update([FromBody] UpdateProfileDto dto)
     {
-        if (!TryGetUserId(out var userId))
-            return Unauthorized(new { message = "Token không hợp lệ" });
+        try
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Token không hợp lệ" });
 
-        var result = await _profileService.UpdateAsync(userId, dto);
-        if (result.Status == Const.WARNING_NO_DATA_CODE)
-            return NotFound(new { message = result.Message });
-        if (result.Status == Const.FAIL_UPDATE_CODE)
-            return BadRequest(new { message = result.Message });
-        return Ok(new { data = result.Data, message = result.Message });
+            var result = await _profileService.UpdateAsync(userId, dto);
+            if (result.Status == Const.WARNING_NO_DATA_CODE)
+                return NotFound(new { message = result.Message });
+            if (result.Status == Const.FAIL_UPDATE_CODE)
+                return BadRequest(new { message = result.Message });
+            return Ok(new { data = result.Data, message = result.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message, details = ex.ToString() });
+        }
     }
 
     private bool TryGetUserId(out Guid userId)

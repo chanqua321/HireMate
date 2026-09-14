@@ -4,10 +4,12 @@ import { LoginRequest, RegisterRequest, AuthResponseData } from '../types';
 export const authService = {
   async login(payload: LoginRequest): Promise<ApiResponse<AuthResponseData>> {
     const res = await apiClient.post<AuthResponseData>('/Auth/login', payload, { skipAuth: true });
-    if (res.ok && res.data?.accessToken) {
-      localStorage.setItem('hm_access_token', res.data.accessToken);
-      if (res.data.refreshToken) {
-        localStorage.setItem('hm_refresh_token', res.data.refreshToken);
+    const token = (res.data as any)?.token || res.data?.accessToken;
+    const refreshToken = (res.data as any)?.refreshToken;
+    if (res.ok && token) {
+      localStorage.setItem('hm_access_token', token);
+      if (refreshToken) {
+        localStorage.setItem('hm_refresh_token', refreshToken);
       }
     }
     return res;
@@ -15,10 +17,12 @@ export const authService = {
 
   async register(payload: RegisterRequest): Promise<ApiResponse<AuthResponseData>> {
     const res = await apiClient.post<AuthResponseData>('/Auth/register', payload, { skipAuth: true });
-    if (res.ok && res.data?.accessToken) {
-      localStorage.setItem('hm_access_token', res.data.accessToken);
-      if (res.data.refreshToken) {
-        localStorage.setItem('hm_refresh_token', res.data.refreshToken);
+    const token = (res.data as any)?.token || res.data?.accessToken;
+    const refreshToken = (res.data as any)?.refreshToken;
+    if (res.ok && token) {
+      localStorage.setItem('hm_access_token', token);
+      if (refreshToken) {
+        localStorage.setItem('hm_refresh_token', refreshToken);
       }
     }
     return res;
@@ -26,10 +30,12 @@ export const authService = {
 
   async loginWithGoogle(idToken: string): Promise<ApiResponse<AuthResponseData>> {
     const res = await apiClient.post<AuthResponseData>('/Auth/login-google', { idToken }, { skipAuth: true });
-    if (res.ok && res.data?.accessToken) {
-      localStorage.setItem('hm_access_token', res.data.accessToken);
-      if (res.data.refreshToken) {
-        localStorage.setItem('hm_refresh_token', res.data.refreshToken);
+    const token = (res.data as any)?.token || res.data?.accessToken;
+    const refreshToken = (res.data as any)?.refreshToken;
+    if (res.ok && token) {
+      localStorage.setItem('hm_access_token', token);
+      if (refreshToken) {
+        localStorage.setItem('hm_refresh_token', refreshToken);
       }
     }
     return res;
@@ -38,10 +44,12 @@ export const authService = {
   async refreshToken(): Promise<ApiResponse<AuthResponseData>> {
     const refreshToken = localStorage.getItem('hm_refresh_token') || '';
     const res = await apiClient.post<AuthResponseData>('/Auth/refresh', { refreshToken }, { skipAuth: true });
-    if (res.ok && res.data?.accessToken) {
-      localStorage.setItem('hm_access_token', res.data.accessToken);
-      if (res.data.refreshToken) {
-        localStorage.setItem('hm_refresh_token', res.data.refreshToken);
+    const token = (res.data as any)?.token || res.data?.accessToken;
+    const newRefreshToken = (res.data as any)?.refreshToken;
+    if (res.ok && token) {
+      localStorage.setItem('hm_access_token', token);
+      if (newRefreshToken) {
+        localStorage.setItem('hm_refresh_token', newRefreshToken);
       }
     }
     return res;

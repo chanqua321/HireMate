@@ -26,6 +26,7 @@ interface AppContextType {
   isLoggedIn: boolean;
   login: (name?: string) => void;
   logout: () => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -85,7 +86,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       // Non-blocking BE sync if logged in
       if (localStorage.getItem('hm_access_token')) {
-        profileService.updateProfile(updates).catch(() => {});
+        profileService
+          .updateProfile({
+            fullName: next.name || 'Ứng viên',
+            desiredPosition: next.role,
+            desiredIndustry: next.field,
+            experienceLevel: next.exp,
+            university: next.education,
+            bio: next.bio,
+            hobbies: next.skills,
+            ...updates,
+          })
+          .catch(() => {});
       }
       return next;
     });
@@ -130,30 +142,58 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     updateProfile({ name: '' });
   }, [updateProfile]);
 
+  const refreshProfile = useCallback(async () => {
+    if (!localStorage.getItem('hm_access_token')) return;
+
+    try {
+      const meRes = await authService.getMe();
+      if (meRes.ok && meRes.data) {
+        setIsLoggedIn(true);
+        if (meRes.data.fullName) {
+          setProfileState((prev) => ({ ...prev, name: meRes.data!.fullName }));
+        }
+      }
+
+      const res = await profileService.getProfile();
+      if (res.ok && res.data) {
+        const beData: any = res.data;
+        setProfileState((prev) => {
+          const mappedRole = beData.desiredPosition || beData.role || prev.role;
+          const mappedField = beData.desiredIndustry || beData.field || prev.field;
+          const mappedEducation = beData.university || beData.education || prev.education;
+          const mappedSkills =
+            Array.isArray(beData.hobbies) && beData.hobbies.length > 0
+              ? beData.hobbies
+              : Array.isArray(beData.skills) && beData.skills.length > 0
+              ? beData.skills
+              : prev.skills;
+
+          const next = {
+            ...prev,
+            ...beData,
+            name: beData.fullName || beData.name || prev.name,
+            role: mappedRole,
+            field: mappedField,
+            exp: beData.experienceLevel || prev.exp,
+            bio: beData.bio !== null && beData.bio !== undefined ? beData.bio : prev.bio,
+            education: mappedEducation,
+            skills: mappedSkills,
+          };
+          safeStoreJSON(STORAGE_KEYS.PROFILE, next);
+          return next;
+        });
+        setIsLoggedIn(true);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     // Sync theme attributes on mount
     document.documentElement.removeAttribute('data-theme');
     document.documentElement.classList.add('js');
 
-    // Automatically sync profile from backend API if JWT token is stored
-    if (localStorage.getItem('hm_access_token')) {
-      profileService.getProfile().then((res) => {
-        if (res.ok && res.data) {
-          const beData: any = res.data;
-          setProfileState((prev) => ({
-            ...prev,
-            ...beData,
-            name: beData.fullName || beData.name || prev.name,
-            role: beData.desiredPosition || beData.role || prev.role,
-            field: beData.desiredIndustry || beData.field || prev.field,
-          }));
-          setIsLoggedIn(true);
-        }
-      }).catch(() => {
-        // Fallback silently to localStorage if backend is offline
-      });
-    }
-  }, []);
+    refreshProfile();
+  }, [refreshProfile]);
 
   return (
     <AppContext.Provider
@@ -169,6 +209,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isLoggedIn,
         login,
         logout,
+        refreshProfile,
       }}
     >
       {children}

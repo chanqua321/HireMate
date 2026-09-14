@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +22,35 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
   const [error, setError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // Forgot password modal state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      setForgotError('Vui lòng nhập email.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError('');
+    try {
+      const res = await authService.forgotPassword(forgotEmail.trim());
+      if (res.ok || res.status === 200) {
+        setForgotSuccess(true);
+      } else {
+        setForgotError(res.message || 'Không thể gửi yêu cầu đặt lại mật khẩu.');
+      }
+    } catch (err: any) {
+      setForgotError(err?.message || 'Lỗi khi gửi yêu cầu đặt lại mật khẩu.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.email.trim() || !form.password.trim()) {
@@ -35,7 +65,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         password: form.password.trim(),
       });
       if (res.ok && res.data) {
-        const fullNameFromDb = res.data.user?.fullName;
+        const fullNameFromDb = (res.data as any)?.fullName || res.data.user?.fullName;
         const fallbackName = fullNameFromDb || form.email.split('@')[0] || 'Người dùng';
         login(fallbackName);
         navigate('/dashboard');
@@ -176,9 +206,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
             href="#forgot"
             onClick={(e) => {
               e.preventDefault();
-              alert('Vui lòng liên hệ bộ phận hỗ trợ HireMate để đặt lại mật khẩu.');
+              setShowForgotModal(true);
+              setForgotEmail(form.email);
+              setForgotSuccess(false);
+              setForgotError('');
             }}
-            style={{ color: '#03BFFF', fontWeight: 600, textDecoration: 'none' }}
+            style={{ color: '#03BFFF', fontWeight: 600, textDecoration: 'none', cursor: 'pointer' }}
           >
             Quên mật khẩu?
           </a>
@@ -188,6 +221,169 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
           Đăng nhập <ArrowRight size={18} />
         </button>
       </form>
+
+      {/* Forgot Password Modal (Portal to body to prevent transform/overflow clipping) */}
+      {showForgotModal &&
+        createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              background: 'rgba(0, 15, 40, 0.65)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 999999,
+              padding: '20px',
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowForgotModal(false);
+              }
+            }}
+          >
+            <div
+              style={{
+                background: '#ffffff',
+                borderRadius: '20px',
+                maxWidth: '420px',
+                width: '100%',
+                padding: '30px',
+                boxShadow: '0 25px 60px rgba(0, 27, 63, 0.25)',
+                position: 'relative',
+                border: '1px solid rgba(226, 232, 240, 0.8)',
+                animation: 'scaleIn 0.2s ease-out forwards',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#001B3F', margin: 0 }}>
+                  Quên mật khẩu?
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(false)}
+                  style={{
+                    border: 'none',
+                    background: '#F1F5F9',
+                    color: '#64748B',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p style={{ fontSize: '0.86rem', color: '#64748B', lineHeight: 1.5, marginBottom: '18px' }}>
+                Nhập email của bạn để nhận mã và hướng dẫn đặt lại mật khẩu mới từ HireMate.
+              </p>
+
+              {forgotError && (
+                <div
+                  style={{
+                    background: '#FEF2F2',
+                    color: '#DC2626',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    fontSize: '0.82rem',
+                    marginBottom: '14px',
+                    fontWeight: 600,
+                    border: '1px solid #FEE2E2',
+                  }}
+                >
+                  {forgotError}
+                </div>
+              )}
+
+              {forgotSuccess ? (
+                <div>
+                  <div
+                    style={{
+                      background: '#F0FDF4',
+                      color: '#166534',
+                      padding: '14px',
+                      borderRadius: '12px',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      marginBottom: '18px',
+                      border: '1px solid #BBF7D0',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    ✅ Hướng dẫn đặt lại mật khẩu đã được gửi đến hộp thư của bạn!
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    className="auth-submit-btn"
+                    style={{ width: '100%' }}
+                  >
+                    Hoàn tất & Đóng
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div className="auth-input-wrap">
+                    <span className="auth-icon-left">
+                      <Mail size={18} />
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      placeholder="Email của bạn"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="auth-input"
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      style={{
+                        flex: 1,
+                        padding: '11px',
+                        borderRadius: '10px',
+                        border: '1px solid #D1D5DB',
+                        background: '#F9FAFB',
+                        color: '#4B5563',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotLoading}
+                      className="auth-submit-btn"
+                      style={{ flex: 1.5, margin: 0 }}
+                    >
+                      {forgotLoading ? 'Đang gửi...' : 'Gửi yêu cầu'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
 
       <div
         style={{
@@ -244,3 +440,4 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
     </div>
   );
 };
+

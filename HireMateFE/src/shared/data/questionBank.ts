@@ -4,6 +4,8 @@ export const INDUSTRY_ROLES: IndustryRoles = {
   'Công nghệ thông tin': [
     'Lập trình viên Frontend',
     'Lập trình viên Backend',
+    'Lập trình viên Fullstack',
+    'Kỹ sư AI / Machine Learning',
     'Kỹ sư DevOps',
     'Chuyên viên dữ liệu (Data Scientist)',
     'Quản lý sản phẩm (Product Manager)',
@@ -40,6 +42,49 @@ export const INDUSTRY_ROLES: IndustryRoles = {
     'Chăm sóc khách hàng',
     'Quản lý dự án',
   ],
+};
+
+export const ROLE_MAPPINGS: Record<string, string> = {
+  'Frontend Developer': 'Lập trình viên Frontend',
+  'Backend Developer': 'Lập trình viên Backend',
+  'Fullstack Developer': 'Lập trình viên Fullstack',
+  'AI / ML Engineer': 'Kỹ sư AI / Machine Learning',
+  'Data Analyst': 'Chuyên viên dữ liệu (Data Scientist)',
+  'Product Manager': 'Quản lý sản phẩm (Product Manager)',
+  'UI/UX Designer': 'Thiết kế UI/UX',
+  'DevOps Engineer': 'Kỹ sư DevOps',
+};
+
+export const normalizeRole = (role?: string, industry?: string): string => {
+  if (!role || !role.trim()) {
+    const list = INDUSTRY_ROLES[industry || 'Công nghệ thông tin'] || [];
+    return list[0] || 'Lập trình viên Backend';
+  }
+  const r = role.trim();
+  if (ROLE_MAPPINGS[r]) return ROLE_MAPPINGS[r];
+
+  const lower = r.toLowerCase();
+  if (lower.includes('backend') || lower.includes('back-end')) return 'Lập trình viên Backend';
+  if (lower.includes('frontend') || lower.includes('front-end')) return 'Lập trình viên Frontend';
+  if (lower.includes('fullstack') || lower.includes('full-stack')) return 'Lập trình viên Fullstack';
+  if (lower.includes('ai') || lower.includes('machine learning') || lower.includes('ml')) return 'Kỹ sư AI / Machine Learning';
+  if (lower.includes('data') || lower.includes('dữ liệu')) return 'Chuyên viên dữ liệu (Data Scientist)';
+  if (lower.includes('product') || lower.includes('quản lý sản phẩm') || lower.includes('pm')) return 'Quản lý sản phẩm (Product Manager)';
+  if (lower.includes('ui/ux') || lower.includes('thiết kế') || lower.includes('design')) return 'Thiết kế UI/UX';
+  if (lower.includes('devops')) return 'Kỹ sư DevOps';
+
+  // Check in current industry
+  const currentList = INDUSTRY_ROLES[industry || 'Công nghệ thông tin'] || [];
+  const foundInCurrent = currentList.find((item) => item.toLowerCase() === lower);
+  if (foundInCurrent) return foundInCurrent;
+
+  // Check in any industry
+  for (const ind of Object.keys(INDUSTRY_ROLES)) {
+    const match = INDUSTRY_ROLES[ind].find((item) => item.toLowerCase() === lower);
+    if (match) return match;
+  }
+
+  return r;
 };
 
 export const QUESTION_BANK: Question[] = [

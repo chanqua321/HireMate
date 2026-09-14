@@ -5,6 +5,14 @@ export interface Profile {
   bio: string;
   exp: string;
   hobbies: string[];
+  skills?: string[];
+  education?: string;
+  university?: string;
+  major?: string;
+  graduationYear?: number;
+  onboardingCompleted?: boolean;
+  email?: string;
+  phone?: string;
 }
 
 export interface Question {

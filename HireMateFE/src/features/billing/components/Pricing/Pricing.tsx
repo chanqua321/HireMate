@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, HelpCircle, Check, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { FaqAccordion } from '../../../../shared/components';
+import { billingService } from '../../api/billing.service';
+import { publicService } from '../../../../shared/services';
 import './css/Pricing.css';
 
 const PRICING_FAQS = [
@@ -12,285 +14,337 @@ const PRICING_FAQS = [
   },
   {
     q: 'Thanh toán có an toàn và hỗ trợ ngân hàng Việt Nam không?',
-    a: 'Hoàn toàn an toàn! Chúng tôi hỗ trợ thanh toán qua Thẻ tín dụng/ghi nợ quốc tế, thẻ ATM nội địa và quét mã VietQR nhanh chóng.',
+    a: 'Hoàn toàn an toàn! Chúng tôi hỗ trợ thanh toán qua Thẻ tín dụng/ghi nợ quốc tế, thẻ ATM nội địa và quét mã VietQR tự động khớp đơn nhanh chóng.',
   },
   {
     q: 'Sự khác nhau giữa các gói là gì?',
-    a: 'Gói Miễn phí cho phép bạn trải nghiệm 3 buổi phỏng vấn thử mỗi tháng. Gói Cơ Bản mở khóa 15 buổi phỏng vấn cùng feedback STAR chi tiết. Gói Nâng Cao cung cấp 50 buổi phỏng vấn tối ưu CV chuyên sâu và tính năng Beta ưu tiên.',
+    a: 'Gói Miễn phí cho phép bạn trải nghiệm 3 buổi phỏng vấn thử mỗi tháng. Gói Cơ Bản mở khóa 15 buổi phỏng vấn cùng feedback STAR chi tiết. Gói Nâng Cao cung cấp 50 buổi phỏng vấn, tối ưu CV chuẩn ATS chuyên sâu và ưu tiên trải nghiệm tính năng AI mới.',
+  },
+  {
+    q: 'Tôi có nhận được hóa đơn VAT không?',
+    a: 'Có! HireMate hỗ trợ xuất hóa đơn điện tử hợp lệ theo quy định của pháp luật Việt Nam ngay sau khi thanh toán thành công.',
   },
 ];
 
-const PLANS = [
+const DEFAULT_PLANS = [
   {
     id: 'free',
     label: 'Gói Miễn phí',
-    price: '0đ',
+    monthlyPrice: 0,
+    priceDisplay: '0đ',
     period: '/tháng',
-    description: 'Lý tưởng để bắt đầu hành trình tìm kiếm công việc đầu tiên.',
+    description: 'Lý tưởng để bắt đầu làm quen và luyện tập những câu hỏi phỏng vấn cơ bản.',
     features: [
-      '3 lượt Phỏng vấn ảo mỗi tháng',
-      'Phân tích CV cơ bản (ATS)',
-      'Feedback cấu trúc STAR rút gọn',
+      '3 lượt phỏng vấn ảo mỗi tháng',
+      'Đánh giá phản xạ giọng nói cơ bản',
+      'Phân tích CV chuẩn ATS sơ bộ',
+      'Feedback cấu trúc STAR tóm tắt',
     ],
-    cta: 'Nâng cấp ngay',
+    cta: 'Bắt đầu miễn phí',
     ctaTo: '/register',
     featured: false,
     badge: null,
   },
   {
     id: 'basic',
-    label: 'Gói Cơ Bản',
-    price: '79.000đ',
+    label: 'Gói Chuyên Nghiệp (Pro)',
+    monthlyPrice: 79000,
+    priceDisplay: '79.000đ',
     period: '/tháng',
-    description: 'Mở khóa tiềm AI để chiếm ưu thế trong mọi cuộc phỏng vấn.',
+    description: 'Mở khóa toàn bộ tiềm năng AI chuẩn STAR để chiếm ưu thế trong mọi cuộc phỏng vấn.',
     features: [
-      '15 lượt Phỏng vấn ảo mỗi tháng',
-      'Phân tích CV cơ bản (ATS)',
-      'Feedback STAR chi tiết theo từng ngành',
-      'Luyện tập câu hỏi chuyên sâu',
+      '15 lượt phỏng vấn ảo mỗi tháng',
+      'Feedback chuẩn STAR chi tiết theo ngành',
+      'Phân tích ngữ điệu & từ đệm chuyên sâu',
+      'Tối ưu CV chuẩn ATS chuẩn quốc tế',
+      'Ngân hàng 1,000+ câu hỏi JD thực tế',
     ],
     cta: 'Nâng cấp ngay',
     ctaTo: '/checkout?plan=basic',
-    featured: false,
-    badge: null,
+    featured: true,
+    badge: 'Phổ biến nhất 🔥',
   },
   {
     id: 'pro',
-    label: 'Gói Nâng Cao',
-    price: '149.000đ',
+    label: 'Gói Toàn Diện (Ultimate)',
+    monthlyPrice: 149000,
+    priceDisplay: '149.000đ',
     period: '/tháng',
-    description: 'Mở khóa toàn bộ tiềm năng AI để chiếm ưu thế trong mọi cuộc phỏng vấn.',
+    description: 'Dành cho ứng viên muốn bứt phá nhanh nhất vào các tập đoàn đa quốc gia và Tech Unicorn.',
     features: [
-      '50 lượt Phỏng vấn ảo mỗi tháng',
-      'Tối ưu CV chuẩn ATS chuyên sâu',
-      'Feedback STAR chi tiết theo từng ngành',
-      'Luyện tập câu hỏi nâng cao',
-      'Ưu tiên trải nghiệm tính năng Beta',
+      '50 lượt phỏng vấn ảo mỗi tháng',
+      'Mô phỏng phỏng vấn hội đồng tuyển dụng',
+      'Trợ lý viết Cover Letter & Email AI',
+      'So khớp trực tiếp CV với Job Description',
+      'Ưu tiên kết nối cố vấn chuyên gia 1-1',
+      'Hỗ trợ kỹ thuật ưu tiên 24/7',
     ],
     cta: 'Nâng cấp ngay',
     ctaTo: '/checkout?plan=pro',
-    featured: true,
-    badge: 'Phổ biến nhất',
+    featured: false,
+    badge: 'Đầy đủ tính năng ⚡',
   },
 ];
 
+const COMPARISON_ROWS = [
+  { feature: 'Số lượt phỏng vấn AI / tháng', free: '3 lượt', basic: '15 lượt', pro: '50 lượt' },
+  { feature: 'Chấm điểm cấu trúc chuẩn STAR', free: 'Rút gọn', basic: 'Chi tiết từng câu', pro: 'Chuyên sâu + Gợi ý sửa' },
+  { feature: 'Phân tích ngữ điệu & giọng nói', free: 'Cơ bản', basic: 'Đầy đủ', pro: 'Nâng cao thời gian thực' },
+  { feature: 'Phân tích & Tối ưu CV chuẩn ATS', free: '1 lần', basic: 'Không giới hạn', pro: 'Không giới hạn' },
+  { feature: 'So khớp CV với Job Description', free: false, basic: true, pro: true },
+  { feature: 'Trợ lý soạn thảo Email & Cover Letter', free: false, basic: false, pro: true },
+  { feature: 'Hỗ trợ ưu tiên 24/7', free: false, basic: 'Email', pro: 'Email + Hotline 1-1' },
+];
+
 export const Pricing: React.FC = () => {
+  const [plans, setPlans] = useState(DEFAULT_PLANS);
+  const [faqs, setFaqs] = useState(PRICING_FAQS);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
+
+  useEffect(() => {
+    billingService.getPlans().then((res) => {
+      if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+        // Map backend plans or merge with rich visual attributes
+        const mapped = res.data.map((p) => {
+          const code = p.code.toLowerCase();
+          const isFeatured = code.includes('pro') || code.includes('premium');
+          const isFree = p.priceVnd === 0 || code.includes('free');
+          return {
+            id: code,
+            label: p.name || (isFree ? 'Gói Miễn phí' : isFeatured ? 'Gói Chuyên Nghiệp (Pro)' : 'Gói Toàn Diện'),
+            monthlyPrice: p.priceVnd,
+            priceDisplay: p.priceVnd > 0 ? `${p.priceVnd.toLocaleString('vi-VN')}đ` : '0đ',
+            period: '/tháng',
+            description: p.description || (isFree ? 'Bắt đầu làm quen với phỏng vấn ảo.' : 'Mở khóa toàn bộ tính năng cao cấp cùng HireMate AI.'),
+            features: isFree
+              ? ['3 lượt phỏng vấn mỗi tháng', 'Phân tích CV cơ bản', 'Đánh giá STAR tóm tắt']
+              : isFeatured
+              ? ['15 lượt phỏng vấn mỗi tháng', 'Feedback chuẩn STAR chi tiết', 'Tối ưu CV chuẩn ATS', 'Luyện tập câu hỏi nâng cao']
+              : ['50 lượt phỏng vấn mỗi tháng', 'Tối ưu CV chuyên sâu', 'Trợ lý Cover Letter AI', 'So khớp CV & JD'],
+            cta: isFree ? 'Bắt đầu miễn phí' : 'Nâng cấp ngay',
+            ctaTo: isFree ? '/register' : `/checkout?plan=${code}`,
+            featured: isFeatured,
+            badge: isFeatured ? 'Phổ biến nhất 🔥' : null,
+          };
+        });
+        if (mapped.length >= 2) {
+          setPlans(mapped);
+        }
+      }
+    }).catch(() => {});
+
+    publicService.getFaqs().then((res) => {
+      if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+        setFaqs(res.data.map((f: any) => ({ q: f.question, a: f.answer })));
+      }
+    }).catch(() => {});
+  }, []);
+
   return (
     <div className="pricing-page">
-      {/* ── Header ── */}
-      <section className="section" style={{ paddingBottom: '16px' }}>
-        <div className="container" style={{ textAlign: 'center', maxWidth: '700px' }}>
-          <span className="eyebrow" style={{ justifyContent: 'center' }}>
-            <Sparkles size={16} />
-            Đầu tư cho sự nghiệp của bạn
-          </span>
-          <h1 style={{ marginTop: '16px' }}>
-            Bảng giá minh bạch,{' '}
-            <span className="text-gradient">không phí ẩn</span>
-          </h1>
-          <p className="lead" style={{ margin: '16px auto 0' }}>
-            Chọn gói cước phù hợp với mục tiêu chinh phục công việc mơ ước của bạn.
-          </p>
+      {/* ── HERO HEADER ── */}
+      <section className="pricing-hero">
+        <div className="container">
+          <motion.div
+            className="pricing-hero-badge"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <Sparkles size={16} /> Bảng Giá Minh Bạch & Tiết Kiệm
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.1 }}
+          >
+            Chọn gói phù hợp để <span className="highlight">bứt phá sự nghiệp</span>
+          </motion.h1>
+
+          <motion.p
+            className="lead"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.2 }}
+          >
+            Đầu tư thông minh cho sự nghiệp với chi phí chỉ bằng vài ly cà phê. Nâng cấp hoặc hủy bất cứ lúc nào không ràng buộc.
+          </motion.p>
+
+          {/* Billing Toggle */}
+          <div className="billing-toggle-container">
+            <button
+              type="button"
+              className={`billing-toggle-btn ${billingCycle === 'monthly' ? 'active' : ''}`}
+              onClick={() => setBillingCycle('monthly')}
+            >
+              Thanh toán theo tháng
+            </button>
+            <button
+              type="button"
+              className={`billing-toggle-btn ${billingCycle === 'annual' ? 'active' : ''}`}
+              onClick={() => setBillingCycle('annual')}
+            >
+              Thanh toán theo năm <span className="save-badge">Tiết kiệm 20%</span>
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* ── Cards ── */}
-      <section className="section" style={{ paddingTop: '24px', paddingBottom: '64px' }}>
+      {/* ── CARDS GRID ── */}
+      <section className="pricing-cards-sec">
         <div className="container">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '24px',
-              alignItems: 'stretch',
-              maxWidth: '960px',
-              margin: '0 auto',
-            }}
-          >
-            {PLANS.map((plan, i) => (
-              <motion.div
-                key={plan.id}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.45, delay: i * 0.1 }}
-                whileHover={{ y: -6, transition: { duration: 0.25 } }}
-                style={{
-                  background: 'transparent',
-                  borderRadius: '20px',
-                  position: 'relative',
-                }}
-              >
-                <div
-                  style={{
-                    background: '#ffffff',
-                    borderRadius: '20px',
-                    border: plan.featured ? '2px solid #03BFFF' : '1.5px solid #E5E7EB',
-                    padding: '36px 30px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    position: 'relative',
-                    cursor: 'default',
-                    height: '100%',
-                    boxShadow: plan.featured
-                      ? '0 12px 36px rgba(3, 191, 255, 0.18)'
-                      : '0 4px 16px rgba(16, 24, 40, 0.05)',
-                  }}
+          <div className="pricing-grid">
+            {plans.map((plan, i) => {
+              const displayPrice =
+                billingCycle === 'annual' && plan.monthlyPrice > 0
+                  ? `${Math.round((plan.monthlyPrice * 0.8)).toLocaleString('vi-VN')}đ`
+                  : plan.priceDisplay;
+
+              return (
+                <motion.div
+                  key={plan.id}
+                  className="pricing-card-wrapper"
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: i * 0.12 }}
                 >
-                  {/* POPULAR badge at top right corner */}
-                  {plan.badge && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        right: 0,
-                        background: '#03BFFF',
-                        color: '#ffffff',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        padding: '6px 16px',
-                        borderRadius: '0 18px 0 16px',
-                        boxShadow: '0 2px 8px rgba(3, 191, 255, 0.3)',
-                      }}
-                    >
-                      {plan.badge}
+                  <div className={`pricing-card ${plan.featured ? 'featured' : ''}`}>
+                    {/* Featured Ribbon */}
+                    {plan.badge && (
+                      <div className="featured-badge">
+                        <Zap size={14} />
+                        <span>{plan.badge}</span>
+                      </div>
+                    )}
+
+                    {/* Header */}
+                    <div className="plan-header">
+                      <h3 className="plan-label">{plan.label}</h3>
+                      <p className="plan-desc">{plan.description}</p>
                     </div>
-                  )}
 
-                  {/* Plan label */}
-                  <h3
-                    style={{
-                      fontSize: '1.45rem',
-                      fontWeight: 800,
-                      color: '#001B3F',
-                      margin: '0 0 14px',
-                    }}
-                  >
-                    {plan.label}
-                  </h3>
+                    {/* Price Box */}
+                    <div className="plan-price-box">
+                      <span className="plan-price-amount">{displayPrice}</span>
+                      <span className="plan-price-period">{plan.period}</span>
+                    </div>
 
-                  {/* Price */}
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '14px' }}>
-                    <span
-                      style={{
-                        fontSize: '2.4rem',
-                        fontWeight: 800,
-                        color: '#03BFFF',
-                        lineHeight: 1,
-                      }}
+                    {/* Features List */}
+                    <ul className="plan-features-list">
+                      {plan.features.map((f, idx) => (
+                        <li key={idx} className="plan-feature-item">
+                          <CheckCircle2 size={18} className="plan-feature-icon" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* CTA Button */}
+                    <Link
+                      to={plan.ctaTo}
+                      className={`plan-cta-btn ${plan.featured ? 'plan-cta-btn--primary' : 'plan-cta-btn--outline'}`}
                     >
-                      {plan.price}
-                    </span>
-                    <span style={{ color: '#6B7280', fontSize: '0.92rem', fontWeight: 500 }}>
-                      {plan.period}
-                    </span>
+                      <span>{plan.cta}</span>
+                      <ArrowRight size={18} />
+                    </Link>
                   </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-                  {/* Description */}
-                  <p
-                    style={{
-                      fontSize: '0.92rem',
-                      color: '#6B7280',
-                      lineHeight: 1.55,
-                      margin: '0 0 24px',
-                      minHeight: '44px',
-                    }}
-                  >
-                    {plan.description}
-                  </p>
+      {/* ── TRUST / GUARANTEE BANNER ── */}
+      <div className="container" style={{ maxWidth: '1000px', margin: '0 auto 60px', padding: '0 20px' }}>
+        <div className="pricing-trust-banner">
+          <div className="trust-item">
+            <ShieldCheck size={24} />
+            <span>Bảo mật SSL 256-bit chuẩn quốc tế</span>
+          </div>
+          <div className="trust-item">
+            <Zap size={24} />
+            <span>Kích hoạt quyền lợi tức thì</span>
+          </div>
+          <div className="trust-item">
+            <CheckCircle2 size={24} />
+            <span>Hỗ trợ VietQR, ATM & Thẻ Quốc Tế</span>
+          </div>
+        </div>
+      </div>
 
-                  {/* Divider */}
-                  <div
-                    style={{
-                      height: '1px',
-                      background: '#F3F4F6',
-                      marginBottom: '22px',
-                    }}
-                  />
+      {/* ── DETAILED COMPARISON TABLE ── */}
+      <section className="pricing-comparison-sec">
+        <div className="container">
+          <div className="faq-header">
+            <h2>So sánh chi tiết tính năng</h2>
+            <p>Bảng đối chiếu minh bạch quyền lợi giữa các gói cước</p>
+          </div>
 
-                  {/* Feature list */}
-                  <ul
-                    style={{
-                      listStyle: 'none',
-                      padding: 0,
-                      margin: '0 0 32px',
-                      flex: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                    }}
-                  >
-                    {plan.features.map((f) => (
-                      <li
-                        key={f}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: '10px',
-                          fontSize: '0.9rem',
-                          color: '#374151',
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        <CheckCircle2
-                          size={18}
-                          style={{
-                            color: '#03BFFF',
-                            flexShrink: 0,
-                            marginTop: '2px',
-                          }}
-                        />
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {/* CTA Button */}
-                  <Link
-                    to={plan.ctaTo}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '100%',
-                      padding: '13px 20px',
-                      borderRadius: '12px',
-                      border: 'none',
-                      background: '#03BFFF',
-                      color: '#ffffff',
-                      fontWeight: 700,
-                      fontSize: '0.96rem',
-                      textDecoration: 'none',
-                      boxShadow: '0 4px 14px rgba(3, 191, 255, 0.35)',
-                      transition: 'all 0.2s ease',
-                      boxSizing: 'border-box',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = '#008BDD';
-                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = '#03BFFF';
-                      (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                    }}
-                  >
-                    {plan.cta}
-                  </Link>
-                </div>
-              </motion.div>
-            ))}
+          <div className="comparison-table-card">
+            <table className="comparison-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '40%' }}>Tính năng</th>
+                  <th style={{ width: '20%' }}>Miễn phí</th>
+                  <th style={{ width: '20%' }}>Chuyên nghiệp (Pro)</th>
+                  <th style={{ width: '20%' }}>Toàn diện (Ultimate)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARISON_ROWS.map((row, idx) => (
+                  <tr key={idx}>
+                    <td style={{ fontWeight: 600, color: '#1E293B' }}>{row.feature}</td>
+                    <td>
+                      {typeof row.free === 'boolean' ? (
+                        row.free ? (
+                          <Check size={18} color="#22C55E" style={{ margin: '0 auto' }} />
+                        ) : (
+                          <X size={18} color="#94A3B8" style={{ margin: '0 auto' }} />
+                        )
+                      ) : (
+                        row.free
+                      )}
+                    </td>
+                    <td>
+                      {typeof row.basic === 'boolean' ? (
+                        row.basic ? (
+                          <Check size={18} color="#03BFFF" style={{ margin: '0 auto' }} />
+                        ) : (
+                          <X size={18} color="#94A3B8" style={{ margin: '0 auto' }} />
+                        )
+                      ) : (
+                        <strong style={{ color: '#03BFFF' }}>{row.basic}</strong>
+                      )}
+                    </td>
+                    <td>
+                      {typeof row.pro === 'boolean' ? (
+                        row.pro ? (
+                          <Check size={18} color="#03BFFF" style={{ margin: '0 auto' }} />
+                        ) : (
+                          <X size={18} color="#94A3B8" style={{ margin: '0 auto' }} />
+                        )
+                      ) : (
+                        <strong style={{ color: '#008BDD' }}>{row.pro}</strong>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
 
       {/* ── FAQ ── */}
-      <section className="section faq-sec" style={{ paddingTop: 0 }}>
-        <div className="container" style={{ maxWidth: '840px' }}>
-          <div className="section-head">
+      <section className="pricing-faq-sec">
+        <div className="container">
+          <div className="faq-header">
             <h2>Câu hỏi thường gặp về Bảng giá</h2>
-            <p className="lead">Giải đáp các thắc mắc về thanh toán và quyền lợi gói cước.</p>
+            <p>Giải đáp các thắc mắc về thanh toán và quyền lợi gói cước.</p>
           </div>
-          <FaqAccordion items={PRICING_FAQS} />
+          <FaqAccordion items={faqs} />
         </div>
       </section>
     </div>

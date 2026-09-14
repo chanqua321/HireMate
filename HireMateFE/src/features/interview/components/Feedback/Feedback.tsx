@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
+import { interviewService } from '../../api/interview.service';
 import {
   Award,
   RotateCcw,
@@ -15,6 +16,7 @@ import {
   Check,
   Target,
   Zap,
+  Loader2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AnimatedCounter } from '../../../../shared/components';
@@ -25,14 +27,53 @@ import './css/Feedback.css';
 export const Feedback: React.FC = () => {
   const { lastResult } = useApp();
   const { triggerConfetti } = useConfetti();
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get('sessionId');
 
-  const r = lastResult || {
+  const [loading, setLoading] = useState<boolean>(Boolean(sessionId));
+  const [sessionDetail, setSessionDetail] = useState<any>(null);
+
+  useEffect(() => {
+    if (sessionId && localStorage.getItem('hm_access_token')) {
+      interviewService
+        .getDetail(sessionId)
+        .then((res) => {
+          if (res.ok && res.data) {
+            setSessionDetail(res.data);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [sessionId]);
+
+  const defaultResult = {
     overall: 86,
     role: 'Lập trình viên Frontend',
     clarity: 88,
     subs: { S: 90, T: 86, A: 80, R: 92 },
     date: new Date().toLocaleDateString('vi-VN'),
   };
+
+  const r = sessionDetail
+    ? {
+        overall: sessionDetail.overallScore || 85,
+        role: sessionDetail.position || 'Lập trình viên',
+        clarity: sessionDetail.clarityScore || 88,
+        subs: {
+          S: sessionDetail.scoreS || 88,
+          T: sessionDetail.scoreT || 85,
+          A: sessionDetail.scoreA || 82,
+          R: sessionDetail.scoreR || 90,
+        },
+        date: sessionDetail.completedAt
+          ? new Date(sessionDetail.completedAt).toLocaleDateString('vi-VN')
+          : new Date().toLocaleDateString('vi-VN'),
+        feedbackSummary: sessionDetail.feedbackSummary,
+      }
+    : lastResult || defaultResult;
 
   useEffect(() => {
     if (r.overall >= 80) {

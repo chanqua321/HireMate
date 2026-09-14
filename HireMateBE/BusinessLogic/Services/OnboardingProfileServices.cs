@@ -48,6 +48,10 @@ public class OnboardingService(
         profile.University = dto.University;
         profile.Major = dto.Major;
         profile.GraduationYear = dto.GraduationYear;
+        if (!string.IsNullOrWhiteSpace(dto.Bio))
+            profile.Bio = dto.Bio.Trim();
+        if (dto.Hobbies != null)
+            profile.HobbiesJson = SerializeHobbies(dto.Hobbies);
         profile.UpdatedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
 
@@ -60,14 +64,9 @@ public class OnboardingService(
         if (user == null || user.IsDeleted)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
-        var profile = await _unitOfWork.CareerProfileRepository.GetQueryable()
-            .FirstOrDefaultAsync(p => p.UserId == userId);
+        var profile = await GetOrCreateProfileAsync(userId);
 
-        if (profile == null
-            || string.IsNullOrWhiteSpace(profile.DesiredIndustry)
-            || string.IsNullOrWhiteSpace(profile.DesiredPosition)
-            || string.IsNullOrWhiteSpace(profile.University)
-            || string.IsNullOrWhiteSpace(user.FullName))
+        if (string.IsNullOrWhiteSpace(user.FullName))
         {
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Vui lòng hoàn thành bước mục tiêu và thông tin cá nhân trước khi xác nhận");
         }
@@ -171,7 +170,10 @@ public class ProfileService(
         if (user == null || user.IsDeleted)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
-        user.FullName = dto.FullName;
+        if (!string.IsNullOrWhiteSpace(dto.FullName))
+            user.FullName = dto.FullName.Trim();
+
+        user.OnboardingCompleted = true;
         user.UpdatedAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
@@ -189,15 +191,23 @@ public class ProfileService(
             await _unitOfWork.CareerProfileRepository.CreateAsync(profile);
         }
 
-        profile.DesiredIndustry = dto.DesiredIndustry;
-        profile.DesiredPosition = dto.DesiredPosition;
-        profile.ExperienceLevel = dto.ExperienceLevel;
-        profile.University = dto.University;
-        profile.Major = dto.Major;
-        profile.GraduationYear = dto.GraduationYear;
-        profile.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.DesiredIndustry))
+            profile.DesiredIndustry = dto.DesiredIndustry.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.DesiredPosition))
+            profile.DesiredPosition = dto.DesiredPosition.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.ExperienceLevel))
+            profile.ExperienceLevel = dto.ExperienceLevel.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.University))
+            profile.University = dto.University.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.Major))
+            profile.Major = dto.Major.Trim();
+        if (dto.GraduationYear.HasValue)
+            profile.GraduationYear = dto.GraduationYear;
+        if (!string.IsNullOrWhiteSpace(dto.Bio))
+            profile.Bio = dto.Bio.Trim();
         if (dto.Hobbies != null)
             profile.HobbiesJson = OnboardingService.SerializeHobbies(dto.Hobbies);
+
         profile.UpdatedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
 

@@ -10,8 +10,8 @@ public class OnboardingGoalDto
     [Required, MaxLength(150)]
     public string DesiredPosition { get; set; } = string.Empty;
 
-    [Required, MaxLength(50)]
-    public string ExperienceLevel { get; set; } = string.Empty;
+    [MaxLength(50)]
+    public string? ExperienceLevel { get; set; }
 }
 
 public class OnboardingPersonalDto
@@ -19,12 +19,17 @@ public class OnboardingPersonalDto
     [Required, MaxLength(255)]
     public string FullName { get; set; } = string.Empty;
 
-    [Required, MaxLength(200)]
-    public string University { get; set; } = string.Empty;
+    [MaxLength(200)]
+    public string? University { get; set; }
 
-    [Required, MaxLength(150)]
-    public string Major { get; set; } = string.Empty;
+    [MaxLength(150)]
+    public string? Major { get; set; }
 
-    [Required, Range(1980, 2100)]
-    public int GraduationYear { get; set; }
+    [Range(1980, 2100)]
+    public int? GraduationYear { get; set; }
+
+    [MaxLength(1000)]
+    public string? Bio { get; set; }
+
+    public List<string>? Hobbies { get; set; }
 }

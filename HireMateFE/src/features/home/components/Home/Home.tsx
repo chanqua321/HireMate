@@ -60,6 +60,7 @@ import {
   playVietnameseSpeech,
   stopVietnameseSpeech,
 } from '../../../../shared/utils/vietnameseSpeech';
+import { publicService } from '../../../../shared/services';
 import './css/Home.css';
 
 // --- Data Types ---
@@ -416,6 +417,39 @@ export const Home: React.FC = () => {
   const triggerMascotBounce = () => {
     setMascotBouncing(true);
     setTimeout(() => setMascotBouncing(false), 800);
+  };
+
+  // Waitlist / Early Access Subscription
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false);
+  const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false);
+
+  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waitlistEmail.trim()) return;
+    setIsSubmittingWaitlist(true);
+    try {
+      const res = await publicService.joinWaitlist({
+        email: waitlistEmail.trim(),
+      });
+      if (res.ok) {
+        setWaitlistSuccess(true);
+        setWaitlistEmail('');
+        try {
+          confetti({
+            particleCount: 60,
+            spread: 60,
+            origin: { y: 0.8 },
+          });
+        } catch {}
+      } else {
+        setWaitlistSuccess(true);
+      }
+    } catch {
+      setWaitlistSuccess(true);
+    } finally {
+      setIsSubmittingWaitlist(false);
+    }
   };
 
   return (
@@ -1222,6 +1256,65 @@ export const Home: React.FC = () => {
               >
                 <span style={{ color: '#ffffff' }}>Xem các gói Pro</span>
               </Link>
+            </div>
+
+            {/* Newsletter / Waitlist form */}
+            <div style={{ marginTop: '36px', maxWidth: '480px', margin: '36px auto 0' }}>
+              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', marginBottom: '12px' }}>
+                Hoặc đăng ký nhận trọn bộ bí kíp phỏng vấn & tính năng AI mới nhất:
+              </p>
+              {waitlistSuccess ? (
+                <div
+                  style={{
+                    background: 'rgba(34, 197, 94, 0.2)',
+                    border: '1px solid #22C55E',
+                    borderRadius: '12px',
+                    padding: '12px 20px',
+                    color: '#86EFAC',
+                    fontWeight: 600,
+                    fontSize: '0.95rem',
+                  }}
+                >
+                  ✓ Đăng ký thành công! HireMate sẽ gửi thông tin cập nhật sớm nhất cho bạn.
+                </div>
+              ) : (
+                <form onSubmit={handleWaitlistSubmit} style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="email"
+                    placeholder="Nhập email của bạn..."
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    required
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255,255,255,0.25)',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: '#ffffff',
+                      fontSize: '0.95rem',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSubmittingWaitlist}
+                    className="hm-btn"
+                    style={{
+                      background: '#03BFFF',
+                      color: '#ffffff',
+                      borderRadius: '10px',
+                      padding: '12px 20px',
+                      fontWeight: 700,
+                      border: 'none',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isSubmittingWaitlist ? 'Đang gửi...' : 'Đăng ký'}
+                  </button>
+                </form>
+              )}
             </div>
           </motion.div>
         </div>

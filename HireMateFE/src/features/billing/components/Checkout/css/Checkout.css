@@ -1,1 +1,490 @@
-/* Specific styles for Checkout component can be added here */
+/* =====================================================================
+   HIREMATE CHECKOUT & UPGRADE PAGE STYLES
+   ===================================================================== */
+
+.checkout-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 60%, #F0F9FF 100%);
+  color: #0F172A;
+  padding: 40px 20px 80px;
+  position: relative;
+}
+
+.checkout-page::before {
+  content: '';
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(3, 191, 255, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.checkout-container {
+  max-width: 1080px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Top Bar / Header ── */
+.checkout-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.checkout-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748B;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  transition: all 0.2s ease;
+}
+
+.checkout-back-link:hover {
+  color: #03BFFF;
+  border-color: #03BFFF;
+  background: #F8FDFF;
+  transform: translateX(-2px);
+}
+
+.checkout-ssl-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #15803D;
+  background: #DCFCE7;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid #BBF7D0;
+}
+
+.checkout-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.checkout-header h1 {
+  font-size: 2.2rem;
+  font-weight: 850;
+  color: #001B3F;
+  margin: 0 0 10px;
+  letter-spacing: -0.02em;
+}
+
+.checkout-header p {
+  color: #64748B;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+/* ── Plan Switcher Bar ── */
+.plan-switcher-box {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 18px;
+  padding: 16px 20px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.plan-switcher-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+
+.plan-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.plan-option-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 2px solid #E2E8F0;
+  background: #F8FAFC;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.plan-option-btn:hover {
+  border-color: #93C5FD;
+  background: #FFFFFF;
+}
+
+.plan-option-btn.selected {
+  border-color: #03BFFF;
+  background: #F0F9FF;
+  box-shadow: 0 4px 14px rgba(3, 191, 255, 0.15);
+}
+
+.plan-option-info .option-name {
+  font-size: 0.95rem;
+  font-weight: 750;
+  color: #001B3F;
+  margin-bottom: 2px;
+}
+
+.plan-option-info .option-desc {
+  font-size: 0.78rem;
+  color: #64748B;
+}
+
+.plan-option-price {
+  font-size: 1.15rem;
+  font-weight: 850;
+  color: #03BFFF;
+  white-space: nowrap;
+}
+
+/* ── 2-Column Main Layout ── */
+.checkout-main-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+/* ── Card Wrappers ── */
+.checkout-card {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.05);
+}
+
+.checkout-card-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #001B3F;
+  margin: 0 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Payment Gateway Selector ── */
+.payment-methods-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.payment-tab-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border-radius: 12px;
+  border: 2px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.payment-tab-btn:hover {
+  border-color: #CBD5E1;
+  background: #FFFFFF;
+}
+
+.payment-tab-btn.active {
+  border-color: #03BFFF;
+  background: #F0F9FF;
+  color: #008BDD;
+  box-shadow: 0 4px 12px rgba(3, 191, 255, 0.15);
+}
+
+.payment-tab-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Payment Panel Content */
+.payment-info-box {
+  padding: 18px;
+  border-radius: 14px;
+  margin-bottom: 24px;
+}
+
+.payment-info-box.mock {
+  background: #F0F9FF;
+  border: 1px solid #BAE6FD;
+  color: #0369A1;
+}
+
+.payment-info-box.vnpay {
+  background: #FFF8F0;
+  border: 1px solid #FED7AA;
+  color: #9A3412;
+}
+
+.payment-info-box.payos {
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  color: #166534;
+}
+
+.payment-info-box-title {
+  font-weight: 750;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.payment-info-box-desc {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+  opacity: 0.9;
+}
+
+/* ── Promo Code Section ── */
+.promo-code-wrap {
+  margin-bottom: 24px;
+  background: #F8FAFC;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid #E2E8F0;
+}
+
+.promo-label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.promo-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.promo-input {
+  flex: 1;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1.5px solid #CBD5E1;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.promo-input:focus {
+  border-color: #03BFFF;
+}
+
+.promo-apply-btn {
+  padding: 11px 18px;
+  border-radius: 10px;
+  background: #001B3F;
+  color: #FFFFFF;
+  border: none;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.promo-apply-btn:hover {
+  background: #002B66;
+}
+
+.promo-tag-suggest {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #64748B;
+  cursor: pointer;
+}
+
+.promo-tag-suggest code {
+  background: #E0F2FE;
+  color: #0369A1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.promo-success-alert {
+  margin-top: 8px;
+  color: #16A34A;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Submit Button ── */
+.checkout-submit-btn {
+  width: 100%;
+  padding: 15px 24px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #03BFFF 0%, #008BDD 100%);
+  color: #FFFFFF;
+  border: none;
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 6px 20px rgba(3, 191, 255, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.checkout-submit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #00A8EA 0%, #0077CC 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 26px rgba(3, 191, 255, 0.45);
+}
+
+.checkout-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ── Right Column: Order Summary ── */
+.order-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
+.order-summary-row .label {
+  color: #64748B;
+}
+
+.order-summary-row .val {
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.order-summary-row.discount .val {
+  color: #16A34A;
+}
+
+.order-divider {
+  height: 1px;
+  background: #E2E8F0;
+  margin: 18px 0;
+}
+
+.order-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 24px;
+}
+
+.order-total-label {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #001B3F;
+}
+
+.order-total-amount {
+  font-size: 2.2rem;
+  font-weight: 850;
+  color: #03BFFF;
+  letter-spacing: -0.02em;
+}
+
+/* Benefits Card Box */
+.plan-benefits-card {
+  background: #F8FDFF;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.benefits-title {
+  font-size: 0.95rem;
+  font-weight: 750;
+  color: #001B3F;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.benefits-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.benefits-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.88rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.benefits-item svg {
+  color: #03BFFF;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Responsive Queries ── */
+@media (max-width: 900px) {
+  .checkout-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .checkout-header h1 {
+    font-size: 1.8rem;
+  }
+}

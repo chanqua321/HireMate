@@ -3,20 +3,20 @@ import { apiClient, ApiResponse } from '../api/apiClient';
 export interface WaitlistDto {
   email: string;
   fullName?: string;
-  role?: string;
+  university?: string;
 }
 
 export interface ContactDto {
-  name: string;
+  fullName: string;
   email: string;
-  subject?: string;
-  message: string;
+  subject: string;
+  body: string;
 }
 
 export interface CreateTicketDto {
+  email: string;
   subject: string;
-  content: string;
-  priority?: string;
+  body: string;
 }
 
 export const publicService = {

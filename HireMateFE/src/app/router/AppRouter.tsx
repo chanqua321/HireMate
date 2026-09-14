@@ -25,13 +25,15 @@ export const AppRouter: React.FC = () => {
         <Route path="email-confirmed" element={<EmailConfirmed />} />
         <Route path="email-confirmation" element={<EmailConfirmed />} />
 
-        {/* Onboarding */}
-        <Route path="onboarding/profile" element={<OnboardingProfile />} />
-        <Route path="onboarding-profile.html" element={<OnboardingProfile />} />
-        <Route path="onboarding/goal" element={<OnboardingGoal />} />
-        <Route path="onboarding-goal.html" element={<OnboardingGoal />} />
-        <Route path="onboarding/summary" element={<OnboardingSummary />} />
-        <Route path="onboarding-summary.html" element={<OnboardingSummary />} />
+        {/* Onboarding (Unified In-Page Dashboard View) */}
+        <Route path="onboarding" element={<Navigate to="/dashboard?view=onboarding" replace />} />
+        <Route path="onboarding.html" element={<Navigate to="/dashboard?view=onboarding" replace />} />
+        <Route path="onboarding/profile" element={<Navigate to="/dashboard?view=onboarding" replace />} />
+        <Route path="onboarding-profile.html" element={<Navigate to="/dashboard?view=onboarding" replace />} />
+        <Route path="onboarding/goal" element={<Navigate to="/dashboard?view=onboarding" replace />} />
+        <Route path="onboarding-goal.html" element={<Navigate to="/dashboard?view=onboarding" replace />} />
+        <Route path="onboarding/summary" element={<Navigate to="/dashboard?view=onboarding" replace />} />
+        <Route path="onboarding-summary.html" element={<Navigate to="/dashboard?view=onboarding" replace />} />
 
         {/* Billing & Pricing */}
         <Route path="pricing" element={<Pricing />} />

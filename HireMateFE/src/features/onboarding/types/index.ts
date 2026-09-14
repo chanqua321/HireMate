@@ -1,12 +1,15 @@
 export interface OnboardingGoalDto {
-  targetRole?: string;
-  targetField?: string;
-  targetLevel?: string;
+  desiredIndustry: string;
+  desiredPosition: string;
+  experienceLevel: string;
 }
 
 export interface OnboardingPersonalDto {
-  fullName?: string;
+  fullName: string;
+  university?: string;
+  major?: string;
+  graduationYear?: number;
   bio?: string;
-  experienceYears?: string;
-  skills?: string[];
+  hobbies?: string[];
 }
+

@@ -54,7 +54,21 @@
   text-decoration: none;
   border-radius: 6px;
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   transition: color 0.18s ease;
+}
+
+.nav-lock-badge {
+  color: #94a3b8;
+  opacity: 0.8;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.nav-links a:hover .nav-lock-badge {
+  color: #0284c7;
+  transform: scale(1.1);
 }
 
 .nav-links a:hover {
@@ -158,6 +172,55 @@
 .nav-logout-btn:hover {
   color: #ef4444;
   background: #fef2f2;
+}
+
+/* Nav Auth Buttons (When Logged Out) */
+.nav-auth-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-login-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #1e293b;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  transition: all 0.18s ease;
+}
+
+.nav-login-link:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0284c7;
+}
+
+.nav-register-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0284c7 0%, #03bfff 100%);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 8px 18px;
+  border-radius: 999px;
+  box-shadow: 0 3px 12px rgba(2, 132, 199, 0.28);
+  transition: all 0.2s ease;
+}
+
+.nav-register-btn:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 18px rgba(2, 132, 199, 0.4);
 }
 
 .hamburger {

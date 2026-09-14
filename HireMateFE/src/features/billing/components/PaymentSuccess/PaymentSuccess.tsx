@@ -1,8 +1,10 @@
-import React, { useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { CheckCircle, ArrowRight, FileText, Sparkles } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams, useLocation } from 'react-router-dom';
+import { CheckCircle, ArrowRight, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useConfetti } from '../../../../shared/hooks';
+import { billingService } from '../../api/billing.service';
+import { useApp } from '../../../../app/context/AppContext';
 import './css/PaymentSuccess.css';
 
 const PLAN_SUCCESS_MAP: Record<
@@ -28,17 +30,41 @@ const PLAN_SUCCESS_MAP: Record<
     packageName: 'Gói Nâng Cao - 1 tháng',
     price: '149.000đ',
   },
+  premium: {
+    title: 'Chào mừng bạn đến với Gói Cao Cấp!',
+    packageName: 'Gói Cao Cấp - 1 tháng',
+    price: '149.000đ',
+  },
 };
 
 export const PaymentSuccess: React.FC = () => {
   const { triggerConfetti } = useConfetti();
+  const { refreshProfile } = useApp();
   const [searchParams] = useSearchParams();
-  const planKey = searchParams.get('plan') || 'pro';
+  const location = useLocation();
+
+  const planKey = (searchParams.get('plan') || 'pro').toLowerCase();
+  const invoiceParam = searchParams.get('invoice') || 'HM-20260726-3362';
   const planInfo = PLAN_SUCCESS_MAP[planKey] || PLAN_SUCCESS_MAP.pro;
+
+  const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     triggerConfetti();
-  }, [triggerConfetti]);
+
+    // If returning from VNPay or PayOS with query parameters
+    if (location.search && (location.search.includes('vnp_') || location.search.includes('code='))) {
+      setIsVerifying(true);
+      billingService.handleVnPayReturn(location.search)
+        .then(() => {
+          if (refreshProfile) refreshProfile();
+        })
+        .catch(() => {})
+        .finally(() => setIsVerifying(false));
+    } else {
+      if (refreshProfile) refreshProfile();
+    }
+  }, [triggerConfetti, location.search]);
 
   return (
     <div className="section container" style={{ maxWidth: '580px', margin: '40px auto' }}>
@@ -88,7 +114,7 @@ export const PaymentSuccess: React.FC = () => {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span className="muted">Mã đơn hàng</span>
-            <strong>#HM2026-9843</strong>
+            <strong>#{invoiceParam}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span className="muted">Gói cước</span>
@@ -100,7 +126,9 @@ export const PaymentSuccess: React.FC = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span className="muted">Trạng thái</span>
-            <span className="badge badge--success">Đã thanh toán</span>
+            <span className="badge badge--success">
+              {isVerifying ? 'Đang xác thực giao dịch...' : 'Đã thanh toán'}
+            </span>
           </div>
         </div>
 
@@ -113,7 +141,7 @@ export const PaymentSuccess: React.FC = () => {
             Về Bảng điều khiển <ArrowRight size={18} />
           </Link>
           <Link
-            to={`/invoice?plan=${planKey}`}
+            to={`/invoice?plan=${planKey}&invoice=${invoiceParam}`}
             className="btn btn-ghost"
             style={{ width: '100%', justifyContent: 'center' }}
           >

@@ -1,17 +1,16 @@
 import { apiClient, ApiResponse } from '../api/apiClient';
 
 export interface EmailGenerateDto {
-  emailType?: string;
-  recipientName?: string;
-  companyName?: string;
-  roleName?: string;
-  context?: string;
+  type: string;
+  position?: string;
+  company?: string;
   tone?: string;
 }
 
 export interface GeneratedEmailResult {
-  subject: string;
-  body: string;
+  subject?: string;
+  body?: string;
+  emailText?: string;
   tips?: string[];
 }
 

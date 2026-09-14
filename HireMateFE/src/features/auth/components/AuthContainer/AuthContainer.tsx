@@ -172,7 +172,7 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
           <motion.div
             className="auth-overlay-track"
             initial={false}
-            animate={{ x: isLogin ? '0%' : '50%' }}
+            animate={{ x: isLogin ? '-50%' : '0%' }}
             transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
             style={{ zIndex: 10, position: 'relative' }}
           >
