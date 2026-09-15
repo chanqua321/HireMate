@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, X, Check, Tag, Calendar, Percent } from 'lucide-react';
+import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
 // ---- Fake data ----
@@ -44,7 +45,7 @@ const AdminPromos: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.code.trim()) return;
     if (editing) {
       setPromos(prev => prev.map(p => p.id === editing.id ? { ...p, ...form } : p));
@@ -52,6 +53,21 @@ const AdminPromos: React.FC = () => {
       setPromos(prev => [...prev, { id: String(Date.now()), ...form, usedCount: 0 }]);
     }
     setShowModal(false);
+
+    try {
+      await adminService.upsertPromo({
+        id: editing?.id,
+        code: form.code,
+        discountPercent: form.type === 'percent' ? form.discount : 0,
+        discountAmountVnd: form.type === 'fixed' ? form.discount : 0,
+        maxUses: form.maxUses,
+        validFrom: form.validFrom,
+        validTo: form.validTo,
+        isActive: form.active,
+      });
+    } catch (err) {
+      console.warn('Failed to upsert promo on BE:', err);
+    }
   };
 
   const deletePromo = (id: string) => {
@@ -108,35 +124,35 @@ const AdminPromos: React.FC = () => {
                   <tr key={p.id}>
                     <td>
                       <code style={{
-                        background: 'rgba(255,255,255,0.12)', padding: '0.2rem 0.6rem', borderRadius: 6,
-                        fontFamily: 'monospace', fontSize: '0.875rem', color: '#f093fb', fontWeight: 700, letterSpacing: 1
+                        background: '#E0F2FE', padding: '0.2rem 0.6rem', borderRadius: 6,
+                        fontFamily: 'monospace', fontSize: '0.875rem', color: '#0284c7', fontWeight: 700, letterSpacing: 1, border: '1px solid rgba(3, 191, 255, 0.3)'
                       }}>
                         {p.code}
                       </code>
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        {p.type === 'percent' ? <Percent size={14} style={{ color: '#fbbf24' }} /> : <Tag size={14} style={{ color: '#34d399' }} />}
-                        <span style={{ fontWeight: 700, color: p.type === 'percent' ? '#fbbf24' : '#34d399', fontSize: '1rem' }}>
+                        {p.type === 'percent' ? <Percent size={14} style={{ color: '#d97706' }} /> : <Tag size={14} style={{ color: '#059669' }} />}
+                        <span style={{ fontWeight: 700, color: p.type === 'percent' ? '#d97706' : '#059669', fontSize: '1rem' }}>
                           {fmtDiscount(p)}
                         </span>
                       </div>
-                      {p.minAmount > 0 && <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)' }}>Tối thiểu ₫{p.minAmount.toLocaleString()}</div>}
+                      {p.minAmount > 0 && <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Tối thiểu ₫{p.minAmount.toLocaleString()}</div>}
                     </td>
                     <td><span className="admin-badge info">{p.plan === 'all' ? 'Tất cả gói' : p.plan}</span></td>
                     <td>
-                      <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.8)' }}>
-                        <span style={{ fontWeight: 700, color: '#c4b5fd' }}>{p.usedCount}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.4)' }}> / {p.maxUses}</span>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--admin-text)' }}>
+                        <span style={{ fontWeight: 700, color: '#0284c7' }}>{p.usedCount}</span>
+                        <span style={{ color: 'var(--admin-text-muted)' }}> / {p.maxUses}</span>
                       </div>
                       <div className="admin-progress" style={{ marginTop: '0.3rem', height: 5 }}>
                         <div className="admin-progress-bar" style={{ width: `${Math.min((p.usedCount / p.maxUses) * 100, 100)}%` }} />
                       </div>
                     </td>
                     <td>
-                      <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.65)' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--admin-text-muted)' }}>
                         <div><Calendar size={11} style={{ display: 'inline', marginRight: 3 }} />{p.validFrom}</div>
-                        <div style={{ color: 'rgba(255,255,255,0.4)' }}>→ {p.validTo}</div>
+                        <div style={{ color: 'var(--admin-text-muted)' }}>→ {p.validTo}</div>
                       </div>
                     </td>
                     <td>{getStatusBadge(p)}</td>

@@ -68,7 +68,22 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         const fullNameFromDb = (res.data as any)?.fullName || res.data.user?.fullName;
         const fallbackName = fullNameFromDb || form.email.split('@')[0] || 'Người dùng';
         login(fallbackName);
-        navigate('/dashboard');
+
+        // Check if user is Admin
+        const roles = (res.data as any)?.roles || (res.data as any)?.user?.roles || [];
+        if (Array.isArray(roles) && roles.length > 0) {
+          localStorage.setItem('hm_roles', JSON.stringify(roles));
+        }
+
+        const isAdmin = Array.isArray(roles)
+          ? roles.some((r: string) => typeof r === 'string' && r.toLowerCase() === 'admin')
+          : String(roles).toLowerCase().includes('admin');
+
+        if (isAdmin) {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
         return;
       } else if (res.status !== 0 && res.message) {
         setError(res.message);
@@ -105,7 +120,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         const fallbackName = fullNameFromDb || 'Người dùng Google';
         login(fallbackName);
         triggerConfetti();
-        navigate('/dashboard');
+
+        const roles = (res.data as any)?.roles || (res.data as any)?.user?.roles || [];
+        if (Array.isArray(roles) && roles.length > 0) {
+          localStorage.setItem('hm_roles', JSON.stringify(roles));
+        }
+
+        const isAdmin = Array.isArray(roles)
+          ? roles.some((r: string) => typeof r === 'string' && r.toLowerCase() === 'admin')
+          : String(roles).toLowerCase().includes('admin');
+
+        if (isAdmin) {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
         return;
       } else {
         setError(res.message || 'Đăng nhập Google thất bại.');

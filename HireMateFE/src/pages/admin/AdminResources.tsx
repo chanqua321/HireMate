@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, X, Check, BookOpen, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, X, Check, BookOpen, ExternalLink, RefreshCw } from 'lucide-react';
+import { publicService } from '../../shared/services/public.service';
+import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
-// ---- Fake data ----
-const RESOURCES = [
+// ---- Fallback data ----
+const FALLBACK_RESOURCES = [
   { id: '1', title: 'Khóa học React cơ bản đến nâng cao', category: 'Frontend', type: 'Course', url: 'https://example.com/react', description: 'Khóa học React hoàn chỉnh từ cơ bản đến chuyên sâu, phù hợp mọi trình độ.', free: true, featured: true },
   { id: '2', title: 'LeetCode – Luyện thuật toán phỏng vấn', category: 'Algorithm', type: 'Platform', url: 'https://leetcode.com', description: 'Nền tảng luyện thuật toán số 1 thế giới với hàng nghìn bài tập.', free: false, featured: true },
   { id: '3', title: 'Template CV dành cho Developer', category: 'CV', type: 'Template', url: 'https://example.com/cv', description: 'Bộ template CV chuyên nghiệp dành riêng cho các vị trí IT.', free: true, featured: false },
@@ -11,17 +13,56 @@ const RESOURCES = [
   { id: '5', title: 'System Design Interview Guide', category: 'Backend', type: 'Book', url: 'https://example.com/sdi', description: 'Cẩm nang thiết kế hệ thống dành cho các vị trí Senior Developer.', free: false, featured: true },
 ];
 
-type Resource = typeof RESOURCES[0];
+export interface ResourceItem {
+  id: string;
+  title: string;
+  category: string;
+  type: string;
+  url: string;
+  description: string;
+  free: boolean;
+  featured: boolean;
+}
+
 const CATS = ['Frontend', 'Backend', 'Algorithm', 'CV', 'Career', 'Data Science', 'DevOps'];
 const TYPES = ['Course', 'Platform', 'Template', 'Article', 'Book', 'Video', 'Tool'];
 const typeIcon: Record<string, string> = { Course: '🎓', Platform: '💻', Template: '📄', Article: '📰', Book: '📚', Video: '🎬', Tool: '🔧' };
 
 const AdminResources: React.FC = () => {
-  const [resources, setResources] = useState<Resource[]>(RESOURCES);
+  const [resources, setResources] = useState<ResourceItem[]>(FALLBACK_RESOURCES);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState<Resource | null>(null);
+  const [editing, setEditing] = useState<ResourceItem | null>(null);
   const [filterCat, setFilterCat] = useState('all');
   const [form, setForm] = useState({ title: '', category: CATS[0], type: TYPES[0], url: '', description: '', free: true, featured: false });
+
+  const fetchResources = async () => {
+    setLoading(true);
+    try {
+      const res = await publicService.getResources();
+      if (res.ok && res.data && res.data.length > 0) {
+        const mapped: ResourceItem[] = res.data.map((r: any) => ({
+          id: r.id || String(Date.now()),
+          title: r.title || 'Tài nguyên',
+          category: r.category || 'Career',
+          type: r.type || 'Course',
+          url: r.url || 'https://example.com',
+          description: r.description || '',
+          free: r.free !== false,
+          featured: r.featured === true,
+        }));
+        setResources(mapped);
+      }
+    } catch (err) {
+      console.warn('Real resources API fallback:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchResources();
+  }, []);
 
   const filtered = filterCat === 'all' ? resources : resources.filter(r => r.category === filterCat);
 
@@ -31,20 +72,37 @@ const AdminResources: React.FC = () => {
     setShowModal(true);
   };
 
-  const openEdit = (r: Resource) => {
+  const openEdit = (r: ResourceItem) => {
     setEditing(r);
     setForm({ title: r.title, category: r.category, type: r.type, url: r.url, description: r.description, free: r.free, featured: r.featured });
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.title.trim()) return;
+    const payload = {
+      id: editing?.id,
+      title: form.title,
+      category: form.category,
+      type: form.type,
+      url: form.url,
+      description: form.description,
+      free: form.free,
+      featured: form.featured,
+    };
+
     if (editing) {
       setResources(prev => prev.map(r => r.id === editing.id ? { ...r, ...form } : r));
     } else {
       setResources(prev => [...prev, { id: String(Date.now()), ...form }]);
     }
     setShowModal(false);
+
+    try {
+      await adminService.upsertResource(payload);
+    } catch (err) {
+      console.warn('Failed to upsert resource on BE:', err);
+    }
   };
 
   const deleteResource = (id: string) => {
@@ -56,9 +114,20 @@ const AdminResources: React.FC = () => {
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="admin-page-title">📚 Quản lý Tài nguyên</h1>
-          <p className="admin-page-subtitle">Tài nguyên học tập gợi ý cho người dùng HireMate.</p>
+          <p className="admin-page-subtitle">Tài nguyên học tập gợi ý cho người dùng HireMate từ cơ sở dữ liệu thời gian thực.</p>
         </div>
-        <button className="admin-btn admin-btn-primary" onClick={openCreate}><Plus size={16} /> Thêm tài nguyên</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button 
+            className="admin-btn admin-btn-secondary" 
+            onClick={fetchResources} 
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <RefreshCw size={14} className={loading ? 'spin' : ''} />
+            {loading ? 'Đang tải...' : 'Làm mới API'}
+          </button>
+          <button className="admin-btn admin-btn-primary" onClick={openCreate}><Plus size={16} /> Thêm tài nguyên</button>
+        </div>
       </div>
 
       {/* Filter */}
@@ -93,8 +162,8 @@ const AdminResources: React.FC = () => {
                   {r.featured && <span className="admin-badge purple">⭐ Featured</span>}
                 </div>
               </div>
-              <h3 style={{ color: '#fff', fontWeight: 700, fontSize: '0.95rem', margin: '0 0 0.4rem' }}>{r.title}</h3>
-              <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.82rem', lineHeight: 1.55, margin: '0 0 1rem' }}>{r.description}</p>
+              <h3 style={{ color: 'var(--admin-text)', fontWeight: 700, fontSize: '0.95rem', margin: '0 0 0.4rem' }}>{r.title}</h3>
+              <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.82rem', lineHeight: 1.55, margin: '0 0 1rem' }}>{r.description}</p>
               <div style={{ display: 'flex', gap: '0.4rem' }}>
                 <a href={r.url} target="_blank" rel="noreferrer" className="admin-btn admin-btn-secondary admin-btn-sm">
                   <ExternalLink size={12} /> Xem

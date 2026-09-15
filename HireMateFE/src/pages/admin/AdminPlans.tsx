@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, X, Check, Star, Zap, Crown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, X, Check, Star, Zap, Crown, RefreshCw } from 'lucide-react';
+import { billingService } from '../../features/billing/api/billing.service';
+import { adminService } from '../../shared/services/admin.service';
+import { PlanDto } from '../../features/billing/types';
 import './admin.css';
 
-// ---- Fake data ----
-const PLANS = [
+// ---- Fallback data ----
+const FALLBACK_PLANS = [
   {
     id: '1', name: 'Free', slug: 'free', price: 0, currency: 'VND', interval: 'month',
     features: ['3 phiên phỏng vấn/tháng', 'Phân tích CV cơ bản', 'Hỏi đáp AI giới hạn'],
@@ -24,17 +27,50 @@ const PLANS = [
   },
 ];
 
-type Plan = typeof PLANS[0];
+type Plan = typeof FALLBACK_PLANS[0];
 const fmt = (n: number) => n === 0 ? 'Miễn phí' : `₫${n.toLocaleString('vi-VN')}/tháng`;
 
 const AdminPlans: React.FC = () => {
-  const [plans, setPlans] = useState<Plan[]>(PLANS);
+  const [plans, setPlans] = useState<Plan[]>(FALLBACK_PLANS);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Plan | null>(null);
   const [form, setForm] = useState({
     name: '', slug: '', price: 0, features: [''], active: true, popular: false, color: '#667eea', icon: '⚡'
   });
   const [newFeature, setNewFeature] = useState('');
+
+  const fetchPlans = async () => {
+    setLoading(true);
+    try {
+      const res = await billingService.getPlans();
+      if (res.ok && res.data && res.data.length > 0) {
+        const mapped: Plan[] = res.data.map((p: PlanDto) => ({
+          id: p.id,
+          name: p.name,
+          slug: p.code?.toLowerCase() || 'pro',
+          price: p.priceVnd,
+          currency: 'VND',
+          interval: 'month',
+          features: p.description ? p.description.split('\n') : ['Phỏng vấn AI thông minh', 'Phân tích CV'],
+          active: p.isActive !== false,
+          popular: p.code?.toLowerCase().includes('pro'),
+          color: p.code?.toLowerCase().includes('premium') ? '#f093fb' : '#667eea',
+          icon: p.code?.toLowerCase().includes('premium') ? '👑' : '⚡',
+          subscribers: 120,
+        }));
+        setPlans(mapped);
+      }
+    } catch (err) {
+      console.warn('Real plans API fallback:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -48,7 +84,7 @@ const AdminPlans: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) return;
     const data = { ...form, currency: 'VND', interval: 'month', subscribers: 0 };
     if (editing) {
@@ -57,6 +93,20 @@ const AdminPlans: React.FC = () => {
       setPlans(prev => [...prev, { id: String(Date.now()), ...data }]);
     }
     setShowModal(false);
+
+    try {
+      await adminService.upsertPlan({
+        id: editing?.id,
+        code: form.slug.toUpperCase(),
+        name: form.name,
+        priceVnd: form.price,
+        durationDays: 30,
+        description: form.features.join('\n'),
+        isActive: form.active,
+      });
+    } catch (err) {
+      console.warn('Failed to upsert plan on BE:', err);
+    }
   };
 
   const deletePlan = (id: string) => {
@@ -80,9 +130,20 @@ const AdminPlans: React.FC = () => {
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="admin-page-title">💳 Gói Subscription</h1>
-          <p className="admin-page-subtitle">Quản lý các gói dịch vụ và giá cước của HireMate.</p>
+          <p className="admin-page-subtitle">Quản lý các gói dịch vụ và giá cước của HireMate đồng bộ hệ thống thanh toán.</p>
         </div>
-        <button className="admin-btn admin-btn-primary" onClick={openCreate}><Plus size={16} /> Thêm gói mới</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button 
+            className="admin-btn admin-btn-secondary" 
+            onClick={fetchPlans} 
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <RefreshCw size={14} className={loading ? 'spin' : ''} />
+            {loading ? 'Đang tải...' : 'Làm mới API'}
+          </button>
+          <button className="admin-btn admin-btn-primary" onClick={openCreate}><Plus size={16} /> Thêm gói mới</button>
+        </div>
       </div>
 
       {/* Summary */}
@@ -127,18 +188,18 @@ const AdminPlans: React.FC = () => {
                 }}>
                   {p.icon}
                 </div>
-                <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#fff' }}>{p.name}</div>
+                <div style={{ fontWeight: 800, fontSize: '1.3rem', color: 'var(--admin-text)' }}>{p.name}</div>
                 <div style={{ fontWeight: 800, fontSize: '1.75rem', color: p.color, marginTop: '0.25rem' }}>
                   {fmt(p.price)}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', marginTop: '0.25rem' }}>
                   {p.subscribers.toLocaleString()} subscribers
                 </div>
               </div>
 
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.25rem' }}>
                 {p.features.map((f, i) => (
-                  <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'rgba(255,255,255,0.85)' }}>
+                  <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--admin-text)' }}>
                     <Check size={14} style={{ color: p.color, flexShrink: 0 }} />
                     {f}
                   </li>

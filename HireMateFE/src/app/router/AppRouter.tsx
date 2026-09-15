@@ -9,9 +9,32 @@ import { Pricing, Checkout, PaymentSuccess, Invoice } from '../../features/billi
 import { Dashboard } from '../../features/dashboard';
 import { InterviewSetup, InterviewRoom, Feedback, Questions } from '../../features/interview';
 
+// Candidate Systems
+import CareerOS from '../../pages/career/CareerOS';
+import Leaderboard from '../../pages/gamification/Leaderboard';
+import BlogList from '../../pages/blog/BlogList';
+import BlogDetail from '../../pages/blog/BlogDetail';
+import ResourcesPage from '../../pages/resources/ResourcesPage';
+
+// Admin pages
+import AdminLayout from '../../pages/admin/AdminLayout';
+import AdminRouteGuard from '../../pages/admin/AdminRouteGuard';
+import AdminDashboard from '../../pages/admin/AdminDashboard';
+import AdminUsers from '../../pages/admin/AdminUsers';
+import AdminInterviews from '../../pages/admin/AdminInterviews';
+import AdminRevenue from '../../pages/admin/AdminRevenue';
+import AdminPlans from '../../pages/admin/AdminPlans';
+import AdminPromos from '../../pages/admin/AdminPromos';
+import AdminTickets from '../../pages/admin/AdminTickets';
+import AdminBlog from '../../pages/admin/AdminBlog';
+import AdminFaq from '../../pages/admin/AdminFaq';
+import AdminResources from '../../pages/admin/AdminResources';
+import AdminConfig from '../../pages/admin/AdminConfig';
+
 export const AppRouter: React.FC = () => {
   return (
     <Routes>
+      {/* Public & Candidate App Routes */}
       <Route path="/" element={<MainLayout />}>
         {/* Home */}
         <Route index element={<Home />} />
@@ -59,10 +82,44 @@ export const AppRouter: React.FC = () => {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="dashboard.html" element={<Dashboard />} />
 
-        {/* Wildcard redirect */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Candidate Systems: Career OS, Gamification, Blog, Resources */}
+        <Route path="career" element={<CareerOS />} />
+        <Route path="career.html" element={<CareerOS />} />
+        <Route path="leaderboard" element={<Leaderboard />} />
+        <Route path="leaderboard.html" element={<Leaderboard />} />
+        <Route path="blog" element={<BlogList />} />
+        <Route path="blog.html" element={<BlogList />} />
+        <Route path="blog/:slug" element={<BlogDetail />} />
+        <Route path="resources" element={<ResourcesPage />} />
+        <Route path="resources.html" element={<ResourcesPage />} />
       </Route>
+
+      {/* Admin Protected Routes */}
+      <Route
+        path="/admin"
+        element={
+          <AdminRouteGuard>
+            <AdminLayout />
+          </AdminRouteGuard>
+        }
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="interviews" element={<AdminInterviews />} />
+        <Route path="revenue" element={<AdminRevenue />} />
+        <Route path="plans" element={<AdminPlans />} />
+        <Route path="promos" element={<AdminPromos />} />
+        <Route path="tickets" element={<AdminTickets />} />
+        <Route path="blog" element={<AdminBlog />} />
+        <Route path="faq" element={<AdminFaq />} />
+        <Route path="resources" element={<AdminResources />} />
+        <Route path="config" element={<AdminConfig />} />
+      </Route>
+
+      {/* Wildcard redirect */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
+
 

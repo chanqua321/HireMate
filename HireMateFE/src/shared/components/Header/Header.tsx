@@ -20,9 +20,11 @@ import {
   CheckCircle2,
   Compass,
   Lock,
+  Award,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthRequiredModal } from '../AuthRequiredModal/AuthRequiredModal';
+import { SupportTicketModal } from '../SupportTicketModal/SupportTicketModal';
 import './css/Header.css';
 
 export const Header: React.FC = () => {
@@ -34,6 +36,7 @@ export const Header: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalFeature, setAuthModalFeature] = useState('Tính năng');
+  const [ticketModalOpen, setTicketModalOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => {
@@ -114,12 +117,30 @@ export const Header: React.FC = () => {
               {!isLoggedIn && <Lock size={12} className="nav-lock-badge" />}
             </Link>
             <Link
-              to="/dashboard"
-              className={isActive('/dashboard') ? 'active' : ''}
-              onClick={(e) => handleProtectedClick(e, '/dashboard', 'Bảng điều khiển & Hồ sơ')}
+              to="/career"
+              className={isActive('/career') ? 'active' : ''}
+              onClick={(e) => handleProtectedClick(e, '/career', 'Hệ điều hành sự nghiệp Career OS')}
             >
-              Bảng điều khiển
+              Career OS
               {!isLoggedIn && <Lock size={12} className="nav-lock-badge" />}
+            </Link>
+            <Link
+              to="/leaderboard"
+              className={isActive('/leaderboard') ? 'active' : ''}
+            >
+              Bảng vàng
+            </Link>
+            <Link
+              to="/blog"
+              className={isActive('/blog') ? 'active' : ''}
+            >
+              Cẩm nang
+            </Link>
+            <Link
+              to="/resources"
+              className={isActive('/resources') ? 'active' : ''}
+            >
+              Tài nguyên
             </Link>
             <Link
               to="/pricing"
@@ -279,7 +300,7 @@ export const Header: React.FC = () => {
                         <div style={{ height: '1px', background: '#f1f5f9', margin: '6px 0' }} />
 
                         <Link
-                          to="/pricing"
+                          to="/career"
                           onClick={() => setDropdownOpen(false)}
                           style={{
                             display: 'flex',
@@ -287,14 +308,60 @@ export const Header: React.FC = () => {
                             gap: '10px',
                             padding: '9px 12px',
                             borderRadius: '10px',
-                            color: '#0284c7',
+                            color: '#1e293b',
                             fontSize: '0.86rem',
                             fontWeight: 600,
                             textDecoration: 'none',
                           }}
                         >
-                          <Sparkles size={16} color="#03BFFF" /> Nâng cấp VIP
+                          <Compass size={16} color="#03BFFF" /> Hệ điều hành Career OS
                         </Link>
+
+                        <Link
+                          to="/leaderboard"
+                          onClick={() => setDropdownOpen(false)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '9px 12px',
+                            borderRadius: '10px',
+                            color: '#1e293b',
+                            fontSize: '0.86rem',
+                            fontWeight: 500,
+                            textDecoration: 'none',
+                          }}
+                        >
+                          <Award size={16} color="#eab308" /> Bảng vàng & Huy hiệu
+                        </Link>
+
+                        <div style={{ height: '1px', background: '#f1f5f9', margin: '6px 0' }} />
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDropdownOpen(false);
+                            setTicketModalOpen(true);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            width: '100%',
+                            padding: '9px 12px',
+                            borderRadius: '10px',
+                            color: '#0284c7',
+                            fontSize: '0.86rem',
+                            fontWeight: 600,
+                            background: '#f0f9ff',
+                            border: '1px solid #e0f2fe',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            marginBottom: '4px',
+                          }}
+                        >
+                          <BookOpen size={16} color="#03BFFF" /> Gửi Ticket Hỗ Trợ
+                        </button>
 
                         <Link
                           to="/invoice"
@@ -516,6 +583,14 @@ export const Header: React.FC = () => {
         onClose={() => setAuthModalOpen(false)}
         featureName={authModalFeature}
       />
+
+      {/* Support Ticket Modal */}
+      <SupportTicketModal
+        isOpen={ticketModalOpen}
+        onClose={() => setTicketModalOpen(false)}
+      />
     </>
   );
 };
+
+export default Header;
