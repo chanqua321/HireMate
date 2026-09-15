@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, X, Check, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { publicService } from '../../shared/services/public.service';
+import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
-// ---- Fake data ----
-const FAQS = [
+// ---- Fallback data ----
+const FALLBACK_FAQS = [
   { id: '1', question: 'HireMate hỗ trợ những vị trí phỏng vấn nào?', answer: 'HireMate hỗ trợ hơn 50 vị trí phổ biến trong ngành công nghệ thông tin, marketing, kinh doanh, tài chính và nhiều lĩnh vực khác.', category: 'Sản phẩm', order: 1, active: true },
   { id: '2', question: 'Tôi có thể thực hành phỏng vấn bao nhiêu lần?', answer: 'Gói Free cho phép 3 phiên/tháng. Gói Pro không giới hạn số lần thực hành.', category: 'Billing', order: 2, active: true },
   { id: '3', question: 'AI phỏng vấn có thực sự chính xác không?', answer: 'Hệ thống AI của HireMate được huấn luyện trên hàng nghìn phiên phỏng vấn thực tế, đạt độ chính xác 94% so với phỏng vấn viên chuyên nghiệp.', category: 'AI', order: 3, active: true },
@@ -11,15 +13,50 @@ const FAQS = [
   { id: '5', question: 'Dữ liệu của tôi có được bảo mật không?', answer: 'Tất cả dữ liệu được mã hóa AES-256. Chúng tôi không bán thông tin người dùng cho bên thứ ba.', category: 'Bảo mật', order: 5, active: false },
 ];
 
-type Faq = typeof FAQS[0];
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  order: number;
+  active: boolean;
+}
+
 const CATS = ['Sản phẩm', 'Billing', 'AI', 'Bảo mật', 'Tài khoản'];
 
 const AdminFaq: React.FC = () => {
-  const [faqs, setFaqs] = useState<Faq[]>(FAQS);
+  const [faqs, setFaqs] = useState<FaqItem[]>(FALLBACK_FAQS);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState<Faq | null>(null);
+  const [editing, setEditing] = useState<FaqItem | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [form, setForm] = useState({ question: '', answer: '', category: CATS[0], order: 1, active: true });
+
+  const fetchFaqs = async () => {
+    setLoading(true);
+    try {
+      const res = await publicService.getFaqs();
+      if (res.ok && res.data && res.data.length > 0) {
+        const mapped: FaqItem[] = res.data.map((f: any, idx: number) => ({
+          id: f.id || String(idx + 1),
+          question: f.question || 'Câu hỏi',
+          answer: f.answer || 'Câu trả lời',
+          category: f.category || 'Sản phẩm',
+          order: f.order ?? (idx + 1),
+          active: f.active !== false,
+        }));
+        setFaqs(mapped);
+      }
+    } catch (err) {
+      console.warn('Real FAQs API fallback:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFaqs();
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -27,28 +64,52 @@ const AdminFaq: React.FC = () => {
     setShowModal(true);
   };
 
-  const openEdit = (f: Faq) => {
+  const openEdit = (f: FaqItem) => {
     setEditing(f);
     setForm({ question: f.question, answer: f.answer, category: f.category, order: f.order, active: f.active });
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.question.trim()) return;
+    const payload = {
+      id: editing?.id,
+      question: form.question,
+      answer: form.answer,
+      category: form.category,
+      order: form.order,
+      active: form.active,
+    };
+
     if (editing) {
       setFaqs(prev => prev.map(f => f.id === editing.id ? { ...f, ...form } : f));
     } else {
       setFaqs(prev => [...prev, { id: String(Date.now()), ...form }]);
     }
     setShowModal(false);
+
+    try {
+      await adminService.upsertFaq(payload);
+    } catch (err) {
+      console.warn('Failed to upsert FAQ on BE:', err);
+    }
   };
 
   const deleteFaq = (id: string) => {
     if (window.confirm('Xóa FAQ này?')) setFaqs(prev => prev.filter(f => f.id !== id));
   };
 
-  const toggleActive = (id: string) => {
-    setFaqs(prev => prev.map(f => f.id === id ? { ...f, active: !f.active } : f));
+  const toggleActive = async (id: string) => {
+    const updated = faqs.map(f => f.id === id ? { ...f, active: !f.active } : f);
+    setFaqs(updated);
+    const target = updated.find(f => f.id === id);
+    if (target) {
+      try {
+        await adminService.upsertFaq({ id: target.id, question: target.question, answer: target.answer, active: target.active });
+      } catch (err) {
+        console.warn('Toggle FAQ active failed:', err);
+      }
+    }
   };
 
   const sorted = [...faqs].sort((a, b) => a.order - b.order);
@@ -58,9 +119,20 @@ const AdminFaq: React.FC = () => {
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="admin-page-title">❓ Quản lý FAQ</h1>
-          <p className="admin-page-subtitle">Quản lý các câu hỏi thường gặp hiển thị trên trang web.</p>
+          <p className="admin-page-subtitle">Quản lý các câu hỏi thường gặp hiển thị trên trang web từ cơ sở dữ liệu thời gian thực.</p>
         </div>
-        <button className="admin-btn admin-btn-primary" onClick={openCreate}><Plus size={16} /> Thêm FAQ</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button 
+            className="admin-btn admin-btn-secondary" 
+            onClick={fetchFaqs} 
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <RefreshCw size={14} className={loading ? 'spin' : ''} />
+            {loading ? 'Đang tải...' : 'Làm mới API'}
+          </button>
+          <button className="admin-btn admin-btn-primary" onClick={openCreate}><Plus size={16} /> Thêm FAQ</button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -93,7 +165,7 @@ const AdminFaq: React.FC = () => {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.2rem' }}>
-                  <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.925rem' }}>{f.question}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--admin-text)', fontSize: '0.925rem' }}>{f.question}</span>
                   {!f.active && <span className="admin-badge warning">Ẩn</span>}
                 </div>
                 <span className="admin-badge neutral" style={{ fontSize: '0.7rem' }}>{f.category}</span>
@@ -101,17 +173,17 @@ const AdminFaq: React.FC = () => {
               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                 <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={e => { e.stopPropagation(); openEdit(f); }}><Edit2 size={12} /></button>
                 <button className={`admin-btn admin-btn-sm`}
-                  style={{ background: f.active ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)', color: f.active ? '#fbbf24' : '#34d399', border: `1px solid ${f.active ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'}`, padding: '0.4rem 0.75rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+                  style={{ background: f.active ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: f.active ? '#d97706' : '#059669', border: `1px solid ${f.active ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'}`, padding: '0.4rem 0.75rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
                   onClick={e => { e.stopPropagation(); toggleActive(f.id); }}>
                   {f.active ? 'Ẩn' : 'Hiện'}
                 </button>
                 <button className="admin-btn admin-btn-danger admin-btn-sm" onClick={e => { e.stopPropagation(); deleteFaq(f.id); }}><Trash2 size={12} /></button>
-                {expanded === f.id ? <ChevronUp size={16} color="rgba(255,255,255,0.5)" /> : <ChevronDown size={16} color="rgba(255,255,255,0.5)" />}
+                {expanded === f.id ? <ChevronUp size={16} color="var(--admin-text-muted)" /> : <ChevronDown size={16} color="var(--admin-text-muted)" />}
               </div>
             </div>
             {expanded === f.id && (
-              <div style={{ padding: '0 1.5rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', lineHeight: 1.65, margin: '1rem 0 0' }}>{f.answer}</p>
+              <div style={{ padding: '0 1.5rem 1.25rem', borderTop: '1px solid rgba(3, 191, 255, 0.15)' }}>
+                <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.9rem', lineHeight: 1.65, margin: '1rem 0 0' }}>{f.answer}</p>
               </div>
             )}
           </div>

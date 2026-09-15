@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, TrendingUp, MessageSquare,
   FileText, HelpCircle, BookOpen, CreditCard, Tag,
   ListOrdered, GitBranch, Award, ChevronRight,
-  LogOut, Briefcase, X
+  LogOut, Briefcase, X, Palette
 } from 'lucide-react';
 import './admin.css';
 
@@ -78,6 +78,12 @@ const menuStructure: MenuEntry[] = [
       { type: 'item', name: 'Badges & Leaderboard', path: '/admin/gamification', icon: <Award size={16} /> },
     ],
   },
+  {
+    type: 'item',
+    name: 'Cấu hình UI',
+    path: '/admin/config',
+    icon: <Palette size={18} />,
+  },
 ];
 
 interface AdminSidebarProps {
@@ -97,9 +103,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
   };
 
   const handleLogout = () => {
-    if (window.confirm('Bạn có chắc muốn đăng xuất?')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user_role');
+    if (window.confirm('Bạn có chắc muốn đăng xuất khỏi trang Quản trị?')) {
+      localStorage.removeItem('hm_access_token');
+      localStorage.removeItem('hm_refresh_token');
+      localStorage.removeItem('hm_roles');
       navigate('/login');
     }
   };

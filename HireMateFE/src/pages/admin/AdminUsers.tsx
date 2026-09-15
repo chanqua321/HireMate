@@ -64,11 +64,11 @@ const AdminUsers: React.FC = () => {
   const toggleBan = async (id: string) => {
     const target = users.find((u) => u.id === id);
     if (!target) return;
-    const nextActive = target.status !== 'active';
-    const res = await adminService.patchUser(id, { isActive: nextActive });
+    const shouldLock = target.status === 'active';
+    const res = await adminService.patchUser(id, { lock: shouldLock });
     if (res.ok) {
       setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, status: nextActive ? 'active' : 'banned' } : u))
+        prev.map((u) => (u.id === id ? { ...u, status: shouldLock ? 'banned' : 'active' } : u))
       );
     } else {
       setError(res.message || 'Patch user thất bại');
@@ -83,9 +83,10 @@ const AdminUsers: React.FC = () => {
 
   const saveEdit = async () => {
     if (!editUser) return;
+    const shouldLock = editStatus !== 'active';
     const res = await adminService.patchUser(editUser.id, {
       role: editRole,
-      isActive: editStatus === 'active',
+      lock: shouldLock,
     });
     if (!res.ok) {
       setError(res.message || 'Lưu user thất bại');
@@ -180,20 +181,20 @@ const AdminUsers: React.FC = () => {
                   </tr>
                 ) : filtered.map((u, i) => (
                   <tr key={u.id}>
-                    <td style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>{i + 1}</td>
+                    <td style={{ color: 'var(--admin-text-muted)', fontSize: '0.8rem' }}>{i + 1}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                         <div className="admin-avatar">{u.name.charAt(0)}</div>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{u.name}</div>
-                          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{u.email}</div>
+                          <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--admin-text)' }}>{u.name}</div>
+                          <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem' }}>{u.email}</div>
                         </div>
                       </div>
                     </td>
                     <td><span className={`admin-badge ${roleColor(u.role)}`}>{u.role}</span></td>
                     <td><span className={`admin-badge ${planColor(u.plan)}`}>{u.plan}</span></td>
-                    <td style={{ fontWeight: 600, color: '#c4b5fd' }}>{u.interviews}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>{u.joinDate}</td>
+                    <td style={{ fontWeight: 600, color: '#0284c7' }}>{u.interviews}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{u.joinDate}</td>
                     <td>
                       {u.emailConfirmed
                         ? <span className="admin-badge success"><Check size={11} /> Confirmed</span>
@@ -236,11 +237,11 @@ const AdminUsers: React.FC = () => {
               <button className="admin-modal-close" onClick={() => setEditUser(null)}><X size={18} /></button>
             </div>
             <div className="admin-modal-body">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.08)', borderRadius: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '1.5rem', padding: '1rem', background: '#F0F8FF', borderRadius: 12, border: '1px solid rgba(3, 191, 255, 0.2)' }}>
                 <div className="admin-avatar" style={{ width: '3rem', height: '3rem', fontSize: '1.25rem' }}>{editUser.name.charAt(0)}</div>
                 <div>
-                  <div style={{ fontWeight: 700, color: '#fff', fontSize: '1rem' }}>{editUser.name}</div>
-                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem' }}>{editUser.email}</div>
+                  <div style={{ fontWeight: 700, color: 'var(--admin-text)', fontSize: '1rem' }}>{editUser.name}</div>
+                  <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.875rem' }}>{editUser.email}</div>
                 </div>
               </div>
 
