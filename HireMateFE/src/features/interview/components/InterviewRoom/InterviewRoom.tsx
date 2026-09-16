@@ -15,6 +15,7 @@ import {
   Star,
   CheckCircle2,
   AlertCircle,
+  Loader2,
   HelpCircle,
   Video,
   Radio,
@@ -68,6 +69,9 @@ export const InterviewRoom: React.FC = () => {
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [activeVoiceName, setActiveVoiceName] = useState<string>('Tiếng Việt (AI)');
   const [timeLeft, setTimeLeft] = useState(120);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inputError, setInputError] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -260,7 +264,7 @@ export const InterviewRoom: React.FC = () => {
 
   // Countdown timer
   useEffect(() => {
-    if (isEntering) return;
+    if (isEntering || isCompleted) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) return 0;
@@ -268,34 +272,68 @@ export const InterviewRoom: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [currentIndex, isEntering]);
+  }, [currentIndex, isEntering, isCompleted]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const calculateScore = useCallback((): InterviewResult => {
-    const baseScore = 84 + Math.floor(Math.random() * 8);
+  const calculateRealisticScore = (answersList: string[]): InterviewResult => {
+    const validAnswers = answersList.filter(
+      (a) => a && !a.includes('(Ứng viên đã bỏ qua') && a.trim().length > 5
+    );
     const today = new Date().toISOString().split('T')[0];
 
+    if (validAnswers.length === 0) {
+      return {
+        overall: 20,
+        role: currentRole,
+        clarity: 25,
+        subs: { S: 20, T: 20, A: 20, R: 20 },
+        date: today,
+      };
+    }
+
+    const joined = validAnswers.join(' ').toLowerCase();
+    const hasS = ['bối cảnh', 'tình huống', 'dự án', 'khi đó', 'thời điểm'].some((k) =>
+      joined.includes(k)
+    );
+    const hasT = ['nhiệm vụ', 'mục tiêu', 'trách nhiệm', 'yêu cầu', 'kpi'].some((k) =>
+      joined.includes(k)
+    );
+    const hasA = ['hành động', 'triển khai', 'tôi đã', 'xử lý', 'thực hiện', 'phối hợp'].some((k) =>
+      joined.includes(k)
+    );
+    const hasR = ['kết quả', 'đạt được', '%', 'hoàn thành', 'tăng', 'giảm'].some((k) =>
+      joined.includes(k)
+    );
+
+    const lengthBonus = Math.min(30, joined.length / 20);
+    const s = Math.min(96, Math.max(25, 35 + (hasS ? 30 : 0) + lengthBonus));
+    const t = Math.min(96, Math.max(25, 35 + (hasT ? 30 : 0) + lengthBonus));
+    const a = Math.min(96, Math.max(25, 30 + (hasA ? 35 : 0) + lengthBonus));
+    const r = Math.min(96, Math.max(25, 25 + (hasR ? 40 : 0) + lengthBonus));
+    const overall = Math.round((s + t + a + r) / 4);
+
     return {
-      overall: baseScore,
+      overall,
       role: currentRole,
-      clarity: 88,
+      clarity: Math.round(overall * 0.95),
       subs: {
-        S: 90,
-        T: 86,
-        A: 80,
-        R: 92,
+        S: Math.round(s),
+        T: Math.round(t),
+        A: Math.round(a),
+        R: Math.round(r),
       },
       date: today,
     };
-  }, [currentRole]);
+  };
 
-  const handleNextQuestion = async () => {
-    const userAnswer = inputVal.trim()
-      ? inputVal.trim()
-      : '(Câu trả lời được trình bày qua giọng nói AI)';
+  const proceedWithAnswer = async (userAnswer: string, isSkipped = false) => {
+    if (isCompleted || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setInputError(null);
 
     const updatedMessages: ChatMessage[] = [
       ...messages,
@@ -316,7 +354,8 @@ export const InterviewRoom: React.FC = () => {
           orderIndex: currentIndex,
           questionId: questionIds[currentIndex] || undefined,
           questionText: questions[currentIndex]?.q || '',
-          answerText: userAnswer,
+          answerText: isSkipped ? '' : userAnswer,
+          skipped: isSkipped,
           durationSec: Math.max(1, perQuestionDuration - timeLeft),
         })
         .catch(() => {});
@@ -324,6 +363,9 @@ export const InterviewRoom: React.FC = () => {
 
     // Farewell on finishing interview
     if (currentIndex >= (questions.length || 5) - 1) {
+      setIsCompleted(true);
+      setInputVal('');
+
       const farewellText =
         'Cảm ơn bạn đã hoàn thành buổi phỏng vấn hôm nay cùng HireMate AI! Tôi đã ghi nhận toàn bộ câu trả lời của bạn và đang hoàn tất báo cáo phân tích chi tiết 4 yếu tố STAR cùng danh sách lỗi cần cải thiện. Chúng ta cùng xem kết quả nhé!';
 
@@ -339,7 +381,11 @@ export const InterviewRoom: React.FC = () => {
         },
       ]);
 
-      let finalResult = calculateScore();
+      const allAnswers = [
+        ...messages.filter((m) => m.sender === 'user').map((m) => m.text),
+        userAnswer,
+      ];
+      let finalResult = calculateRealisticScore(allAnswers);
 
       if (sessionId && localStorage.getItem('hm_access_token')) {
         try {
@@ -347,34 +393,43 @@ export const InterviewRoom: React.FC = () => {
           if (compRes.ok && compRes.data) {
             const be = compRes.data;
             finalResult = {
-              overall: be.overallScore || finalResult.overall,
+              overall: be.overallScore ?? finalResult.overall,
               role: be.position || finalResult.role,
-              clarity: be.clarityScore || finalResult.clarity,
+              clarity: be.clarityScore ?? finalResult.clarity,
               subs: {
-                S: be.scoreS || finalResult.subs.S,
-                T: be.scoreT || finalResult.subs.T,
-                A: be.scoreA || finalResult.subs.A,
-                R: be.scoreR || finalResult.subs.R,
+                S: be.scoreS ?? finalResult.subs.S,
+                T: be.scoreT ?? finalResult.subs.T,
+                A: be.scoreA ?? finalResult.subs.A,
+                R: be.scoreR ?? finalResult.subs.R,
               },
               date: new Date().toISOString().split('T')[0],
             };
           }
         } catch (e) {
-          // Fallback to computed score
+          // Fallback to heuristic score
         }
       }
 
       saveLastResult(finalResult);
 
       // Speak farewell then transition to Feedback report
+      let hasNavigated = false;
+      const navigateToReport = () => {
+        if (hasNavigated) return;
+        hasNavigated = true;
+        if (sessionId) {
+          navigate(`/feedback?sessionId=${sessionId}`);
+        } else {
+          navigate('/feedback');
+        }
+      };
+
+      // Fallback timer ensures candidate transitions to feedback even if TTS completes early or has no audio output
+      const fallbackRedirect = setTimeout(navigateToReport, 5000);
+
       speakVietnamese(farewellText, () => {
-        setTimeout(() => {
-          if (sessionId) {
-            navigate(`/feedback?sessionId=${sessionId}`);
-          } else {
-            navigate('/feedback');
-          }
-        }, 1200);
+        clearTimeout(fallbackRedirect);
+        setTimeout(navigateToReport, 1000);
       });
       return;
     }
@@ -400,9 +455,26 @@ export const InterviewRoom: React.FC = () => {
     setCurrentIndex(nextIdx);
     setInputVal('');
     setRecording(false);
+    setIsSubmitting(false);
 
     // Speak next question
     speakVietnamese(aiFeedback);
+  };
+
+  const handleNextQuestion = async () => {
+    if (isCompleted || isSubmitting) return;
+
+    if (!inputVal.trim() && !recording) {
+      setInputError('Vui lòng nhập câu trả lời của bạn trước khi gửi, hoặc bấm nút "Bỏ qua câu này" nếu muốn chuyển tiếp.');
+      return;
+    }
+    await proceedWithAnswer(inputVal.trim(), false);
+  };
+
+  const handleSkipQuestion = async () => {
+    if (isCompleted || isSubmitting) return;
+    setInputError(null);
+    await proceedWithAnswer('(Ứng viên đã bỏ qua câu hỏi này)', true);
   };
 
   const handleRecordToggle = async () => {
@@ -690,12 +762,25 @@ export const InterviewRoom: React.FC = () => {
                     recording ? 'is-active' : ''
                   }`}
                   onClick={handleRecordToggle}
-                  title={recording ? 'Dừng ghi âm' : 'Nhấn để bắt đầu nói'}
+                  disabled={isCompleted || isSubmitting}
+                  style={{
+                    opacity: (isCompleted || isSubmitting) ? 0.5 : 1,
+                    cursor: (isCompleted || isSubmitting) ? 'not-allowed' : 'pointer',
+                  }}
+                  title={
+                    isCompleted
+                      ? 'Buổi phỏng vấn đã hoàn tất'
+                      : recording
+                      ? 'Dừng ghi âm'
+                      : 'Nhấn để bắt đầu nói'
+                  }
                 >
                   <Mic size={28} />
                 </button>
                 <span className="voice-status-text">
-                  {recording
+                  {isCompleted
+                    ? 'Buổi phỏng vấn đã kết thúc thành công.'
+                    : recording
                     ? 'Đang lắng nghe câu trả lời của bạn... (Nhấn lại để kết thúc)'
                     : 'Nhấn vào Micro để trả lời bằng giọng nói'}
                 </span>
@@ -718,6 +803,7 @@ export const InterviewRoom: React.FC = () => {
                     type="button"
                     className="star-chip-btn"
                     onClick={() => insertStarPrompt('[Bối cảnh (S)]')}
+                    disabled={isCompleted || isSubmitting}
                   >
                     + Bối cảnh (S)
                   </button>
@@ -725,6 +811,7 @@ export const InterviewRoom: React.FC = () => {
                     type="button"
                     className="star-chip-btn"
                     onClick={() => insertStarPrompt('[Nhiệm vụ (T)]')}
+                    disabled={isCompleted || isSubmitting}
                   >
                     + Nhiệm vụ (T)
                   </button>
@@ -732,6 +819,7 @@ export const InterviewRoom: React.FC = () => {
                     type="button"
                     className="star-chip-btn"
                     onClick={() => insertStarPrompt('[Hành động (A)]')}
+                    disabled={isCompleted || isSubmitting}
                   >
                     + Hành động (A)
                   </button>
@@ -739,18 +827,39 @@ export const InterviewRoom: React.FC = () => {
                     type="button"
                     className="star-chip-btn"
                     onClick={() => insertStarPrompt('[Kết quả (R)]')}
+                    disabled={isCompleted || isSubmitting}
                   >
                     + Kết quả (R)
                   </button>
                 </div>
 
                 <textarea
-                  className="room-textarea"
+                  className={`room-textarea ${inputError ? 'error' : ''}`}
                   rows={3}
                   value={inputVal}
-                  onChange={(e) => setInputVal(e.target.value)}
-                  placeholder="Nhập câu trả lời theo chuẩn STAR (Bối cảnh -> Nhiệm vụ -> Hành động -> Kết quả)..."
+                  onChange={(e) => {
+                    setInputVal(e.target.value);
+                    if (inputError) setInputError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                      e.preventDefault();
+                      handleNextQuestion();
+                    }
+                  }}
+                  disabled={isCompleted || isSubmitting}
+                  placeholder={
+                    isCompleted
+                      ? 'Buổi phỏng vấn đã hoàn tất. Đang chuyển sang trang báo cáo kết quả...'
+                      : 'Nhập câu trả lời theo chuẩn STAR (Bối cảnh -> Nhiệm vụ -> Hành động -> Kết quả)...'
+                  }
                 />
+                {inputError && (
+                  <div className="room-input-error">
+                    <AlertCircle size={14} />
+                    <span>{inputError}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -763,18 +872,68 @@ export const InterviewRoom: React.FC = () => {
                 </span>
               </div>
 
-              <button
-                type="button"
-                className="btn-send-answer"
-                onClick={handleNextQuestion}
-              >
-                <span>
-                  {currentIndex === (questions.length || 5) - 1
-                    ? 'Hoàn tất & Xem báo cáo'
-                    : 'Gửi & Câu tiếp theo'}
-                </span>
-                <Send size={16} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn-skip-question"
+                  onClick={handleSkipQuestion}
+                  disabled={isCompleted || isSubmitting}
+                  style={{
+                    background: '#F1F5F9',
+                    color: '#64748B',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '10px',
+                    padding: '10px 16px',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    cursor: (isCompleted || isSubmitting) ? 'not-allowed' : 'pointer',
+                    opacity: (isCompleted || isSubmitting) ? 0.5 : 1,
+                    transition: 'all 0.2s',
+                  }}
+                  title="Bỏ qua câu hỏi này và không chấm điểm"
+                >
+                  Bỏ qua câu này
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-send-answer"
+                  onClick={handleNextQuestion}
+                  disabled={isCompleted || isSubmitting || (!inputVal.trim() && !recording)}
+                  style={{
+                    opacity: (isCompleted || isSubmitting || (!inputVal.trim() && !recording)) ? 0.6 : 1,
+                    cursor: (isCompleted || isSubmitting || (!inputVal.trim() && !recording)) ? 'not-allowed' : 'pointer',
+                  }}
+                  title={
+                    isCompleted
+                      ? 'Buổi phỏng vấn đã hoàn tất, nút gửi đã được khóa'
+                      : !inputVal.trim()
+                      ? 'Vui lòng nhập câu trả lời trước khi gửi hoặc bấm Bỏ qua câu này'
+                      : 'Gửi câu trả lời'
+                  }
+                >
+                  {isCompleted ? (
+                    <>
+                      <CheckCircle2 size={16} />
+                      <span>Đã hoàn thành buổi phỏng vấn</span>
+                    </>
+                  ) : isSubmitting ? (
+                    <>
+                      <Loader2 size={16} className="spin" />
+                      <span>Đang xử lý...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        {currentIndex === (questions.length || 5) - 1
+                          ? 'Hoàn tất & Xem báo cáo'
+                          : 'Gửi & Câu tiếp theo'}
+                      </span>
+                      <Send size={16} />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </motion.div>

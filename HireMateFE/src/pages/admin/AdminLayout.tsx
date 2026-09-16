@@ -1,80 +1,66 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Outlet, useNavigate } from 'react-router-dom';
+import { Menu, LogOut } from 'lucide-react';
 import AdminSidebar from './AdminSidebar';
+import { useApp } from '../../app/context/AppContext';
 import './admin.css';
 
 export interface AdminThemeConfig {
-  preset: 'ice-blue' | 'cyber-dark' | 'sapphire' | 'emerald' | 'sunset' | 'custom';
-  mode: 'light' | 'dark';
+  preset: 'cyber-dark';
+  mode: 'dark';
   primaryColor?: string;
   accentColor?: string;
 }
 
-const DEFAULT_THEME: AdminThemeConfig = {
-  preset: 'ice-blue',
-  mode: 'light',
-  primaryColor: '#0085FF',
-  accentColor: '#03BFFF',
-};
-
 const AdminLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [theme, setTheme] = useState<AdminThemeConfig>(() => {
-    try {
-      const saved = localStorage.getItem('hm_admin_theme_config');
-      return saved ? JSON.parse(saved) : DEFAULT_THEME;
-    } catch {
-      return DEFAULT_THEME;
-    }
-  });
+  const { logout } = useApp();
+  const navigate = useNavigate();
 
+  // Đảm bảo đưa về giao diện tối Cyber Dark Cockpit
   useEffect(() => {
-    const handleThemeChange = (e: Event) => {
-      const customEvent = e as CustomEvent<AdminThemeConfig>;
-      if (customEvent.detail) {
-        setTheme(customEvent.detail);
-      } else {
-        try {
-          const saved = localStorage.getItem('hm_admin_theme_config');
-          if (saved) setTheme(JSON.parse(saved));
-        } catch {
-          // ignore
-        }
-      }
-    };
-
-    window.addEventListener('hm-admin-theme-changed', handleThemeChange);
-    return () => window.removeEventListener('hm-admin-theme-changed', handleThemeChange);
+    localStorage.setItem('hm_admin_theme_config', JSON.stringify({ preset: 'cyber-dark', mode: 'dark' }));
   }, []);
 
-  // Determine theme class & custom styles
-  const themeClass = `admin-layout theme-${theme.preset}`;
-  const customStyles: Record<string, string> = {};
-  if (theme.preset === 'custom') {
-    if (theme.primaryColor) customStyles['--admin-primary'] = theme.primaryColor;
-    if (theme.accentColor) customStyles['--admin-accent'] = theme.accentColor;
-    if (theme.mode === 'dark') {
-      customStyles['--admin-bg'] = '#0B1120';
-      customStyles['--admin-card-bg'] = '#111827';
-      customStyles['--admin-sidebar-bg'] = '#0F172A';
-      customStyles['--admin-text-primary'] = '#F8FAFC';
-      customStyles['--admin-text-muted'] = '#94A3B8';
-      customStyles['--admin-table-th-bg'] = '#1E293B';
-    }
-  }
+  const handleMobileLogout = () => {
+    logout();
+    navigate('/login');
+    window.location.href = '/login';
+  };
 
   return (
-    <div className={themeClass} style={customStyles as React.CSSProperties}>
+    <div className="admin-layout theme-cyber-dark">
       {/* Mobile header */}
       <div className="admin-mobile-header">
         <div className="admin-mobile-logo">
            <span className="sidebar-logo-icon" style={{width: '2rem', height: '2rem', fontSize: '1rem', borderRadius: 8}}>🤝</span>
            <span style={{fontWeight: 700}}>HireMate Admin</span>
         </div>
-        <button className="admin-mobile-toggle" onClick={() => setSidebarOpen(true)}>
-          <Menu size={24} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={handleMobileLogout}
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              color: '#EF4444',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+            title="Đăng xuất khỏi hệ thống Quản trị"
+          >
+            <LogOut size={14} />
+          </button>
+          <button className="admin-mobile-toggle" onClick={() => setSidebarOpen(true)}>
+            <Menu size={24} />
+          </button>
+        </div>
       </div>
 
       {/* Overlay */}

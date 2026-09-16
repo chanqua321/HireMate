@@ -61,9 +61,16 @@ const AdminUsers: React.FC = () => {
     return matchSearch && matchStatus && matchPlan;
   });
 
+  const currentAdminEmail = localStorage.getItem('hm_user_email') || 'admin@gmail.com';
+
   const toggleBan = async (id: string) => {
     const target = users.find((u) => u.id === id);
     if (!target) return;
+    const isSelf = (target.email || '').toLowerCase() === currentAdminEmail.toLowerCase() || (target.role || '').toLowerCase() === 'admin';
+    if (isSelf) {
+      setError('Không thể khóa tài khoản Quản trị viên hiện tại!');
+      return;
+    }
     const shouldLock = target.status === 'active';
     const res = await adminService.patchUser(id, { lock: shouldLock });
     if (res.ok) {
@@ -83,6 +90,11 @@ const AdminUsers: React.FC = () => {
 
   const saveEdit = async () => {
     if (!editUser) return;
+    const isSelf = (editUser.email || '').toLowerCase() === currentAdminEmail.toLowerCase() || (editUser.role || '').toLowerCase() === 'admin';
+    if (isSelf && editStatus === 'banned') {
+      setError('Không thể tự khóa tài khoản Quản trị viên!');
+      return;
+    }
     const shouldLock = editStatus !== 'active';
     const res = await adminService.patchUser(editUser.id, {
       role: editRole,
@@ -117,7 +129,7 @@ const AdminUsers: React.FC = () => {
           { label: 'Chưa xác nhận', value: users.filter(u => !u.emailConfirmed).length, color: 'purple' },
         ].map((s, i) => (
           <div key={i} className="admin-stat-card" style={{ padding: '1.25rem' }}>
-            <div className="admin-stat-value" style={{ fontSize: '1.75rem' }}>{s.value}</div>
+            <div className="admin-stat-value" style={{ fontSize: '1.75rem', color: '#FFFFFF' }}>{s.value}</div>
             <div className="admin-stat-label">{s.label}</div>
           </div>
         ))}
@@ -193,8 +205,8 @@ const AdminUsers: React.FC = () => {
                     </td>
                     <td><span className={`admin-badge ${roleColor(u.role)}`}>{u.role}</span></td>
                     <td><span className={`admin-badge ${planColor(u.plan)}`}>{u.plan}</span></td>
-                    <td style={{ fontWeight: 600, color: '#0284c7' }}>{u.interviews}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{u.joinDate}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--admin-accent, #00F2FE)' }}>{u.interviews}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{u.joinDate || 'Mới tham gia'}</td>
                     <td>
                       {u.emailConfirmed
                         ? <span className="admin-badge success"><Check size={11} /> Confirmed</span>
@@ -207,17 +219,29 @@ const AdminUsers: React.FC = () => {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                         <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => openEdit(u)} title="Chỉnh sửa">
                           <Edit2 size={13} />
                         </button>
-                        <button
-                          className={`admin-btn admin-btn-sm ${u.status === 'active' ? 'admin-btn-danger' : 'admin-btn-success'}`}
-                          onClick={() => toggleBan(u.id)}
-                          title={u.status === 'active' ? 'Ban user' : 'Unban user'}
-                        >
-                          {u.status === 'active' ? <UserX size={13} /> : <UserCheck size={13} />}
-                        </button>
+                        {(() => {
+                          const isSelf = (u.email || '').toLowerCase() === currentAdminEmail.toLowerCase() || (u.role || '').toLowerCase() === 'admin';
+                          if (isSelf) {
+                            return (
+                              <span className="admin-badge neutral" style={{ fontSize: '0.72rem', opacity: 0.8 }} title="Tài khoản Quản trị viên hiện tại">
+                                Quản trị
+                              </span>
+                            );
+                          }
+                          return (
+                            <button
+                              className={`admin-btn admin-btn-sm ${u.status === 'active' ? 'admin-btn-danger' : 'admin-btn-success'}`}
+                              onClick={() => toggleBan(u.id)}
+                              title={u.status === 'active' ? 'Ban user' : 'Unban user'}
+                            >
+                              {u.status === 'active' ? <UserX size={13} /> : <UserCheck size={13} />}
+                            </button>
+                          );
+                        })()}
                       </div>
                     </td>
                   </tr>
@@ -237,7 +261,7 @@ const AdminUsers: React.FC = () => {
               <button className="admin-modal-close" onClick={() => setEditUser(null)}><X size={18} /></button>
             </div>
             <div className="admin-modal-body">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '1.5rem', padding: '1rem', background: '#F0F8FF', borderRadius: 12, border: '1px solid rgba(3, 191, 255, 0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(0, 242, 254, 0.08)', borderRadius: 12, border: '1px solid rgba(0, 242, 254, 0.25)' }}>
                 <div className="admin-avatar" style={{ width: '3rem', height: '3rem', fontSize: '1.25rem' }}>{editUser.name.charAt(0)}</div>
                 <div>
                   <div style={{ fontWeight: 700, color: 'var(--admin-text)', fontSize: '1rem' }}>{editUser.name}</div>

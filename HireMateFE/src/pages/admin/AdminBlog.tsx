@@ -4,14 +4,6 @@ import { publicService } from '../../shared/services/public.service';
 import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
-// ---- Fallback data ----
-const FALLBACK_BLOGS = [
-  { id: '1', title: '10 Câu hỏi phỏng vấn Frontend thường gặp nhất 2026', slug: '10-cau-hoi-frontend-2026', category: 'Interview Tips', author: 'HireMate Team', published: true, views: 4821, date: '2026-07-15', excerpt: 'Tổng hợp các câu hỏi phỏng vấn Frontend phổ biến nhất và cách trả lời hiệu quả...' },
-  { id: '2', title: 'Cách tối ưu CV để vượt ATS trong 5 phút', slug: 'toi-uu-cv-ats', category: 'CV Tips', author: 'HireMate Team', published: true, views: 3240, date: '2026-07-10', excerpt: 'ATS (Applicant Tracking System) là công cụ mà nhiều công ty lớn dùng để lọc CV...' },
-  { id: '3', title: 'Lộ trình học Data Science từ đầu đến đi làm', slug: 'lo-trinh-data-science', category: 'Career Path', author: 'HireMate Team', published: false, views: 0, date: '2026-07-27', excerpt: 'Bài viết này sẽ hướng dẫn bạn từng bước để trở thành Data Scientist...' },
-  { id: '4', title: 'Tại sao phỏng vấn AI lại hiệu quả hơn tự luyện', slug: 'phong-van-ai-hieu-qua', category: 'AI Interview', author: 'HireMate Team', published: true, views: 2189, date: '2026-07-05', excerpt: 'Nghiên cứu cho thấy người dùng luyện tập với AI đạt kết quả tốt hơn 40%...' },
-];
-
 export interface BlogItem {
   id: string;
   title: string;
@@ -27,7 +19,7 @@ export interface BlogItem {
 const CATEGORIES = ['Interview Tips', 'CV Tips', 'Career Path', 'AI Interview', 'Industry News'];
 
 const AdminBlog: React.FC = () => {
-  const [blogs, setBlogs] = useState<BlogItem[]>(FALLBACK_BLOGS);
+  const [blogs, setBlogs] = useState<BlogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<BlogItem | null>(null);
@@ -37,22 +29,25 @@ const AdminBlog: React.FC = () => {
     setLoading(true);
     try {
       const res = await publicService.getBlogList();
-      if (res.ok && res.data && res.data.length > 0) {
+      if (res.ok && Array.isArray(res.data)) {
         const mapped: BlogItem[] = res.data.map((b: any) => ({
-          id: b.id || b.slug,
+          id: String(b.id || b.slug),
           title: b.title || 'Bài viết',
           slug: b.slug || 'slug-bai-viet',
           category: b.category || 'Career Path',
           author: b.author || 'HireMate Editorial',
           published: b.published !== false,
-          views: b.views || 100,
-          date: b.createdAt ? new Date(b.createdAt).toISOString().split('T')[0] : '2026-07-27',
+          views: b.views || 0,
+          date: b.createdAt ? new Date(b.createdAt).toISOString().split('T')[0] : '—',
           excerpt: b.summary || b.content?.substring(0, 100) || '',
         }));
         setBlogs(mapped);
+      } else {
+        setBlogs([]);
       }
     } catch (err) {
-      console.warn('Real blog list API fallback:', err);
+      console.warn('Real blog list API error:', err);
+      setBlogs([]);
     } finally {
       setLoading(false);
     }
@@ -163,7 +158,17 @@ const AdminBlog: React.FC = () => {
 
       {/* Blog list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {blogs.map(b => (
+        {blogs.length === 0 ? (
+          <div className="admin-card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem' }}>
+            <p style={{ color: 'var(--admin-text-muted)', fontSize: '1rem', margin: '0 0 1.25rem' }}>
+              Chưa có bài viết nào được lưu trong cơ sở dữ liệu.
+            </p>
+            <button className="admin-btn admin-btn-primary" onClick={openCreate} style={{ display: 'inline-flex', margin: '0 auto', gap: '6px' }}>
+              <Plus size={16} /> Tạo bài viết đầu tiên
+            </button>
+          </div>
+        ) : (
+          blogs.map(b => (
           <div key={b.id} className="admin-card">
             <div className="admin-card-body">
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
@@ -197,7 +202,8 @@ const AdminBlog: React.FC = () => {
               </div>
             </div>
           </div>
-        ))}
+        ))
+      )}
       </div>
 
       {/* Modal */}

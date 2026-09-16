@@ -247,7 +247,7 @@ export const PinnedStarScrollSection: React.FC = () => {
               <div className="scroll-hint-text-row">
                 <span>
                   {activeStepIndex === 3
-                    ? 'Đã xem hết 4 bước • Cuộn tiếp để vào Sandbox'
+                    ? 'Đã xem hết 4 bước • Cuộn tiếp để khám phá tính năng'
                     : `Cuộn tiếp để xem bước ${activeStepIndex + 2} (${activeStepIndex + 1}/4)`}
                 </span>
                 <ChevronDown size={16} color="#0284c7" />

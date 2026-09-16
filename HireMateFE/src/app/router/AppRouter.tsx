@@ -31,6 +31,7 @@ import AdminBlog from '../../pages/admin/AdminBlog';
 import AdminFaq from '../../pages/admin/AdminFaq';
 import AdminResources from '../../pages/admin/AdminResources';
 import AdminConfig from '../../pages/admin/AdminConfig';
+import AdminGamification from '../../pages/admin/AdminGamification';
 
 export const AppRouter: React.FC = () => {
   return (
@@ -76,8 +77,9 @@ export const AppRouter: React.FC = () => {
         <Route path="interview-room.html" element={<InterviewRoom />} />
         <Route path="feedback" element={<Feedback />} />
         <Route path="feedback.html" element={<Feedback />} />
-        <Route path="questions" element={<Questions />} />
-        <Route path="questions.html" element={<Questions />} />
+        {/* Questions (Chỉ Admin mới có quyền truy cập) */}
+        <Route path="questions" element={<AdminRouteGuard><Questions /></AdminRouteGuard>} />
+        <Route path="questions.html" element={<AdminRouteGuard><Questions /></AdminRouteGuard>} />
 
         {/* Dashboard */}
         <Route path="dashboard" element={<Dashboard />} />
@@ -114,6 +116,7 @@ export const AppRouter: React.FC = () => {
         <Route path="blog" element={<AdminBlog />} />
         <Route path="faq" element={<AdminFaq />} />
         <Route path="resources" element={<AdminResources />} />
+        <Route path="gamification" element={<AdminGamification />} />
         <Route path="config" element={<AdminConfig />} />
       </Route>
 

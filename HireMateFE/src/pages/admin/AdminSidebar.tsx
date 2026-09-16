@@ -4,8 +4,9 @@ import {
   LayoutDashboard, Users, TrendingUp, MessageSquare,
   FileText, HelpCircle, BookOpen, CreditCard, Tag,
   ListOrdered, GitBranch, Award, ChevronRight,
-  LogOut, Briefcase, X, Palette
+  LogOut, Briefcase, X, Sliders
 } from 'lucide-react';
+import { useApp } from '../../app/context/AppContext';
 import './admin.css';
 
 interface NavItemDef {
@@ -37,8 +38,6 @@ const menuStructure: MenuEntry[] = [
     icon: <Users size={18} />,
     items: [
       { type: 'item', name: 'Quản lý Users', path: '/admin/users', icon: <Users size={16} /> },
-      { type: 'item', name: 'Referrals', path: '/admin/referrals', icon: <GitBranch size={16} /> },
-      { type: 'item', name: 'Waitlist', path: '/admin/waitlist', icon: <ListOrdered size={16} /> },
     ],
   },
   {
@@ -55,7 +54,7 @@ const menuStructure: MenuEntry[] = [
     icon: <TrendingUp size={18} />,
     items: [
       { type: 'item', name: 'Doanh thu', path: '/admin/revenue', icon: <TrendingUp size={16} /> },
-      { type: 'item', name: 'Gói subscription', path: '/admin/plans', icon: <CreditCard size={16} /> },
+      { type: 'item', name: 'Gói dịch vụ', path: '/admin/plans', icon: <CreditCard size={16} /> },
       { type: 'item', name: 'Mã khuyến mãi', path: '/admin/promos', icon: <Tag size={16} /> },
     ],
   },
@@ -64,7 +63,7 @@ const menuStructure: MenuEntry[] = [
     name: 'Hỗ trợ & Nội dung',
     icon: <MessageSquare size={18} />,
     items: [
-      { type: 'item', name: 'Support Tickets', path: '/admin/tickets', icon: <MessageSquare size={16} /> },
+      { type: 'item', name: 'Phiếu hỗ trợ', path: '/admin/tickets', icon: <MessageSquare size={16} /> },
       { type: 'item', name: 'Blog', path: '/admin/blog', icon: <FileText size={16} /> },
       { type: 'item', name: 'FAQ', path: '/admin/faq', icon: <HelpCircle size={16} /> },
       { type: 'item', name: 'Tài nguyên', path: '/admin/resources', icon: <BookOpen size={16} /> },
@@ -75,14 +74,14 @@ const menuStructure: MenuEntry[] = [
     name: 'Gamification',
     icon: <Award size={18} />,
     items: [
-      { type: 'item', name: 'Badges & Leaderboard', path: '/admin/gamification', icon: <Award size={16} /> },
+      { type: 'item', name: 'Badges & BXH', path: '/admin/gamification', icon: <Award size={16} /> },
     ],
   },
   {
     type: 'item',
-    name: 'Cấu hình UI',
+    name: 'Cấu hình hệ thống',
     path: '/admin/config',
-    icon: <Palette size={18} />,
+    icon: <Sliders size={18} />,
   },
 ];
 
@@ -93,6 +92,7 @@ interface AdminSidebarProps {
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
+  const { logout } = useApp();
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({
     'Người dùng': true,
     'Tài chính': true,
@@ -103,12 +103,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
   };
 
   const handleLogout = () => {
-    if (window.confirm('Bạn có chắc muốn đăng xuất khỏi trang Quản trị?')) {
-      localStorage.removeItem('hm_access_token');
-      localStorage.removeItem('hm_refresh_token');
-      localStorage.removeItem('hm_roles');
-      navigate('/login');
-    }
+    logout();
+    navigate('/login');
+    window.location.href = '/login';
   };
 
   return (
@@ -192,7 +189,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
             <div className="sidebar-user-role">Super Administrator</div>
           </div>
         </div>
-        <button className="sidebar-logout-btn" onClick={handleLogout}>
+        <button type="button" className="sidebar-logout-btn" onClick={handleLogout} title="Đăng xuất khỏi hệ thống Quản trị">
           <LogOut size={16} />
           <span>Đăng xuất</span>
         </button>

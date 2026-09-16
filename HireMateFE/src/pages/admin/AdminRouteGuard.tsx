@@ -145,7 +145,7 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) =>
             Khu vực Quản trị Hệ thống
           </h2>
 
-          <p style={{ fontSize: '0.938rem', color: '#64748B', lineHeight: 1.6, marginBottom: 20 }}>
+          <p style={{ fontSize: '0.938rem', color: '#64748B', lineHeight: 1.6, marginBottom: 24 }}>
             {currentEmail ? (
               <>
                 Bạn đang đăng nhập bằng <b style={{ color: '#001B3F' }}>{currentEmail}</b> nhưng tài khoản này không có quyền Quản trị viên (<b>Admin</b>).
@@ -154,24 +154,6 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) =>
               'Bạn cần đăng nhập bằng tài khoản có quyền Quản trị viên để truy cập bảng điều khiển Admin.'
             )}
           </p>
-
-          <div style={{
-            background: 'rgba(3, 191, 255, 0.08)',
-            border: '1px solid rgba(3, 191, 255, 0.25)',
-            borderRadius: 12,
-            padding: '14px 16px',
-            textAlign: 'left',
-            marginBottom: 24,
-            fontSize: '0.875rem'
-          }}>
-            <div style={{ fontWeight: 700, color: '#0085FF', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <CheckCircle2 size={16} /> Tài khoản Admin mặc định Backend (.NET):
-            </div>
-            <div style={{ color: '#334155', fontSize: '0.85rem', lineHeight: 1.6 }}>
-              • Email: <code style={{ background: '#FFFFFF', padding: '2px 6px', borderRadius: 4, color: '#0085FF', fontWeight: 600, border: '1px solid rgba(3, 191, 255, 0.2)' }}>admin@gmail.com</code><br/>
-              • Mật khẩu: <code style={{ background: '#FFFFFF', padding: '2px 6px', borderRadius: 4, color: '#0085FF', fontWeight: 600, border: '1px solid rgba(3, 191, 255, 0.2)' }}>12345</code>
-            </div>
-          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <button

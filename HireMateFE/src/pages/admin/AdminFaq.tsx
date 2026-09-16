@@ -4,15 +4,6 @@ import { publicService } from '../../shared/services/public.service';
 import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
-// ---- Fallback data ----
-const FALLBACK_FAQS = [
-  { id: '1', question: 'HireMate hỗ trợ những vị trí phỏng vấn nào?', answer: 'HireMate hỗ trợ hơn 50 vị trí phổ biến trong ngành công nghệ thông tin, marketing, kinh doanh, tài chính và nhiều lĩnh vực khác.', category: 'Sản phẩm', order: 1, active: true },
-  { id: '2', question: 'Tôi có thể thực hành phỏng vấn bao nhiêu lần?', answer: 'Gói Free cho phép 3 phiên/tháng. Gói Pro không giới hạn số lần thực hành.', category: 'Billing', order: 2, active: true },
-  { id: '3', question: 'AI phỏng vấn có thực sự chính xác không?', answer: 'Hệ thống AI của HireMate được huấn luyện trên hàng nghìn phiên phỏng vấn thực tế, đạt độ chính xác 94% so với phỏng vấn viên chuyên nghiệp.', category: 'AI', order: 3, active: true },
-  { id: '4', question: 'Thanh toán qua những phương thức nào?', answer: 'Chúng tôi hỗ trợ VNPay, PayOS, và tất cả các thẻ tín dụng quốc tế.', category: 'Billing', order: 4, active: true },
-  { id: '5', question: 'Dữ liệu của tôi có được bảo mật không?', answer: 'Tất cả dữ liệu được mã hóa AES-256. Chúng tôi không bán thông tin người dùng cho bên thứ ba.', category: 'Bảo mật', order: 5, active: false },
-];
-
 export interface FaqItem {
   id: string;
   question: string;
@@ -25,7 +16,7 @@ export interface FaqItem {
 const CATS = ['Sản phẩm', 'Billing', 'AI', 'Bảo mật', 'Tài khoản'];
 
 const AdminFaq: React.FC = () => {
-  const [faqs, setFaqs] = useState<FaqItem[]>(FALLBACK_FAQS);
+  const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<FaqItem | null>(null);
@@ -36,9 +27,9 @@ const AdminFaq: React.FC = () => {
     setLoading(true);
     try {
       const res = await publicService.getFaqs();
-      if (res.ok && res.data && res.data.length > 0) {
+      if (res.ok && Array.isArray(res.data)) {
         const mapped: FaqItem[] = res.data.map((f: any, idx: number) => ({
-          id: f.id || String(idx + 1),
+          id: String(f.id || idx + 1),
           question: f.question || 'Câu hỏi',
           answer: f.answer || 'Câu trả lời',
           category: f.category || 'Sản phẩm',
@@ -46,9 +37,12 @@ const AdminFaq: React.FC = () => {
           active: f.active !== false,
         }));
         setFaqs(mapped);
+      } else {
+        setFaqs([]);
       }
     } catch (err) {
-      console.warn('Real FAQs API fallback:', err);
+      console.warn('Real FAQs API error:', err);
+      setFaqs([]);
     } finally {
       setLoading(false);
     }
@@ -151,43 +145,54 @@ const AdminFaq: React.FC = () => {
 
       {/* FAQ Accordion */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-        {sorted.map(f => (
-          <div key={f.id} className="admin-card" style={{ overflow: 'hidden' }}>
-            <div
-              style={{ padding: '1.25rem 1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' }}
-              onClick={() => setExpanded(expanded === f.id ? null : f.id)}
-            >
-              <div style={{
-                width: '2rem', height: '2rem', borderRadius: 8, background: 'linear-gradient(135deg, #667eea, #764ba2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.8rem', color: '#fff', flexShrink: 0
-              }}>
-                {f.order}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.2rem' }}>
-                  <span style={{ fontWeight: 700, color: 'var(--admin-text)', fontSize: '0.925rem' }}>{f.question}</span>
-                  {!f.active && <span className="admin-badge warning">Ẩn</span>}
-                </div>
-                <span className="admin-badge neutral" style={{ fontSize: '0.7rem' }}>{f.category}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={e => { e.stopPropagation(); openEdit(f); }}><Edit2 size={12} /></button>
-                <button className={`admin-btn admin-btn-sm`}
-                  style={{ background: f.active ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: f.active ? '#d97706' : '#059669', border: `1px solid ${f.active ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'}`, padding: '0.4rem 0.75rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
-                  onClick={e => { e.stopPropagation(); toggleActive(f.id); }}>
-                  {f.active ? 'Ẩn' : 'Hiện'}
-                </button>
-                <button className="admin-btn admin-btn-danger admin-btn-sm" onClick={e => { e.stopPropagation(); deleteFaq(f.id); }}><Trash2 size={12} /></button>
-                {expanded === f.id ? <ChevronUp size={16} color="var(--admin-text-muted)" /> : <ChevronDown size={16} color="var(--admin-text-muted)" />}
-              </div>
-            </div>
-            {expanded === f.id && (
-              <div style={{ padding: '0 1.5rem 1.25rem', borderTop: '1px solid rgba(3, 191, 255, 0.15)' }}>
-                <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.9rem', lineHeight: 1.65, margin: '1rem 0 0' }}>{f.answer}</p>
-              </div>
-            )}
+        {sorted.length === 0 ? (
+          <div className="admin-card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem' }}>
+            <p style={{ color: 'var(--admin-text-muted)', fontSize: '1rem', margin: '0 0 1.25rem' }}>
+              Chưa có câu hỏi thường gặp nào trong cơ sở dữ liệu.
+            </p>
+            <button className="admin-btn admin-btn-primary" onClick={openCreate} style={{ display: 'inline-flex', margin: '0 auto', gap: '6px' }}>
+              <Plus size={16} /> Thêm FAQ đầu tiên
+            </button>
           </div>
-        ))}
+        ) : (
+          sorted.map(f => (
+            <div key={f.id} className="admin-card" style={{ overflow: 'hidden' }}>
+              <div
+                style={{ padding: '1.25rem 1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' }}
+                onClick={() => setExpanded(expanded === f.id ? null : f.id)}
+              >
+                <div style={{
+                  width: '2rem', height: '2rem', borderRadius: 8, background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.8rem', color: '#fff', flexShrink: 0
+                }}>
+                  {f.order}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.2rem' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--admin-text)', fontSize: '0.925rem' }}>{f.question}</span>
+                    {!f.active && <span className="admin-badge warning">Ẩn</span>}
+                  </div>
+                  <span className="admin-badge neutral" style={{ fontSize: '0.7rem' }}>{f.category}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={e => { e.stopPropagation(); openEdit(f); }}><Edit2 size={12} /></button>
+                  <button className={`admin-btn admin-btn-sm`}
+                    style={{ background: f.active ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: f.active ? '#d97706' : '#059669', border: `1px solid ${f.active ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'}`, padding: '0.4rem 0.75rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+                    onClick={e => { e.stopPropagation(); toggleActive(f.id); }}>
+                    {f.active ? 'Ẩn' : 'Hiện'}
+                  </button>
+                  <button className="admin-btn admin-btn-danger admin-btn-sm" onClick={e => { e.stopPropagation(); deleteFaq(f.id); }}><Trash2 size={12} /></button>
+                  {expanded === f.id ? <ChevronUp size={16} color="var(--admin-text-muted)" /> : <ChevronDown size={16} color="var(--admin-text-muted)" />}
+                </div>
+              </div>
+              {expanded === f.id && (
+                <div style={{ padding: '0 1.5rem 1.25rem', borderTop: '1px solid rgba(3, 191, 255, 0.15)' }}>
+                  <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.9rem', lineHeight: 1.65, margin: '1rem 0 0' }}>{f.answer}</p>
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
 
       {/* Modal */}
