@@ -19,6 +19,7 @@ import ResourcesPage from '../../pages/resources/ResourcesPage';
 // Admin pages
 import AdminLayout from '../../pages/admin/AdminLayout';
 import AdminRouteGuard from '../../pages/admin/AdminRouteGuard';
+import CandidateRouteGuard from '../../components/common/CandidateRouteGuard';
 import AdminDashboard from '../../pages/admin/AdminDashboard';
 import AdminUsers from '../../pages/admin/AdminUsers';
 import AdminInterviews from '../../pages/admin/AdminInterviews';
@@ -82,16 +83,16 @@ export const AppRouter: React.FC = () => {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="dashboard.html" element={<Dashboard />} />
 
-        {/* Candidate Systems: Career OS, Gamification, Blog, Resources */}
-        <Route path="career" element={<CareerOS />} />
-        <Route path="career.html" element={<CareerOS />} />
-        <Route path="leaderboard" element={<Leaderboard />} />
-        <Route path="leaderboard.html" element={<Leaderboard />} />
-        <Route path="blog" element={<BlogList />} />
-        <Route path="blog.html" element={<BlogList />} />
-        <Route path="blog/:slug" element={<BlogDetail />} />
-        <Route path="resources" element={<ResourcesPage />} />
-        <Route path="resources.html" element={<ResourcesPage />} />
+        {/* Candidate Systems: Career OS, Gamification, Blog, Resources (Yêu cầu đăng nhập) */}
+        <Route path="career" element={<CandidateRouteGuard><CareerOS /></CandidateRouteGuard>} />
+        <Route path="career.html" element={<CandidateRouteGuard><CareerOS /></CandidateRouteGuard>} />
+        <Route path="leaderboard" element={<CandidateRouteGuard><Leaderboard /></CandidateRouteGuard>} />
+        <Route path="leaderboard.html" element={<CandidateRouteGuard><Leaderboard /></CandidateRouteGuard>} />
+        <Route path="blog" element={<CandidateRouteGuard><BlogList /></CandidateRouteGuard>} />
+        <Route path="blog.html" element={<CandidateRouteGuard><BlogList /></CandidateRouteGuard>} />
+        <Route path="blog/:slug" element={<CandidateRouteGuard><BlogDetail /></CandidateRouteGuard>} />
+        <Route path="resources" element={<CandidateRouteGuard><ResourcesPage /></CandidateRouteGuard>} />
+        <Route path="resources.html" element={<CandidateRouteGuard><ResourcesPage /></CandidateRouteGuard>} />
       </Route>
 
       {/* Admin Protected Routes */}

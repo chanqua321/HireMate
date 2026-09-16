@@ -102,9 +102,9 @@
    ===================================================================== */
 .hm-container {
   width: 100%;
-  max-width: 1200px;
+  max-width: clamp(1160px, 88vw, 1400px);
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 clamp(16px, 2.5vw, 36px);
   position: relative;
   z-index: 2;
 }
@@ -138,7 +138,7 @@
 }
 
 .hm-section-heading {
-  font-size: clamp(2rem, 3.4vw, 2.7rem);
+  font-size: clamp(1.85rem, 2.8vw, 2.7rem);
   font-weight: 800;
   color: #0c182c;
   line-height: 1.25;
@@ -147,7 +147,7 @@
 }
 
 .hm-section-desc {
-  font-size: 1.05rem;
+  font-size: clamp(0.95rem, 1vw, 1.05rem);
   color: #475569;
   line-height: 1.6;
   margin: 0;
@@ -161,8 +161,8 @@
   gap: 10px;
   font-family: inherit;
   font-weight: 700;
-  font-size: 1rem;
-  padding: 14px 28px;
+  font-size: clamp(0.9rem, 0.95vw, 1rem);
+  padding: 13px 26px;
   border-radius: 14px;
   cursor: pointer;
   text-decoration: none;
@@ -197,8 +197,8 @@
 }
 
 .hm-btn--lg {
-  padding: 16px 32px;
-  font-size: 1.08rem;
+  padding: clamp(12px, 1.3vh, 16px) clamp(20px, 1.6vw, 32px);
+  font-size: clamp(0.92rem, 0.95vw, 1.05rem);
 }
 
 /* 3D Tilt Card Base */
@@ -225,8 +225,8 @@
    ===================================================================== */
 .hm-hero-section {
   position: relative;
-  padding: 64px 0 80px 0;
-  min-height: 88vh;
+  padding: clamp(28px, 4vh, 60px) 0 clamp(36px, 5vh, 72px) 0;
+  min-height: calc(100vh - 68px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -234,8 +234,8 @@
 
 .hm-hero-grid {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 52px;
+  grid-template-columns: 1.16fr 0.84fr;
+  gap: clamp(24px, 3.2vw, 48px);
   align-items: center;
 }
 
@@ -249,14 +249,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
+  padding: 6px clamp(12px, 1.2vw, 16px);
   background: #e0f2fe;
   color: #0369a1;
   border: 1px solid #bae6fd;
   border-radius: 999px;
-  font-size: 0.85rem;
+  font-size: clamp(0.78rem, 0.8vw, 0.85rem);
   font-weight: 700;
-  margin-bottom: 20px;
+  margin-bottom: clamp(12px, 1.8vh, 20px);
   box-shadow: 0 4px 12px rgba(3, 191, 255, 0.12);
 }
 
@@ -270,35 +270,36 @@
 }
 
 .hm-hero-title {
-  font-size: clamp(2.5rem, 4.4vw, 3.6rem);
+  font-size: clamp(1.85rem, 2.75vw, 3.4rem);
   font-weight: 800;
   color: #0c182c;
-  line-height: 1.16;
-  margin: 0 0 6px 0;
+  line-height: 1.2;
+  margin: 0 0 8px 0;
   letter-spacing: -0.025em;
+  word-break: normal;
 }
 
 .hm-hero-desc {
-  font-size: 1.12rem;
-  line-height: 1.65;
+  font-size: clamp(0.92rem, 1vw, 1.1rem);
+  line-height: 1.62;
   color: #475569;
-  margin: 18px 0 32px 0;
-  max-width: 540px;
+  margin: clamp(12px, 1.6vh, 18px) 0 clamp(20px, 2.4vh, 32px) 0;
+  max-width: min(540px, 100%);
 }
 
 .hm-hero-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 36px;
+  gap: clamp(10px, 1.1vw, 16px);
+  margin-bottom: clamp(20px, 2.8vh, 36px);
   flex-wrap: wrap;
 }
 
 .hm-hero-trust {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding-top: 20px;
+  gap: clamp(10px, 1.2vw, 16px);
+  padding-top: clamp(12px, 1.8vh, 20px);
   border-top: 1px dashed #e2e8f0;
   width: 100%;
 }
@@ -309,17 +310,17 @@
 }
 
 .hm-trust-avatar {
-  width: 38px;
-  height: 38px;
+  width: clamp(32px, 2.4vw, 38px);
+  height: clamp(32px, 2.4vw, 38px);
   border-radius: 50%;
-  border: 2.5px solid #ffffff;
+  border: 2px solid #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: clamp(0.72rem, 0.78vw, 0.82rem);
   color: #ffffff;
-  margin-left: -10px;
+  margin-left: -8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 .hm-trust-avatar:first-child {
@@ -327,14 +328,14 @@
 }
 
 .hm-trust-text {
-  font-size: 0.86rem;
+  font-size: clamp(0.8rem, 0.84vw, 0.86rem);
   color: #64748b;
   line-height: 1.4;
 }
 
 .hm-trust-stars {
   color: #f59e0b;
-  font-size: 0.95rem;
+  font-size: clamp(0.88rem, 0.92vw, 0.95rem);
   margin-bottom: 2px;
 }
 
@@ -342,9 +343,10 @@
 .hm-hero-preview-card {
   background: #ffffff;
   border: 1.5px solid #e2e8f0;
-  border-radius: 24px;
-  padding: 30px;
+  border-radius: clamp(18px, 1.8vw, 24px);
+  padding: clamp(18px, 2vw, 30px);
   box-shadow: 0 20px 50px rgba(9, 24, 45, 0.09), 0 4px 16px rgba(0, 0, 0, 0.04);
+  max-width: 100%;
 }
 
 .floating-badge {
@@ -1832,8 +1834,47 @@
 }
 
 /* =====================================================================
-   RESPONSIVE DESIGN (Tablets & Mobile)
+   RESPONSIVE DESIGN (Laptops, Tablets & Mobile)
    ===================================================================== */
+/* Laptop scale optimization (14" - 16" laptops at 125% - 150% scaling) */
+@media (max-width: 1400px) {
+  .hm-hero-title {
+    font-size: 2.35rem;
+    line-height: 1.22;
+  }
+  .hm-hero-desc {
+    font-size: 0.98rem;
+    margin: 14px 0 24px 0;
+  }
+  .hm-hero-grid {
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 32px;
+  }
+  .hm-hero-preview-card {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .hm-hero-title {
+    font-size: 2.1rem;
+    line-height: 1.24;
+  }
+  .hm-hero-grid {
+    grid-template-columns: 1.12fr 0.88fr;
+    gap: 26px;
+  }
+  .hm-hero-preview-card {
+    padding: 18px;
+  }
+  .floating-badge.top-right {
+    right: 8px;
+  }
+  .floating-badge.bottom-left {
+    left: 8px;
+  }
+}
+
 @media (max-width: 1024px) {
   .hm-hero-grid {
     grid-template-columns: 1fr;

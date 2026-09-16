@@ -20,44 +20,49 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 1200px;
+  max-width: clamp(1160px, 92vw, 1440px);
+  width: 100%;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 clamp(12px, 2vw, 32px);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: clamp(6px, 0.8vw, 10px);
   text-decoration: none;
   font-weight: 800;
-  font-size: 1.25rem;
+  font-size: clamp(1.1rem, 1.25vw, 1.25rem);
   color: #0f172a;
+  flex-shrink: 0;
 }
 
 .brand img {
-  height: 32px;
+  height: clamp(26px, 2.1vw, 32px);
   width: auto;
 }
 
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: clamp(2px, 0.55vw, 8px);
+  flex-wrap: nowrap;
 }
 
 .nav-links a {
   color: #475569;
   font-weight: 500;
-  font-size: 0.88rem;
-  padding: 8px 12px;
+  font-size: clamp(0.78rem, 0.82vw, 0.88rem);
+  padding: 6px clamp(6px, 0.6vw, 12px);
   text-decoration: none;
   border-radius: 6px;
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  transition: color 0.18s ease;
+  gap: 4px;
+  white-space: nowrap; /* Tuyệt đối không rớt dòng chữ trên laptop */
+  flex-shrink: 0;
+  transition: color 0.18s ease, background 0.18s ease;
 }
 
 .nav-lock-badge {
@@ -178,21 +183,24 @@
 .nav-auth-buttons {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: clamp(6px, 0.8vw, 10px);
+  flex-shrink: 0;
 }
 
 .nav-login-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: #1e293b;
-  font-size: 0.88rem;
+  font-size: clamp(0.78rem, 0.82vw, 0.88rem);
   font-weight: 700;
   text-decoration: none;
-  padding: 8px 14px;
+  padding: 7px clamp(9px, 1vw, 14px);
   border-radius: 999px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.18s ease;
 }
 
@@ -205,15 +213,17 @@
 .nav-register-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: #ffffff;
   background: linear-gradient(135deg, #0284c7 0%, #03bfff 100%);
-  font-size: 0.88rem;
+  font-size: clamp(0.78rem, 0.82vw, 0.88rem);
   font-weight: 700;
   text-decoration: none;
-  padding: 8px 18px;
+  padding: 7px clamp(11px, 1.2vw, 18px);
   border-radius: 999px;
   box-shadow: 0 3px 12px rgba(2, 132, 199, 0.28);
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.2s ease;
 }
 
@@ -257,6 +267,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
 }
 
 .mobile-menu a {
@@ -274,7 +286,8 @@
   color: #0284c7;
 }
 
-@media (max-width: 900px) {
+/* Breakpoint for mid-size / compact laptop viewports */
+@media (max-width: 1080px) {
   .desktop-only {
     display: none !important;
   }

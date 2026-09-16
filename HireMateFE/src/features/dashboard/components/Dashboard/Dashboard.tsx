@@ -41,10 +41,12 @@ import {
   ArrowRight,
   ArrowLeft,
   Edit3,
+  BookOpen,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { onboardingService } from '../../../onboarding/api/onboarding.service';
 import { INDUSTRY_ROLES } from '../../../../shared/data/questionBank';
+import { DashboardGuideModal } from '../DashboardGuideModal/DashboardGuideModal';
 import './css/Dashboard.css';
 
 // Quick Role Suggestions
@@ -227,6 +229,9 @@ export const Dashboard: React.FC = () => {
   const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
   const [generatedEmail, setGeneratedEmail] = useState<any>(null);
   const [copiedEmail, setCopiedEmail] = useState(false);
+
+  // Tutorial Popup State (Chỉ popup 1 lần duy nhất cho tài khoản mới chưa điền đủ 100% hồ sơ)
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -416,6 +421,30 @@ export const Dashboard: React.FC = () => {
   };
 
   const completionPercent = calculateCompletion();
+
+  const accountKey = (profile.name || name || 'user')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+
+  // Tutorial Auto Popup (Chỉ popup 1 lần duy nhất cho tài khoản mới chưa điền đủ 100% hồ sơ)
+  useEffect(() => {
+    // Dọn dẹp cơ chế cũ theo ngày
+    localStorage.removeItem('hm_daily_guide_last_seen');
+
+    const seenKey = `hm_tutorial_seen_${accountKey}`;
+    const alreadySeen = localStorage.getItem(seenKey) === 'true';
+
+    // Chỉ tự động popup khi: tài khoản chưa từng xem lần nào VÀ hồ sơ chưa điền đủ 100%
+    const isProfileIncomplete = completionPercent < 100 || !profile.onboardingCompleted;
+
+    if (!alreadySeen && isProfileIncomplete) {
+      const timer = setTimeout(() => {
+        setGuideModalOpen(true);
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [accountKey, completionPercent, profile.onboardingCompleted]);
 
   // Fallback / dynamic scores for gauge
   const readinessScore =
@@ -725,9 +754,21 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
 
-        <div className="pro-member-pill">
-          <Star size={15} fill="#0284c7" color="#0284c7" />
-          <span>Pro Member</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            type="button"
+            className="dashboard-guide-trigger-btn"
+            onClick={() => setGuideModalOpen(true)}
+            title="Xem cẩm nang hướng dẫn hoàn thiện hồ sơ"
+          >
+            <BookOpen size={15} color="#0284c7" />
+            <span>Tutorial</span>
+          </button>
+
+          <div className="pro-member-pill">
+            <Star size={15} fill="#0284c7" color="#0284c7" />
+            <span>Pro Member</span>
+          </div>
         </div>
       </motion.div>
 
@@ -2161,6 +2202,16 @@ export const Dashboard: React.FC = () => {
           <span>🎉 Chúc mừng! Bạn đã hoàn thành Onboarding thành công. Đang chuyển về Bảng điều khiển...</span>
         </motion.div>
       )}
+
+      {/* User Tutorial Walkthrough Modal (Chỉ popup 1 lần cho người mới chưa điền hồ sơ) */}
+      <DashboardGuideModal
+        isOpen={guideModalOpen}
+        onClose={() => {
+          localStorage.setItem(`hm_tutorial_seen_${accountKey}`, 'true');
+          setGuideModalOpen(false);
+        }}
+        accountKey={accountKey}
+      />
     </div>
   );
 };
