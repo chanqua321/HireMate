@@ -3,21 +3,11 @@ import { MessageSquare, Search, X, Check, Clock, RefreshCw } from 'lucide-react'
 import { adminService, AdminTicketItem } from '../../shared/services/admin.service';
 import './admin.css';
 
-// ---- Fallback data ----
-const FALLBACK_TICKETS = [
-  { id: 'TKT-0091', subject: 'Không vào được tính năng phỏng vấn', user: 'an.nguyen@email.com', category: 'Bug', priority: 'high', status: 'open', created: '2026-07-27', message: 'Tôi click vào "Bắt đầu phỏng vấn" nhưng trang bị lỗi trắng. Đã thử reload nhiều lần.' },
-  { id: 'TKT-0090', subject: 'Thanh toán VNPay bị lỗi', user: 'bich.tran@email.com', category: 'Payment', priority: 'high', status: 'open', created: '2026-07-27', message: 'Bị chuyển sang trang trống sau khi thanh toán. Tài khoản bị trừ nhưng chưa nâng cấp.' },
-  { id: 'TKT-0089', subject: 'CV phân tích sai thông tin kỹ năng', user: 'cuong.le@email.com', category: 'AI', priority: 'medium', status: 'in_progress', created: '2026-07-26', message: 'AI nhận diện sai kỹ năng React thành Angular trong phần phân tích CV của tôi.' },
-  { id: 'TKT-0088', subject: 'Yêu cầu hoàn tiền', user: 'dung.pham@email.com', category: 'Billing', priority: 'medium', status: 'resolved', created: '2026-07-25', message: 'Tôi muốn hoàn tiền vì không dùng được sản phẩm do lỗi kỹ thuật.' },
-  { id: 'TKT-0087', subject: 'Câu hỏi về tính năng Career OS', user: 'giang.dang@email.com', category: 'Feature', priority: 'low', status: 'resolved', created: '2026-07-24', message: 'Career OS có thể tùy chỉnh lộ trình học không? Tôi muốn thêm mục tiêu riêng.' },
-  { id: 'TKT-0086', subject: 'Không nhận được email xác nhận', user: 'fong.vu@email.com', category: 'Account', priority: 'medium', status: 'open', created: '2026-07-24', message: 'Đã đăng ký 2 ngày nhưng không nhận được email xác nhận. Đã kiểm tra spam.' },
-];
-
 export interface TicketUI {
   id: string;
   subject: string;
   user: string;
-  category: string;
+  category?: string;
   priority: string;
   status: string;
   created: string;
@@ -32,12 +22,12 @@ const priorityBadge = (p: string) => {
 
 const statusBadge = (s: string) => {
   const map: Record<string, string> = { open: 'danger', in_progress: 'warning', resolved: 'success' };
-  const label: Record<string, string> = { open: 'Mở', in_progress: 'Đang xử lý', resolved: 'Đã giải quyết' };
+  const label: Record<string, string> = { open: 'Chờ phản hồi', in_progress: 'Đang xử lý', resolved: 'Đã giải quyết' };
   return <span className={`admin-badge ${map[s] || 'neutral'}`}>{label[s] || s}</span>;
 };
 
 const AdminTickets: React.FC = () => {
-  const [tickets, setTickets] = useState<TicketUI[]>(FALLBACK_TICKETS);
+  const [tickets, setTickets] = useState<TicketUI[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -49,21 +39,24 @@ const AdminTickets: React.FC = () => {
     setLoading(true);
     try {
       const res = await adminService.getTickets();
-      if (res.ok && res.data && res.data.length > 0) {
+      if (res.ok && Array.isArray(res.data)) {
         const mapped: TicketUI[] = res.data.map((t: AdminTicketItem) => ({
           id: t.id ? t.id.substring(0, 8).toUpperCase() : 'TKT-NEW',
-          subject: t.subject || 'Yêu cầu hỗ trợ',
-          user: t.email || 'Người dùng ẩn danh',
-          category: 'Support',
+          subject: t.subject || 'Yêu cầu hỗ trợ từ người dùng',
+          user: t.email || 'Người dùng',
+          category: 'Chung',
           priority: 'medium',
           status: t.status?.toLowerCase() === 'resolved' ? 'resolved' : (t.status?.toLowerCase() === 'in_progress' ? 'in_progress' : 'open'),
-          created: t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : '2026-07-27',
+          created: t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : '—',
           message: t.body || '',
         }));
         setTickets(mapped);
+      } else {
+        setTickets([]);
       }
     } catch (err) {
-      console.warn('Real tickets API fallback:', err);
+      console.warn('Real tickets API error:', err);
+      setTickets([]);
     } finally {
       setLoading(false);
     }
@@ -76,7 +69,7 @@ const AdminTickets: React.FC = () => {
   const filtered = tickets.filter(t =>
     (filterStatus === 'all' || t.status === filterStatus) &&
     (filterPriority === 'all' || t.priority === filterPriority) &&
-    (t.subject.toLowerCase().includes(search.toLowerCase()) || t.user.toLowerCase().includes(search.toLowerCase()))
+    (t.subject.toLowerCase().includes(search.toLowerCase()) || t.user.toLowerCase().includes(search.toLowerCase()) || t.message.toLowerCase().includes(search.toLowerCase()))
   );
 
   const updateStatus = async (id: string, status: string) => {
@@ -89,21 +82,25 @@ const AdminTickets: React.FC = () => {
     }
   };
 
+  const [replySuccessMsg, setReplySuccessMsg] = useState<string | null>(null);
+
   const handleReply = async () => {
     if (!replyText.trim() || !selected) return;
-    alert(`Đã gửi phản hồi cho ${selected.user}:\n\n${replyText}`);
     const targetId = selected.id;
+    const recipient = selected.user;
     setReplyText('');
     await updateStatus(targetId, 'resolved');
     setSelected(null);
+    setReplySuccessMsg(`Đã gửi phản hồi thành công cho ${recipient}`);
+    setTimeout(() => setReplySuccessMsg(null), 4000);
   };
 
   return (
     <div>
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 className="admin-page-title">🎫 Support Tickets</h1>
-          <p className="admin-page-subtitle">Quản lý và phản hồi các ticket hỗ trợ từ người dùng trong cơ sở dữ liệu thời gian thực.</p>
+          <h1 className="admin-page-title">🎫 Phiếu hỗ trợ khách hàng</h1>
+          <p className="admin-page-subtitle">Tiếp nhận và phản hồi các yêu cầu trợ giúp, thắc mắc từ người dùng theo chủ đề.</p>
         </div>
         <button 
           className="admin-btn admin-btn-secondary admin-btn-sm" 
@@ -115,6 +112,24 @@ const AdminTickets: React.FC = () => {
           {loading ? 'Đang tải...' : 'Làm mới API'}
         </button>
       </div>
+
+      {replySuccessMsg && (
+        <div style={{
+          background: 'rgba(16, 185, 129, 0.15)',
+          border: '1px solid #10b981',
+          color: '#34d399',
+          padding: '10px 16px',
+          borderRadius: '10px',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontWeight: 600,
+          fontSize: '0.88rem',
+        }}>
+          <Check size={16} /> {replySuccessMsg}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="admin-stats-grid">
@@ -162,41 +177,53 @@ const AdminTickets: React.FC = () => {
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Chủ đề</th>
-                  <th>Danh mục</th>
+                  <th>Mã phiếu</th>
+                  <th>Chủ đề & Người gửi</th>
+                  <th>Nội dung yêu cầu</th>
                   <th>Ưu tiên</th>
-                  <th>Ngày tạo</th>
+                  <th>Ngày gửi</th>
                   <th>Trạng thái</th>
                   <th>Hành động</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(t => (
-                  <tr key={t.id}>
-                    <td style={{ fontFamily: 'monospace', color: '#0284c7', fontWeight: 600 }}>{t.id}</td>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--admin-text)' }}>{t.subject}</div>
-                      <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem' }}>{t.user}</div>
-                    </td>
-                    <td><span className="admin-badge neutral">{t.category}</span></td>
-                    <td>{priorityBadge(t.priority)}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{t.created}</td>
-                    <td>{statusBadge(t.status)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => setSelected(t)}>
-                          <MessageSquare size={13} /> Xem
-                        </button>
-                        {t.status !== 'resolved' && (
-                          <button className="admin-btn admin-btn-success admin-btn-sm" onClick={() => updateStatus(t.id, 'resolved')}>
-                            <Check size={13} />
-                          </button>
-                        )}
-                      </div>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--admin-text-muted)' }}>
+                      Chưa có phiếu hỗ trợ nào trong hệ thống.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filtered.map(t => (
+                    <tr key={t.id}>
+                      <td style={{ fontFamily: 'monospace', color: '#0284c7', fontWeight: 600 }}>{t.id}</td>
+                      <td>
+                        <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--admin-text)' }}>{t.subject}</div>
+                        <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem' }}>{t.user}</div>
+                      </td>
+                      <td>
+                        <div style={{ maxWidth: 280, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.813rem', color: 'var(--admin-text-muted)' }}>
+                          {t.message}
+                        </div>
+                      </td>
+                      <td>{priorityBadge(t.priority)}</td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{t.created}</td>
+                      <td>{statusBadge(t.status)}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => setSelected(t)}>
+                            <MessageSquare size={13} /> Xem
+                          </button>
+                          {t.status !== 'resolved' && (
+                            <button className="admin-btn admin-btn-success admin-btn-sm" onClick={() => updateStatus(t.id, 'resolved')} title="Đánh dấu đã xử lý">
+                              <Check size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -220,7 +247,6 @@ const AdminTickets: React.FC = () => {
               <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
                 {priorityBadge(selected.priority)}
                 {statusBadge(selected.status)}
-                <span className="admin-badge neutral">{selected.category}</span>
               </div>
 
               <div style={{ background: '#F0F8FF', borderRadius: 12, padding: '1rem', marginBottom: '1.25rem', border: '1px solid rgba(3, 191, 255, 0.2)' }}>

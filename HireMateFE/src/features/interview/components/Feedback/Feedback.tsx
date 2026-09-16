@@ -59,14 +59,14 @@ export const Feedback: React.FC = () => {
 
   const r = sessionDetail
     ? {
-        overall: sessionDetail.overallScore || 85,
-        role: sessionDetail.position || 'Lập trình viên',
-        clarity: sessionDetail.clarityScore || 88,
+        overall: sessionDetail.overallScore ?? (lastResult?.overall ?? 25),
+        role: sessionDetail.position || lastResult?.role || 'Lập trình viên',
+        clarity: sessionDetail.clarityScore ?? 30,
         subs: {
-          S: sessionDetail.scoreS || 88,
-          T: sessionDetail.scoreT || 85,
-          A: sessionDetail.scoreA || 82,
-          R: sessionDetail.scoreR || 90,
+          S: sessionDetail.scoreS ?? 25,
+          T: sessionDetail.scoreT ?? 25,
+          A: sessionDetail.scoreA ?? 25,
+          R: sessionDetail.scoreR ?? 25,
         },
         date: sessionDetail.completedAt
           ? new Date(sessionDetail.completedAt).toLocaleDateString('vi-VN')
@@ -76,7 +76,7 @@ export const Feedback: React.FC = () => {
     : lastResult || defaultResult;
 
   useEffect(() => {
-    if (r.overall >= 80) {
+    if (r.overall >= 75) {
       triggerConfetti();
     }
   }, [r.overall, triggerConfetti]);
@@ -85,40 +85,78 @@ export const Feedback: React.FC = () => {
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (r.overall / 100) * circumference;
 
-  // In-depth STAR breakdown with explicit mistakes and improvement suggestions
+  // In-depth STAR breakdown with dynamic feedback adapting to user's real scores
+  const getAnalysis = (dim: 'S' | 'T' | 'A' | 'R', score: number) => {
+    if (score < 50) {
+      switch (dim) {
+        case 'S':
+          return {
+            title: 'Bối cảnh (Situation)',
+            strength: 'Đã nhận biết được câu hỏi phỏng vấn.',
+            mistake: 'Chưa mô tả được bối cảnh thực tế hoặc câu trả lời bị bỏ qua.',
+            advice: 'Nêu rõ dự án hoặc công việc cụ thể: thời gian, quy mô công ty, công nghệ sử dụng.',
+          };
+        case 'T':
+          return {
+            title: 'Nhiệm vụ (Task)',
+            strength: 'Cần xác định rõ trọng tâm nhiệm vụ.',
+            mistake: 'Chưa nêu được mục tiêu hoặc KPI cá nhân cần giải quyết.',
+            advice: 'Nêu rõ trách nhiệm cá nhân: Bạn được giao bài toán gì, thời hạn bao lâu.',
+          };
+        case 'A':
+          return {
+            title: 'Hành động (Action)',
+            strength: 'Cần đào sâu vào hành động thực thi.',
+            mistake: 'Thiếu các bước kỹ thuật hoặc hành động cụ thể bạn trực tiếp làm.',
+            advice: 'Liệt kê 3 hành động cụ thể bạn đã triển khai theo thứ tự ưu tiên.',
+          };
+        case 'R':
+          return {
+            title: 'Kết quả (Result)',
+            strength: 'Cần có số liệu đo lường đầu ra.',
+            mistake: 'Chưa có kết quả hoặc bài học kinh nghiệm sau tình huống.',
+            advice: 'Đưa ra con số cụ thể: % cải thiện, thời gian tiết kiệm, phản hồi của khách hàng.',
+          };
+      }
+    }
+    // Good scores >= 50
+    switch (dim) {
+      case 'S':
+        return {
+          title: 'Bối cảnh (Situation)',
+          strength: 'Nêu bật được quy mô hệ thống, thách thức về trải nghiệm người dùng và tính cấp bách của dự án.',
+          mistake: 'Có thể xác định rõ hơn mốc thời gian cụ thể diễn ra dự án và giới hạn tài nguyên ban đầu.',
+          advice: 'Mở đầu ngắn gọn bằng công thức: "Vào quý 3 năm ngoái, khi hệ thống của công ty đạt mốc..."',
+        };
+      case 'T':
+        return {
+          title: 'Nhiệm vụ (Task)',
+          strength: 'Xác định mục tiêu rõ ràng và phân định rành mạch trách nhiệm cá nhân.',
+          mistake: 'Đôi khi dùng đại từ chung "Nhóm chúng tôi" thay vì nhấn mạnh phần bạn độc lập phụ trách.',
+          advice: 'Nhấn mạnh vai trò độc lập: "Với tư cách là người chịu trách nhiệm chính, nhiệm vụ của tôi là..."',
+        };
+      case 'A':
+        return {
+          title: 'Hành động (Action)',
+          strength: 'Trình bày logic các bước kỹ thuật và giải pháp xử lý vấn đề hiệu quả.',
+          mistake: 'Cần đào sâu thêm cách xử lý các trường hợp ngoại lệ (edge-cases).',
+          advice: 'Trình bày theo tiến trình 3 bước: Phân tích nguyên nhân → Thử nghiệm giải pháp → Triển khai an toàn.',
+        };
+      case 'R':
+        return {
+          title: 'Kết quả (Result)',
+          strength: 'Đưa ra con số định lượng thuyết phục và minh chứng rõ ràng cho hiệu quả công việc.',
+          mistake: 'Có thể liên kết kết quả kỹ thuật chặt chẽ hơn với giá trị kinh doanh của tổ chức.',
+          advice: 'Bổ sung câu kết: "Nhờ giải pháp này, hiệu năng tăng 30% và cải thiện trực tiếp trải nghiệm người dùng."',
+        };
+    }
+  };
+
   const starAnalysis = [
-    {
-      letter: 'S',
-      title: 'Bối cảnh (Situation)',
-      score: r.subs.S,
-      strength: 'Nêu bật được quy mô hệ thống, thách thức về trải nghiệm người dùng và tính cấp bách của dự án.',
-      mistake: 'Chưa xác định rõ mốc thời gian cụ thể diễn ra dự án và giới hạn tài nguyên ban đầu của nhóm.',
-      advice: 'Mở đầu ngắn gọn bằng công thức: "Vào quý 3 năm ngoái, khi hệ thống của công ty đạt mốc 100.000 người dùng hàng ngày..."',
-    },
-    {
-      letter: 'T',
-      title: 'Nhiệm vụ (Task)',
-      score: r.subs.T,
-      strength: 'Xác định mục tiêu rõ ràng: Phải giảm thời gian tải trang dưới 1.5s và đạt chuẩn Core Web Vitals.',
-      mistake: 'Dùng nhiều đại từ chung "Nhóm chúng tôi" thay vì phân định rành mạch trách nhiệm cá nhân.',
-      advice: 'Nhấn mạnh vai trò độc lập: "Với tư cách là lập trình viên chính, trách nhiệm của tôi là tái cấu trúc luồng render..."',
-    },
-    {
-      letter: 'A',
-      title: 'Hành động (Action)',
-      score: r.subs.A,
-      strength: 'Trình bày logic các bước kỹ thuật: Áp dụng code-splitting, tối ưu bundle và lưu cache hiệu quả.',
-      mistake: 'Chưa đào sâu vào cách xử lý khi gặp sự cố ngoài dự kiến (edge-cases) và cách phối hợp cùng đội ngũ Backend.',
-      advice: 'Trình bày theo tiến trình 3 bước: Phân tích Profile hiệu năng → Thử nghiệm A/B Testing → Triển khai an toàn với Feature Flag.',
-    },
-    {
-      letter: 'R',
-      title: 'Kết quả (Result)',
-      score: r.subs.R,
-      strength: 'Đưa ra con số định lượng ấn tượng và thuyết phục: Tốc độ tải trang tăng 42% và Core Web Vitals đạt chuẩn xanh.',
-      mistake: 'Chưa liên kết kết quả kỹ thuật với giá trị kinh doanh (như tỷ lệ giữ chân khách hàng hoặc doanh thu).',
-      advice: 'Bổ sung câu kết: "Nhờ tối ưu này, tỷ lệ thoát trang giảm 15% và đóng góp trực tiếp vào mức tăng trưởng 8% doanh thu quý."',
-    },
+    { letter: 'S', score: r.subs.S, ...getAnalysis('S', r.subs.S) },
+    { letter: 'T', score: r.subs.T, ...getAnalysis('T', r.subs.T) },
+    { letter: 'A', score: r.subs.A, ...getAnalysis('A', r.subs.A) },
+    { letter: 'R', score: r.subs.R, ...getAnalysis('R', r.subs.R) },
   ];
 
   return (
@@ -141,7 +179,11 @@ export const Feedback: React.FC = () => {
             Phản hồi phỏng vấn — <span>{r.role}</span>
           </h1>
           <p className="feedback-hero-desc">
-            Kết quả xuất sắc! Bạn thuộc <strong>Top 12%</strong> ứng viên thể hiện tốt nhất cấu trúc STAR chuẩn tuyển dụng quốc tế.
+            {r.overall >= 80
+              ? 'Kết quả xuất sắc! Bạn thuộc Top 15% ứng viên thể hiện tốt nhất cấu trúc STAR chuẩn tuyển dụng quốc tế.'
+              : r.overall >= 60
+              ? 'Kết quả khá tốt! Bạn đã nắm được cấu trúc phỏng vấn, hãy bổ sung thêm các số liệu định lượng để đạt điểm cao hơn.'
+              : 'Điểm đánh giá còn thấp hoặc bạn chưa hoàn thành đầy đủ câu trả lời. Hãy luyện tập lại và nhập câu trả lời chi tiết theo phương pháp STAR!'}
           </p>
 
           <div className="feedback-hero-actions">

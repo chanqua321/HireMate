@@ -98,7 +98,7 @@ export const Header: React.FC = () => {
           {/* Full Navigation Links */}
           <div className="nav-links desktop-only">
             <Link to="/" className={isActive('/') ? 'active' : ''}>
-              Tính năng
+              Trang chủ
             </Link>
             <Link
               to="/interview-setup"
@@ -109,43 +109,21 @@ export const Header: React.FC = () => {
               {!isLoggedIn && <Lock size={12} className="nav-lock-badge" />}
             </Link>
             <Link
-              to="/questions"
-              className={isActive('/questions') ? 'active' : ''}
-              onClick={(e) => handleProtectedClick(e, '/questions', 'Ngân hàng câu hỏi')}
-            >
-              Ngân hàng câu hỏi
-              {!isLoggedIn && <Lock size={12} className="nav-lock-badge" />}
-            </Link>
-            <Link
               to="/career"
               className={isActive('/career') ? 'active' : ''}
-              onClick={(e) => handleProtectedClick(e, '/career', 'Hệ điều hành sự nghiệp Career OS')}
+              onClick={(e) => handleProtectedClick(e, '/career', 'Lộ trình phát triển')}
             >
-              Career OS
+              Lộ trình phát triển
               {!isLoggedIn && <Lock size={12} className="nav-lock-badge" />}
             </Link>
-            {/* Các phân hệ chỉ hiển thị khi đã đăng nhập */}
+            {/* Các phân hệ hiển thị khi đã đăng nhập */}
             {isLoggedIn && (
-              <>
-                <Link
-                  to="/leaderboard"
-                  className={isActive('/leaderboard') ? 'active' : ''}
-                >
-                  Bảng vàng
-                </Link>
-                <Link
-                  to="/blog"
-                  className={isActive('/blog') ? 'active' : ''}
-                >
-                  Cẩm nang
-                </Link>
-                <Link
-                  to="/resources"
-                  className={isActive('/resources') ? 'active' : ''}
-                >
-                  Tài nguyên
-                </Link>
-              </>
+              <Link
+                to="/resources"
+                className={isActive('/resources') ? 'active' : ''}
+              >
+                Tài nguyên
+              </Link>
             )}
             <Link
               to="/pricing"
@@ -248,23 +226,7 @@ export const Header: React.FC = () => {
                           <User size={16} color="#64748b" /> Hồ sơ & Kỹ năng
                         </Link>
 
-                        <Link
-                          to="/dashboard?view=onboarding"
-                          onClick={() => setDropdownOpen(false)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '9px 12px',
-                            borderRadius: '10px',
-                            color: '#1e293b',
-                            fontSize: '0.86rem',
-                            fontWeight: 500,
-                            textDecoration: 'none',
-                          }}
-                        >
-                          <Compass size={16} color="#0284c7" /> Lộ trình Onboarding (3 Bước)
-                        </Link>
+                        
 
                         <Link
                           to="/dashboard?tab=scan"
@@ -461,7 +423,7 @@ export const Header: React.FC = () => {
           >
             <div className="panel">
               <Link to="/" className={isActive('/') ? 'active' : ''}>
-                Tính năng
+                Trang chủ
               </Link>
               <Link
                 to="/interview-setup"
@@ -470,16 +432,6 @@ export const Header: React.FC = () => {
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span>Phỏng vấn AI</span>
-                  {!isLoggedIn && <Lock size={14} color="#94a3b8" />}
-                </div>
-              </Link>
-              <Link
-                to="/questions"
-                className={isActive('/questions') ? 'active' : ''}
-                onClick={(e) => handleProtectedClick(e, '/questions', 'Ngân hàng câu hỏi')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>Ngân hàng câu hỏi</span>
                   {!isLoggedIn && <Lock size={14} color="#94a3b8" />}
                 </div>
               </Link>
@@ -506,19 +458,7 @@ export const Header: React.FC = () => {
                     to="/career"
                     style={{ padding: '10px 14px', color: '#1e293b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}
                   >
-                    <Compass size={16} color="#03BFFF" /> Hệ điều hành Career OS
-                  </Link>
-                  <Link
-                    to="/leaderboard"
-                    style={{ padding: '10px 14px', color: '#1e293b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}
-                  >
-                    <Award size={16} color="#eab308" /> Bảng vàng & Huy hiệu
-                  </Link>
-                  <Link
-                    to="/blog"
-                    style={{ padding: '10px 14px', color: '#1e293b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}
-                  >
-                    <BookOpen size={16} color="#0284c7" /> Cẩm nang nghề nghiệp
+                    <Compass size={16} color="#03BFFF" /> Lộ trình phát triển
                   </Link>
                   <Link
                     to="/resources"

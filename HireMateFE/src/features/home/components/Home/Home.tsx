@@ -659,16 +659,7 @@ export const Home: React.FC = () => {
           </motion.div>
         </div>
 
-        <div className="hm-scroll-explore-indicator">
-          <span className="explore-text">Cuộn chuột để khám phá chiều sâu</span>
-          <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-            className="explore-mouse-icon"
-          >
-            <ChevronDown size={20} />
-          </motion.div>
-        </div>
+        
       </section>
 
       {/* ===================== SECTION 2: LUSION-STYLE KINETIC STATEMENT & REEL ===================== */}
@@ -1166,10 +1157,9 @@ export const Home: React.FC = () => {
                 viewport={{ once: false, amount: 0.15 }}
                 transition={{ duration: 0.45, delay: idx * 0.06, ease: [0.16, 1, 0.3, 1] }}
               >
-                <Link
-                  to="/interview-setup"
+                <div
                   className="track-card-clean"
-                  data-cursor="Luyện tập 👉"
+                  style={{ cursor: 'default' }}
                 >
                   <div className="track-top-row">
                     <div
@@ -1195,11 +1185,11 @@ export const Home: React.FC = () => {
 
                   <div className="track-footer">
                     <span className="track-badge-count">{track.questionsCount}</span>
-                    <div className="track-arrow-circle" style={{ color: track.color }}>
+                    <div className="track-arrow-circle" style={{ color: track.color, pointerEvents: 'none' }}>
                       <ArrowRight size={16} />
                     </div>
                   </div>
-                </Link>
+                </div>
               </motion.div>
             ))}
           </div>

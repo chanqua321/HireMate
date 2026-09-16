@@ -13,6 +13,8 @@ export interface Profile {
   onboardingCompleted?: boolean;
   email?: string;
   phone?: string;
+  isPremium?: boolean;
+  currentPlanCode?: string;
 }
 
 export interface Question {

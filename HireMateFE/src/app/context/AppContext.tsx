@@ -179,6 +179,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             bio: beData.bio !== null && beData.bio !== undefined ? beData.bio : prev.bio,
             education: mappedEducation,
             skills: mappedSkills,
+            isPremium: Boolean(beData.isPremium),
+            currentPlanCode: beData.currentPlanCode || (beData.isPremium ? 'pro' : 'free'),
           };
           safeStoreJSON(STORAGE_KEYS.PROFILE, next);
           return next;

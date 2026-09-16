@@ -1,134 +1,65 @@
 import React, { useState, useEffect } from 'react';
-import { Palette, Check, RotateCcw, Sparkles, Moon, Sun, Sliders, Eye } from 'lucide-react';
-import { AdminThemeConfig } from './AdminLayout';
+import {
+  Sliders, Check, Server, Shield, AlertTriangle, Save, Clock, Info
+} from 'lucide-react';
 import './admin.css';
 
-interface ThemePresetOption {
-  id: AdminThemeConfig['preset'];
-  name: string;
-  subtitle: string;
-  description: string;
-  mode: 'light' | 'dark';
-  primary: string;
-  accent: string;
-  bg: string;
-  cardBg: string;
-  tag: string;
+interface SystemConfigState {
+  platformName: string;
+  version: string;
+  supportEmail: string;
+  hotline: string;
+  freeMonthlyInterviews: number;
+  maxInterviewDurationMinutes: number;
+  starThreshold: number;
+  maxQuestionsPerSession: number;
+  requireEmailConfirmation: boolean;
+  jwtExpiryDays: number;
+  enableGoogleAuth: boolean;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  autoBackupDaily: boolean;
 }
 
-const PRESETS: ThemePresetOption[] = [
-  {
-    id: 'ice-blue',
-    name: 'Luminous Ice-Blue',
-    subtitle: 'Chuẩn thương hiệu HireMate',
-    description: 'Tông xanh băng sáng dịu mát, thanh thoát, nịnh mắt và tối ưu cho công việc hàng ngày.',
-    mode: 'light',
-    primary: '#0085FF',
-    accent: '#03BFFF',
-    bg: '#F4F8FC',
-    cardBg: '#FFFFFF',
-    tag: 'Mặc định ⭐',
-  },
-  {
-    id: 'cyber-dark',
-    name: 'Cyber Dark Cockpit',
-    subtitle: 'Chế độ tối công nghệ',
-    description: 'Nền đen sâu thẳm kết hợp viền phát sáng Neon Cyan, chống mỏi mắt ban đêm.',
-    mode: 'dark',
-    primary: '#00F2FE',
-    accent: '#4FACFE',
-    bg: '#0B1120',
-    cardBg: '#111827',
-    tag: 'Dark Mode 🌌',
-  },
-  {
-    id: 'sapphire',
-    name: 'Royal Sapphire',
-    subtitle: 'Xanh dương hoàng gia',
-    description: 'Phong cách doanh nghiệp cao cấp (Enterprise), tạo cảm giác tin cậy và chuyên nghiệp vững chãi.',
-    mode: 'light',
-    primary: '#2563EB',
-    accent: '#3B82F6',
-    bg: '#F0F4FA',
-    cardBg: '#FFFFFF',
-    tag: 'Enterprise 💎',
-  },
-  {
-    id: 'emerald',
-    name: 'Emerald Mint',
-    subtitle: 'Xanh ngọc lục bảo',
-    description: 'Tươi sáng, dịu mắt, mang năng lượng phát triển và sinh thái công nghệ sạch.',
-    mode: 'light',
-    primary: '#059669',
-    accent: '#10B981',
-    bg: '#F0FDF4',
-    cardBg: '#FFFFFF',
-    tag: 'Fresh 🍃',
-  },
-  {
-    id: 'sunset',
-    name: 'Sunset Coral',
-    subtitle: 'Cam san hô ấm áp',
-    description: 'Tràn đầy sinh lực, nổi bật, thúc đẩy hành động và gia tăng sự tập trung xử lý dữ liệu.',
-    mode: 'light',
-    primary: '#EA580C',
-    accent: '#F97316',
-    bg: '#FFF7ED',
-    cardBg: '#FFFFFF',
-    tag: 'Warm 🌅',
-  },
-];
-
-const DEFAULT_CONFIG: AdminThemeConfig = {
-  preset: 'ice-blue',
-  mode: 'light',
-  primaryColor: '#0085FF',
-  accentColor: '#03BFFF',
+const DEFAULT_SYSTEM_CONFIG: SystemConfigState = {
+  platformName: 'HireMate - Nền tảng Luyện Phỏng Vấn AI Thông Minh',
+  version: 'v2.4.0 (SWP-Release)',
+  supportEmail: 'support@hiremate.vn',
+  hotline: '1900 6868',
+  freeMonthlyInterviews: 3,
+  maxInterviewDurationMinutes: 30,
+  starThreshold: 6.5,
+  maxQuestionsPerSession: 5,
+  requireEmailConfirmation: true,
+  jwtExpiryDays: 7,
+  enableGoogleAuth: true,
+  maintenanceMode: false,
+  maintenanceMessage: 'Hệ thống HireMate đang bảo trì định kỳ để nâng cấp mô hình AI đánh giá phỏng vấn. Vui lòng quay lại sau ít phút.',
+  autoBackupDaily: true,
 };
 
 const AdminConfig: React.FC = () => {
-  const [config, setConfig] = useState<AdminThemeConfig>(() => {
+  // Đảm bảo đưa giao diện về lại 1 màu chuẩn duy nhất Luminous Ice-Blue
+  useEffect(() => {
+    localStorage.removeItem('hm_admin_theme_config');
+  }, []);
+
+  // System config state
+  const [systemConfig, setSystemConfig] = useState<SystemConfigState>(() => {
     try {
-      const saved = localStorage.getItem('hm_admin_theme_config');
-      return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
+      const saved = localStorage.getItem('hm_system_config');
+      return saved ? { ...DEFAULT_SYSTEM_CONFIG, ...JSON.parse(saved) } : DEFAULT_SYSTEM_CONFIG;
     } catch {
-      return DEFAULT_CONFIG;
+      return DEFAULT_SYSTEM_CONFIG;
     }
   });
 
-  const [customPrimary, setCustomPrimary] = useState(config.primaryColor || '#0085FF');
-  const [customAccent, setCustomAccent] = useState(config.accentColor || '#03BFFF');
-  const [customMode, setCustomMode] = useState<'light' | 'dark'>(config.mode || 'light');
-  const [copiedNotice, setCopiedNotice] = useState(false);
+  const [sysSaveNotice, setSysSaveNotice] = useState(false);
 
-  const applyTheme = (newConfig: AdminThemeConfig) => {
-    setConfig(newConfig);
-    localStorage.setItem('hm_admin_theme_config', JSON.stringify(newConfig));
-    window.dispatchEvent(new CustomEvent('hm-admin-theme-changed', { detail: newConfig }));
-    setCopiedNotice(true);
-    setTimeout(() => setCopiedNotice(false), 2500);
-  };
-
-  const handleSelectPreset = (p: ThemePresetOption) => {
-    applyTheme({
-      preset: p.id,
-      mode: p.mode,
-      primaryColor: p.primary,
-      accentColor: p.accent,
-    });
-  };
-
-  const handleApplyCustom = () => {
-    applyTheme({
-      preset: 'custom',
-      mode: customMode,
-      primaryColor: customPrimary,
-      accentColor: customAccent,
-    });
-  };
-
-  const handleReset = () => {
-    applyTheme(DEFAULT_CONFIG);
+  const handleSaveSystemConfig = () => {
+    localStorage.setItem('hm_system_config', JSON.stringify(systemConfig));
+    setSysSaveNotice(true);
+    setTimeout(() => setSysSaveNotice(false), 2500);
   };
 
   return (
@@ -137,24 +68,25 @@ const AdminConfig: React.FC = () => {
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 className="admin-page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <Palette size={26} color="var(--admin-primary)" />
-            Cấu hình Giao diện Quản trị
+            <Sliders size={26} color="var(--admin-primary)" />
+            Cấu hình Hệ thống Quản trị
           </h1>
           <p className="admin-page-subtitle">
-            Tùy biến phong cách màu sắc, độ tương phản và giao diện hiển thị cho Admin Dashboard.
+            Thiết lập quy tắc vận hành dự án, hạn mức phỏng vấn, chính sách bảo mật và chế độ bảo trì hệ thống.
           </p>
         </div>
 
         <button
-          className="admin-btn admin-btn-secondary"
-          onClick={handleReset}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          type="button"
+          className="admin-btn admin-btn-primary"
+          onClick={handleSaveSystemConfig}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.4rem' }}
         >
-          <RotateCcw size={15} /> Đặt lại mặc định
+          <Save size={16} /> Lưu cấu hình hệ thống
         </button>
       </div>
 
-      {copiedNotice && (
+      {sysSaveNotice && (
         <div style={{
           background: 'rgba(16, 185, 129, 0.15)',
           border: '1px solid rgba(16, 185, 129, 0.3)',
@@ -169,238 +101,215 @@ const AdminConfig: React.FC = () => {
           fontSize: '0.9rem',
           animation: 'fadeInUp 0.3s ease'
         }}>
-          <Check size={18} /> Đã áp dụng giao diện thành công cho toàn bộ hệ thống!
+          <Check size={18} /> Đã lưu thông số cấu hình hệ thống thành công!
         </div>
       )}
 
-      {/* Preset Theme Selection Grid */}
-      <div style={{ marginBottom: '2.5rem' }}>
-        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--admin-text-primary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Sparkles size={18} color="var(--admin-primary)" />
-          Bộ sưu tập Theme cài sẵn (Presets)
-        </h2>
-        <p style={{ fontSize: '0.875rem', color: 'var(--admin-text-muted)', marginBottom: '1.25rem' }}>
-          Nhấp chuột để đổi giao diện tức thì. Cấu hình được lưu tự động trên trình duyệt.
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
-          {PRESETS.map((p) => {
-            const isSelected = config.preset === p.id;
-            return (
-              <div
-                key={p.id}
-                onClick={() => handleSelectPreset(p)}
-                style={{
-                  background: 'var(--admin-card-bg)',
-                  borderRadius: 16,
-                  border: isSelected ? `2px solid ${p.accent}` : '1px solid var(--admin-card-border)',
-                  padding: '1.25rem',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: isSelected
-                    ? `0 12px 30px ${p.accent}25, 0 2px 8px rgba(0,0,0,0.04)`
-                    : 'var(--admin-shadow)',
-                  transform: isSelected ? 'translateY(-3px)' : 'none',
-                }}
-              >
-                {/* Header of card */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
-                  <span className="admin-badge neutral" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
-                    {p.tag}
-                  </span>
-                  {isSelected && (
-                    <span style={{
-                      background: p.accent,
-                      color: '#FFFFFF',
-                      borderRadius: 999,
-                      padding: '0.2rem 0.6rem',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem'
-                    }}>
-                      <Check size={12} /> Đang dùng
-                    </span>
-                  )}
-                </div>
-
-                {/* Color Palette Preview Bar */}
-                <div style={{
-                  height: 48,
-                  borderRadius: 10,
-                  background: p.bg,
-                  border: `1px solid ${p.accent}30`,
-                  padding: '6px 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '1rem',
-                  boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)'
-                }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: p.primary, border: '2px solid #fff', boxShadow: '0 2px 5px rgba(0,0,0,0.15)' }} title="Primary Color" />
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: p.accent, border: '2px solid #fff', boxShadow: '0 2px 5px rgba(0,0,0,0.15)' }} title="Accent Color" />
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: p.cardBg, border: `1px solid ${p.accent}40` }} title="Card Background" />
-                  <span style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 600, color: p.mode === 'dark' ? '#CBD5E1' : '#475569' }}>
-                    {p.mode === 'dark' ? '🌙 Dark' : '☀️ Light'}
-                  </span>
-                </div>
-
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--admin-text-primary)', margin: '0 0 0.25rem' }}>
-                  {p.name}
-                </h3>
-                <div style={{ fontSize: '0.8rem', color: 'var(--admin-primary)', fontWeight: 600, marginBottom: '0.5rem' }}>
-                  {p.subtitle}
-                </div>
-                <p style={{ fontSize: '0.825rem', color: 'var(--admin-text-muted)', lineHeight: 1.5, margin: 0 }}>
-                  {p.description}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Live Mini Preview Box */}
-      <div className="admin-card" style={{ marginBottom: '2.5rem' }}>
-        <div className="admin-card-header">
-          <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Eye size={18} color="var(--admin-primary)" />
-            Khung xem trước trực quan (Live Mini Preview)
-          </h3>
-          <span className="admin-badge info">Mô phỏng Dashboard</span>
-        </div>
-
-        <div className="admin-card-body" style={{ background: 'var(--admin-bg)', borderRadius: '0 0 16px 16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-            <div className="admin-stat-card" style={{ padding: '1rem' }}>
-              <div className="admin-stat-value" style={{ fontSize: '1.4rem' }}>5 Users</div>
-              <div className="admin-stat-label">Tổng người dùng</div>
+      {/* SWP SYSTEM CONFIGURATION SECTIONS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* Section 1: Thông tin chung */}
+        <div className="admin-card">
+          <div className="admin-card-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Server size={18} color="var(--admin-primary)" />
+            <h3 className="admin-card-title">1. Thông tin chung nền tảng</h3>
+          </div>
+          <div className="admin-card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+            <div className="admin-form-group">
+              <label className="admin-label">Tên nền tảng</label>
+              <input
+                className="admin-input"
+                value={systemConfig.platformName}
+                onChange={(e) => setSystemConfig({ ...systemConfig, platformName: e.target.value })}
+              />
             </div>
-            <div className="admin-stat-card" style={{ padding: '1rem' }}>
-              <div className="admin-stat-value" style={{ fontSize: '1.4rem' }}>98.0 / 10</div>
-              <div className="admin-stat-label">Điểm STAR trung bình</div>
+            <div className="admin-form-group">
+              <label className="admin-label">Phiên bản phát hành (Build Version)</label>
+              <input
+                className="admin-input"
+                value={systemConfig.version}
+                onChange={(e) => setSystemConfig({ ...systemConfig, version: e.target.value })}
+              />
             </div>
-            <div className="admin-stat-card" style={{ padding: '1rem' }}>
-              <div className="admin-stat-value" style={{ fontSize: '1.4rem', color: '#059669' }}>₫259.7M</div>
-              <div className="admin-stat-label">Doanh thu tích lũy</div>
+            <div className="admin-form-group">
+              <label className="admin-label">Email hỗ trợ & kỹ thuật</label>
+              <input
+                className="admin-input"
+                type="email"
+                value={systemConfig.supportEmail}
+                onChange={(e) => setSystemConfig({ ...systemConfig, supportEmail: e.target.value })}
+              />
+            </div>
+            <div className="admin-form-group">
+              <label className="admin-label">Hotline hỗ trợ</label>
+              <input
+                className="admin-input"
+                value={systemConfig.hotline}
+                onChange={(e) => setSystemConfig({ ...systemConfig, hotline: e.target.value })}
+              />
             </div>
           </div>
-
-          <div className="admin-card" style={{ padding: 0 }}>
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Tài khoản</th>
-                  <th>Gói</th>
-                  <th>Trạng thái</th>
-                  <th>Hành động</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>
-                    <div style={{ fontWeight: 600, color: 'var(--admin-text-primary)' }}>Admin HireMate</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>admin@gmail.com</div>
-                  </td>
-                  <td><span className="admin-badge purple">Super Admin</span></td>
-                  <td><span className="admin-badge success">Hoạt động</span></td>
-                  <td>
-                    <button className="admin-btn admin-btn-primary admin-btn-sm">Chi tiết</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Advanced Custom Theme Panel */}
-      <div className="admin-card">
-        <div className="admin-card-header">
-          <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Sliders size={18} color="var(--admin-primary)" />
-            Tùy chỉnh màu sắc nâng cao (Custom Palette)
-          </h3>
-          <span className="admin-badge neutral">Dành riêng cho Admin</span>
         </div>
 
-        <div className="admin-card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
-            {/* Primary color picker */}
-            <div>
-              <label className="admin-label" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                Màu thương hiệu chính (Primary Color)
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <input
-                  type="color"
-                  value={customPrimary}
-                  onChange={(e) => setCustomPrimary(e.target.value)}
-                  style={{ width: 44, height: 44, padding: 0, borderRadius: 10, border: 'none', cursor: 'pointer' }}
-                />
-                <input
-                  className="admin-input"
-                  value={customPrimary}
-                  onChange={(e) => setCustomPrimary(e.target.value)}
-                  placeholder="#0085FF"
-                  style={{ flex: 1, fontFamily: 'monospace' }}
-                />
-              </div>
+        {/* Section 2: Quy tắc phỏng vấn & Hạn mức */}
+        <div className="admin-card">
+          <div className="admin-card-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Clock size={18} color="#3b82f6" />
+            <h3 className="admin-card-title">2. Quy tắc nghiệp vụ & Hạn mức phỏng vấn AI</h3>
+          </div>
+          <div className="admin-card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+            <div className="admin-form-group">
+              <label className="admin-label">Số lượt phỏng vấn miễn phí / tháng (Free Tier)</label>
+              <input
+                className="admin-input"
+                type="number"
+                min={1}
+                max={20}
+                value={systemConfig.freeMonthlyInterviews}
+                onChange={(e) => setSystemConfig({ ...systemConfig, freeMonthlyInterviews: Number(e.target.value) })}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', marginTop: '4px', display: 'block' }}>
+                Giới hạn số phiên dành cho tài khoản ứng viên gói Free.
+              </span>
             </div>
-
-            {/* Accent color picker */}
-            <div>
-              <label className="admin-label" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                Màu nhấn phát sáng (Accent Color)
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <input
-                  type="color"
-                  value={customAccent}
-                  onChange={(e) => setCustomAccent(e.target.value)}
-                  style={{ width: 44, height: 44, padding: 0, borderRadius: 10, border: 'none', cursor: 'pointer' }}
-                />
-                <input
-                  className="admin-input"
-                  value={customAccent}
-                  onChange={(e) => setCustomAccent(e.target.value)}
-                  placeholder="#03BFFF"
-                  style={{ flex: 1, fontFamily: 'monospace' }}
-                />
-              </div>
+            <div className="admin-form-group">
+              <label className="admin-label">Thời gian tối đa 1 phiên phỏng vấn (Phút)</label>
+              <input
+                className="admin-input"
+                type="number"
+                min={10}
+                max={90}
+                value={systemConfig.maxInterviewDurationMinutes}
+                onChange={(e) => setSystemConfig({ ...systemConfig, maxInterviewDurationMinutes: Number(e.target.value) })}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', marginTop: '4px', display: 'block' }}>
+                Hệ thống sẽ tự động tổng kết điểm khi hết thời gian này.
+              </span>
             </div>
-
-            {/* Mode selector */}
-            <div>
-              <label className="admin-label" style={{ display: 'block', marginBottom: '0.5rem' }}>
-                Chế độ nền (Background Mode)
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setCustomMode('light')}
-                  className={`admin-btn ${customMode === 'light' ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
-                >
-                  <Sun size={15} /> Sáng
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCustomMode('dark')}
-                  className={`admin-btn ${customMode === 'dark' ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
-                >
-                  <Moon size={15} /> Tối
-                </button>
-              </div>
+            <div className="admin-form-group">
+              <label className="admin-label">Ngưỡng điểm STAR đạt chuẩn (Thang 10)</label>
+              <input
+                className="admin-input"
+                type="number"
+                step="0.1"
+                min={1}
+                max={10}
+                value={systemConfig.starThreshold}
+                onChange={(e) => setSystemConfig({ ...systemConfig, starThreshold: Number(e.target.value) })}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', marginTop: '4px', display: 'block' }}>
+                Điểm STAR tối thiểu để được cấp chứng nhận vượt qua phiên phỏng vấn.
+              </span>
+            </div>
+            <div className="admin-form-group">
+              <label className="admin-label">Số câu hỏi tối đa trong 1 phiên</label>
+              <input
+                className="admin-input"
+                type="number"
+                min={3}
+                max={15}
+                value={systemConfig.maxQuestionsPerSession}
+                onChange={(e) => setSystemConfig({ ...systemConfig, maxQuestionsPerSession: Number(e.target.value) })}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', marginTop: '4px', display: 'block' }}>
+                AI sẽ chủ động điều phối lượt hỏi dựa theo chỉ số này.
+              </span>
             </div>
           </div>
+        </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-            <button className="admin-btn admin-btn-primary" onClick={handleApplyCustom} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Check size={16} /> Áp dụng cấu hình tùy chỉnh
+        {/* Section 3: Chính sách bảo mật & Xác thực */}
+        <div className="admin-card">
+          <div className="admin-card-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Shield size={18} color="#10b981" />
+            <h3 className="admin-card-title">3. Chính sách bảo mật & Xác thực tài khoản</h3>
+          </div>
+          <div className="admin-card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+            <div className="admin-form-group">
+              <label className="admin-label">Thời hạn phiên đăng nhập (JWT Expiry - Ngày)</label>
+              <input
+                className="admin-input"
+                type="number"
+                min={1}
+                max={30}
+                value={systemConfig.jwtExpiryDays}
+                onChange={(e) => setSystemConfig({ ...systemConfig, jwtExpiryDays: Number(e.target.value) })}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontSize: '0.875rem', color: 'var(--admin-text)' }}>
+                <input
+                  type="checkbox"
+                  checked={systemConfig.requireEmailConfirmation}
+                  onChange={(e) => setSystemConfig({ ...systemConfig, requireEmailConfirmation: e.target.checked })}
+                  style={{ width: 18, height: 18, accentColor: 'var(--admin-primary)' }}
+                />
+                <span>Bắt buộc xác nhận Email trước khi bắt đầu phỏng vấn</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontSize: '0.875rem', color: 'var(--admin-text)' }}>
+                <input
+                  type="checkbox"
+                  checked={systemConfig.enableGoogleAuth}
+                  onChange={(e) => setSystemConfig({ ...systemConfig, enableGoogleAuth: e.target.checked })}
+                  style={{ width: 18, height: 18, accentColor: 'var(--admin-primary)' }}
+                />
+                <span>Cho phép đăng nhập nhanh qua Google OAuth 2.0</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Vận hành & Bảo trì */}
+        <div className="admin-card" style={{ borderColor: systemConfig.maintenanceMode ? '#ef4444' : 'var(--admin-border)' }}>
+          <div className="admin-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle size={18} color={systemConfig.maintenanceMode ? '#ef4444' : '#f59e0b'} />
+              <h3 className="admin-card-title">4. Vận hành sàn & Chế độ bảo trì hệ thống</h3>
+            </div>
+            <span className={`admin-badge ${systemConfig.maintenanceMode ? 'danger' : 'success'}`}>
+              {systemConfig.maintenanceMode ? 'ĐANG BẢO TRÌ' : 'HOẠT ĐỘNG BÌNH THƯỜNG'}
+            </span>
+          </div>
+          <div className="admin-card-body">
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontSize: '0.92rem', fontWeight: 650, color: systemConfig.maintenanceMode ? '#ef4444' : 'var(--admin-text)' }}>
+                <input
+                  type="checkbox"
+                  checked={systemConfig.maintenanceMode}
+                  onChange={(e) => setSystemConfig({ ...systemConfig, maintenanceMode: e.target.checked })}
+                  style={{ width: 20, height: 20, accentColor: '#ef4444' }}
+                />
+                <span>Kích hoạt chế độ bảo trì hệ thống (Maintenance Mode)</span>
+              </label>
+              <span style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', display: 'block', marginLeft: '2.2rem', marginTop: '4px' }}>
+                Khi bật, thí sinh sẽ nhận thông báo bảo trì và tạm thời không thể bắt đầu phiên phỏng vấn mới.
+              </span>
+            </div>
+
+            <div className="admin-form-group">
+              <label className="admin-label">Thông điệp bảo trì hiển thị cho người dùng</label>
+              <textarea
+                className="admin-textarea"
+                rows={3}
+                value={systemConfig.maintenanceMessage}
+                onChange={(e) => setSystemConfig({ ...systemConfig, maintenanceMessage: e.target.value })}
+              />
+            </div>
+
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--admin-border)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontSize: '0.875rem', color: 'var(--admin-text)' }}>
+                <input
+                  type="checkbox"
+                  checked={systemConfig.autoBackupDaily}
+                  onChange={(e) => setSystemConfig({ ...systemConfig, autoBackupDaily: e.target.checked })}
+                  style={{ width: 18, height: 18, accentColor: 'var(--admin-primary)' }}
+                />
+                <span>Tự động sao lưu cơ sở dữ liệu (Daily Automated Backup lúc 02:00 AM)</span>
+              </label>
+            </div>
+          </div>
+          <div className="admin-card-footer" style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.02)', display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="admin-btn admin-btn-primary" onClick={handleSaveSystemConfig}>
+              <Save size={15} /> Lưu toàn bộ cấu hình hệ thống
             </button>
           </div>
         </div>

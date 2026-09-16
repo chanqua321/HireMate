@@ -4,15 +4,6 @@ import { publicService } from '../../shared/services/public.service';
 import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
-// ---- Fallback data ----
-const FALLBACK_RESOURCES = [
-  { id: '1', title: 'Khóa học React cơ bản đến nâng cao', category: 'Frontend', type: 'Course', url: 'https://example.com/react', description: 'Khóa học React hoàn chỉnh từ cơ bản đến chuyên sâu, phù hợp mọi trình độ.', free: true, featured: true },
-  { id: '2', title: 'LeetCode – Luyện thuật toán phỏng vấn', category: 'Algorithm', type: 'Platform', url: 'https://leetcode.com', description: 'Nền tảng luyện thuật toán số 1 thế giới với hàng nghìn bài tập.', free: false, featured: true },
-  { id: '3', title: 'Template CV dành cho Developer', category: 'CV', type: 'Template', url: 'https://example.com/cv', description: 'Bộ template CV chuyên nghiệp dành riêng cho các vị trí IT.', free: true, featured: false },
-  { id: '4', title: 'Harvard Business Review – Career Development', category: 'Career', type: 'Article', url: 'https://hbr.org', description: 'Tổng hợp bài viết chuyên sâu về phát triển sự nghiệp từ HBR.', free: false, featured: false },
-  { id: '5', title: 'System Design Interview Guide', category: 'Backend', type: 'Book', url: 'https://example.com/sdi', description: 'Cẩm nang thiết kế hệ thống dành cho các vị trí Senior Developer.', free: false, featured: true },
-];
-
 export interface ResourceItem {
   id: string;
   title: string;
@@ -29,7 +20,7 @@ const TYPES = ['Course', 'Platform', 'Template', 'Article', 'Book', 'Video', 'To
 const typeIcon: Record<string, string> = { Course: '🎓', Platform: '💻', Template: '📄', Article: '📰', Book: '📚', Video: '🎬', Tool: '🔧' };
 
 const AdminResources: React.FC = () => {
-  const [resources, setResources] = useState<ResourceItem[]>(FALLBACK_RESOURCES);
+  const [resources, setResources] = useState<ResourceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<ResourceItem | null>(null);
@@ -40,7 +31,7 @@ const AdminResources: React.FC = () => {
     setLoading(true);
     try {
       const res = await publicService.getResources();
-      if (res.ok && res.data && res.data.length > 0) {
+      if (res.ok && Array.isArray(res.data)) {
         const mapped: ResourceItem[] = res.data.map((r: any) => ({
           id: r.id || String(Date.now()),
           title: r.title || 'Tài nguyên',
@@ -52,9 +43,12 @@ const AdminResources: React.FC = () => {
           featured: r.featured === true,
         }));
         setResources(mapped);
+      } else {
+        setResources([]);
       }
     } catch (err) {
-      console.warn('Real resources API fallback:', err);
+      console.warn('Real resources API error:', err);
+      setResources([]);
     } finally {
       setLoading(false);
     }
@@ -150,30 +144,41 @@ const AdminResources: React.FC = () => {
 
       {/* Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
-        {filtered.map(r => (
-          <div key={r.id} className="admin-card">
-            <div className="admin-card-body">
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '1.25rem' }}>{typeIcon[r.type] || '📌'}</span>
-                  <span className="admin-badge info">{r.type}</span>
-                  <span className="admin-badge neutral">{r.category}</span>
-                  {r.free && <span className="admin-badge success">Free</span>}
-                  {r.featured && <span className="admin-badge purple">⭐ Featured</span>}
+        {filtered.length === 0 ? (
+          <div className="admin-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3.5rem 1.5rem' }}>
+            <p style={{ color: 'var(--admin-text-muted)', fontSize: '1rem', margin: '0 0 1.25rem' }}>
+              Chưa có tài nguyên nào trong cơ sở dữ liệu.
+            </p>
+            <button className="admin-btn admin-btn-primary" onClick={openCreate} style={{ display: 'inline-flex', margin: '0 auto', gap: '6px' }}>
+              <Plus size={16} /> Thêm tài nguyên đầu tiên
+            </button>
+          </div>
+        ) : (
+          filtered.map(r => (
+            <div key={r.id} className="admin-card">
+              <div className="admin-card-body">
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '1.25rem' }}>{typeIcon[r.type] || '📌'}</span>
+                    <span className="admin-badge info">{r.type}</span>
+                    <span className="admin-badge neutral">{r.category}</span>
+                    {r.free && <span className="admin-badge success">Free</span>}
+                    {r.featured && <span className="admin-badge purple">⭐ Featured</span>}
+                  </div>
+                </div>
+                <h3 style={{ color: 'var(--admin-text)', fontWeight: 700, fontSize: '0.95rem', margin: '0 0 0.4rem' }}>{r.title}</h3>
+                <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.82rem', lineHeight: 1.55, margin: '0 0 1rem' }}>{r.description}</p>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <a href={r.url} target="_blank" rel="noreferrer" className="admin-btn admin-btn-secondary admin-btn-sm">
+                    <ExternalLink size={12} /> Xem
+                  </a>
+                  <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => openEdit(r)}><Edit2 size={12} /></button>
+                  <button className="admin-btn admin-btn-danger admin-btn-sm" onClick={() => deleteResource(r.id)}><Trash2 size={12} /></button>
                 </div>
               </div>
-              <h3 style={{ color: 'var(--admin-text)', fontWeight: 700, fontSize: '0.95rem', margin: '0 0 0.4rem' }}>{r.title}</h3>
-              <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.82rem', lineHeight: 1.55, margin: '0 0 1rem' }}>{r.description}</p>
-              <div style={{ display: 'flex', gap: '0.4rem' }}>
-                <a href={r.url} target="_blank" rel="noreferrer" className="admin-btn admin-btn-secondary admin-btn-sm">
-                  <ExternalLink size={12} /> Xem
-                </a>
-                <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => openEdit(r)}><Edit2 size={12} /></button>
-                <button className="admin-btn admin-btn-danger admin-btn-sm" onClick={() => deleteResource(r.id)}><Trash2 size={12} /></button>
-              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Modal */}

@@ -3,18 +3,22 @@ import { Plus, Edit2, Trash2, X, Check, Tag, Calendar, Percent } from 'lucide-re
 import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
-// ---- Fake data ----
-const PROMOS = [
-  { id: '1', code: 'HIREMATE30', discount: 30, type: 'percent', minAmount: 0, maxUses: 100, usedCount: 67, validFrom: '2026-07-01', validTo: '2026-07-31', plan: 'all', active: true },
-  { id: '2', code: 'NEWUSER50K', discount: 50000, type: 'fixed', minAmount: 199000, maxUses: 500, usedCount: 123, validFrom: '2026-06-01', validTo: '2026-08-31', plan: 'Pro', active: true },
-  { id: '3', code: 'SUMMER2026', discount: 20, type: 'percent', minAmount: 0, maxUses: 200, usedCount: 200, validFrom: '2026-06-15', validTo: '2026-07-15', plan: 'all', active: false },
-  { id: '4', code: 'PREMIUM15', discount: 15, type: 'percent', minAmount: 0, maxUses: 50, usedCount: 12, validFrom: '2026-07-20', validTo: '2026-08-20', plan: 'Premium', active: true },
-  { id: '5', code: 'REFER100K', discount: 100000, type: 'fixed', minAmount: 299000, maxUses: 999, usedCount: 45, validFrom: '2026-01-01', validTo: '2026-12-31', plan: 'Pro', active: true },
-];
+export interface Promo {
+  id: string;
+  code: string;
+  discount: number;
+  type: 'percent' | 'fixed' | string;
+  minAmount: number;
+  maxUses: number;
+  usedCount: number;
+  validFrom: string;
+  validTo: string;
+  plan: string;
+  active: boolean;
+}
 
-type Promo = typeof PROMOS[0];
-const fmtDiscount = (p: Promo) => p.type === 'percent' ? `${p.discount}%` : `₫${p.discount.toLocaleString()}`;
-const isExpired = (to: string) => new Date(to) < new Date();
+const fmtDiscount = (p: Promo) => p.type === 'percent' ? `${p.discount}%` : `₫${p.discount.toLocaleString()}đ`;
+const isExpired = (to: string) => to ? new Date(to) < new Date() : false;
 const getStatusBadge = (p: Promo) => {
   if (!p.active) return <span className="admin-badge warning">Tắt</span>;
   if (isExpired(p.validTo)) return <span className="admin-badge danger">Hết hạn</span>;
@@ -23,7 +27,7 @@ const getStatusBadge = (p: Promo) => {
 };
 
 const AdminPromos: React.FC = () => {
-  const [promos, setPromos] = useState<Promo[]>(PROMOS);
+  const [promos, setPromos] = useState<Promo[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Promo | null>(null);
   const [form, setForm] = useState({
@@ -120,7 +124,14 @@ const AdminPromos: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {promos.map(p => (
+                {promos.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--admin-text-muted)' }}>
+                      Chưa có mã khuyến mãi nào trong hệ thống. Bấm "Tạo mã mới" để tạo mã đầu tiên.
+                    </td>
+                  </tr>
+                ) : (
+                  promos.map(p => (
                   <tr key={p.id}>
                     <td>
                       <code style={{
@@ -170,7 +181,8 @@ const AdminPromos: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                ))
+              )}
               </tbody>
             </table>
           </div>

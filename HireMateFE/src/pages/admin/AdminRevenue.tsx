@@ -5,26 +5,6 @@ import { billingService } from '../../features/billing/api/billing.service';
 import { InvoiceDto } from '../../features/billing/types';
 import './admin.css';
 
-// ---- Fallback data in case DB has no invoices yet ----
-const fallbackMonthlyRevenue = [
-  { month: 'Tháng 2', revenue: 38200000, subscriptions: 982, newUsers: 312 },
-  { month: 'Tháng 3', revenue: 42100000, subscriptions: 1040, newUsers: 358 },
-  { month: 'Tháng 4', revenue: 35800000, subscriptions: 998, newUsers: 289 },
-  { month: 'Tháng 5', revenue: 50400000, subscriptions: 1152, newUsers: 421 },
-  { month: 'Tháng 6', revenue: 44600000, subscriptions: 1098, newUsers: 376 },
-  { month: 'Tháng 7', revenue: 48620000, subscriptions: 1286, newUsers: 405 },
-];
-
-const fallbackInvoices = [
-  { id: 'INV-2847', user: 'Lê Minh Cường', email: 'cuong.le@email.com', plan: 'Premium', amount: 499000, date: '2026-07-27', status: 'paid', method: 'VNPay' },
-  { id: 'INV-2846', user: 'Nguyễn Văn An', email: 'an.nguyen@email.com', plan: 'Pro', amount: 299000, date: '2026-07-26', status: 'paid', method: 'PayOS' },
-  { id: 'INV-2845', user: 'Trần Thị Bích', email: 'bich.tran@email.com', plan: 'Pro', amount: 299000, date: '2026-07-26', status: 'pending', method: 'VNPay' },
-  { id: 'INV-2844', user: 'Tô Minh Khoa', email: 'khoa.to@email.com', plan: 'Premium', amount: 499000, date: '2026-07-25', status: 'paid', method: 'PayOS' },
-  { id: 'INV-2843', user: 'Đặng Văn Giang', email: 'giang.dang@email.com', plan: 'Pro', amount: 299000, date: '2026-07-24', status: 'failed', method: 'VNPay' },
-  { id: 'INV-2842', user: 'Hoàng Đức Em', email: 'em.hoang@email.com', plan: 'Premium', amount: 499000, date: '2026-07-23', status: 'paid', method: 'PayOS' },
-  { id: 'INV-2841', user: 'Bùi Thị Hoa', email: 'hoa.bui@email.com', plan: 'Pro', amount: 299000, date: '2026-07-22', status: 'refunded', method: 'VNPay' },
-];
-
 const fmt = (n: number) => `₫${n.toLocaleString('vi-VN')}`;
 const fmtM = (n: number) => `₫${(n / 1_000_000).toFixed(1)}M`;
 
@@ -34,12 +14,19 @@ const statusBadge = (s: string) => {
   return <span className={`admin-badge ${map[s] || 'neutral'}`}>{label[s] || s}</span>;
 };
 
+export interface MonthlyRevenueItem {
+  month: string;
+  revenue: number;
+  subscriptions: number;
+  newUsers: number;
+}
+
 const AdminRevenue: React.FC = () => {
   const [tab, setTab] = useState<'overview' | 'invoices'>('overview');
   const [loading, setLoading] = useState(true);
   const [revenueData, setRevenueData] = useState<AdminRevenueData | null>(null);
-  const [invoicesList, setInvoicesList] = useState<any[]>(fallbackInvoices);
-  const [monthlyRevenue] = useState(fallbackMonthlyRevenue);
+  const [invoicesList, setInvoicesList] = useState<any[]>([]);
+  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenueItem[]>([]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -53,21 +40,48 @@ const AdminRevenue: React.FC = () => {
         setRevenueData(revRes.value.data);
       }
 
-      if (invRes.status === 'fulfilled' && invRes.value?.ok && invRes.value.data && invRes.value.data.length > 0) {
+      if (invRes.status === 'fulfilled' && invRes.value?.ok && Array.isArray(invRes.value.data)) {
         const mapped = invRes.value.data.map((inv: InvoiceDto) => ({
           id: inv.invoiceNumber || inv.id?.substring(0, 8) || 'INV-000',
           user: inv.userId || 'Người dùng',
           email: 'Khách hàng',
           plan: inv.plan?.name || (inv.amountVnd > 300000 ? 'Premium' : 'Pro'),
           amount: inv.amountVnd,
-          date: inv.createdAt ? new Date(inv.createdAt).toISOString().split('T')[0] : '2026-07-27',
+          date: inv.createdAt ? new Date(inv.createdAt).toISOString().split('T')[0] : '—',
           status: inv.status?.toLowerCase() === 'completed' || inv.status?.toLowerCase() === 'paid' ? 'paid' : (inv.status?.toLowerCase() || 'pending'),
           method: inv.paymentMethod || 'VNPay',
         }));
         setInvoicesList(mapped);
+
+        // Calculate real monthly aggregations from actual invoices
+        if (mapped.length > 0) {
+          const monthMap: Record<string, { revenue: number; subscriptions: number; newUsers: number }> = {};
+          mapped.forEach((inv) => {
+            const m = inv.date !== '—' ? `Tháng ${new Date(inv.date).getMonth() + 1}` : 'Tháng gần nhất';
+            if (!monthMap[m]) monthMap[m] = { revenue: 0, subscriptions: 0, newUsers: 0 };
+            if (inv.status === 'paid') {
+              monthMap[m].revenue += inv.amount;
+              monthMap[m].subscriptions += 1;
+            }
+          });
+          const list: MonthlyRevenueItem[] = Object.entries(monthMap).map(([month, val]) => ({
+            month,
+            revenue: val.revenue,
+            subscriptions: Math.max(val.subscriptions, 1),
+            newUsers: val.subscriptions,
+          }));
+          setMonthlyRevenue(list);
+        } else {
+          setMonthlyRevenue([]);
+        }
+      } else {
+        setInvoicesList([]);
+        setMonthlyRevenue([]);
       }
     } catch (err) {
-      console.warn('Real revenue API call had issue, using fallback data:', err);
+      console.warn('Real revenue API call had issue:', err);
+      setInvoicesList([]);
+      setMonthlyRevenue([]);
     } finally {
       setLoading(false);
     }
@@ -77,11 +91,11 @@ const AdminRevenue: React.FC = () => {
     fetchData();
   }, []);
 
-  const totalRev = revenueData?.totalRevenue ?? monthlyRevenue.reduce((s, m) => s + m.revenue, 0);
-  const mrr = revenueData?.mrr ?? 48620000;
-  const activeSubs = revenueData?.premiumUsers ?? 1286;
-  const convRate = revenueData?.conversionRate ? `${(revenueData.conversionRate * 100).toFixed(1)}%` : '33%';
-  const maxRev = Math.max(...monthlyRevenue.map(m => m.revenue));
+  const totalRev = revenueData?.totalRevenue ?? 0;
+  const mrr = revenueData?.mrr ?? 0;
+  const activeSubs = revenueData?.premiumUsers ?? 0;
+  const convRate = revenueData?.conversionRate !== undefined ? `${revenueData.conversionRate}%` : '0%';
+  const maxRev = Math.max(...monthlyRevenue.map(m => m.revenue), 1);
 
   return (
     <div>
@@ -147,30 +161,38 @@ const AdminRevenue: React.FC = () => {
               <h3 className="admin-card-title">📈 Doanh thu theo tháng</h3>
             </div>
             <div className="admin-card-body">
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem', height: 200, marginBottom: '0.5rem' }}>
-                {monthlyRevenue.map((m, i) => (
-                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--admin-text)', fontWeight: 600 }}>
-                      {fmtM(m.revenue)}
-                    </span>
-                    <div
-                      style={{
-                        width: '100%',
-                        height: `${(m.revenue / maxRev) * 160}px`,
-                        background: i === monthlyRevenue.length - 1
-                          ? 'linear-gradient(180deg, #03bffd, #0284c7)'
-                          : 'linear-gradient(180deg, rgba(3, 191, 255, 0.45), rgba(3, 191, 255, 0.15))',
-                        borderRadius: '10px 10px 4px 4px',
-                        minHeight: 20,
-                        transition: 'height 0.6s ease',
-                        position: 'relative',
-                        boxShadow: i === monthlyRevenue.length - 1 ? '0 4px 12px rgba(3, 191, 255, 0.35)' : 'none'
-                      }}
-                    />
-                    <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>{m.month}</span>
-                  </div>
-                ))}
-              </div>
+              {monthlyRevenue.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--admin-text-muted)' }}>
+                  <CreditCard size={36} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                  <p style={{ fontWeight: 600, margin: 0 }}>Chưa có phát sinh giao dịch doanh thu theo tháng trên hệ thống.</p>
+                  <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Dữ liệu thời gian thực được đồng bộ tự động khi người dùng thanh toán qua cổng VNPay/PayOS.</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem', height: 200, marginBottom: '0.5rem' }}>
+                  {monthlyRevenue.map((m, i) => (
+                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--admin-text)', fontWeight: 600 }}>
+                        {fmtM(m.revenue)}
+                      </span>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: `${(m.revenue / maxRev) * 160}px`,
+                          background: i === monthlyRevenue.length - 1
+                            ? 'linear-gradient(180deg, #03bffd, #0284c7)'
+                            : 'linear-gradient(180deg, rgba(3, 191, 255, 0.45), rgba(3, 191, 255, 0.15))',
+                          borderRadius: '10px 10px 4px 4px',
+                          minHeight: 20,
+                          transition: 'height 0.6s ease',
+                          position: 'relative',
+                          boxShadow: i === monthlyRevenue.length - 1 ? '0 4px 12px rgba(3, 191, 255, 0.35)' : 'none'
+                        }}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>{m.month}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -189,15 +211,23 @@ const AdminRevenue: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyRevenue.map((m, i) => (
-                      <tr key={i}>
-                        <td style={{ fontWeight: 600 }}>{m.month}</td>
-                        <td style={{ fontWeight: 700, color: '#059669' }}>{fmtM(m.revenue)}</td>
-                        <td style={{ color: '#0284c7', fontWeight: 600 }}>{m.subscriptions.toLocaleString()}</td>
-                        <td style={{ color: '#7c3aed', fontWeight: 600 }}>{m.newUsers}</td>
-                        <td style={{ color: '#d97706', fontWeight: 600 }}>{fmt(Math.round(m.revenue / m.subscriptions))}</td>
+                    {monthlyRevenue.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--admin-text-muted)' }}>
+                          Chưa có lịch sử doanh thu theo tháng trên hệ thống.
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      monthlyRevenue.map((m, i) => (
+                        <tr key={i}>
+                          <td style={{ fontWeight: 600 }}>{m.month}</td>
+                          <td style={{ fontWeight: 700, color: '#059669' }}>{fmtM(m.revenue)}</td>
+                          <td style={{ color: '#0284c7', fontWeight: 600 }}>{m.subscriptions.toLocaleString()}</td>
+                          <td style={{ color: '#7c3aed', fontWeight: 600 }}>{m.newUsers}</td>
+                          <td style={{ color: '#d97706', fontWeight: 600 }}>{fmt(Math.round(m.revenue / m.subscriptions))}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -227,24 +257,32 @@ const AdminRevenue: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoicesList.map(inv => (
-                    <tr key={inv.id}>
-                      <td style={{ fontFamily: 'monospace', color: '#0284c7', fontWeight: 600 }}>{inv.id}</td>
-                      <td>
-                        <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--admin-text)' }}>{inv.user}</div>
-                        <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem' }}>{inv.email}</div>
+                  {invoicesList.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--admin-text-muted)' }}>
+                        Chưa có lịch sử hóa đơn thanh toán nào trong cơ sở dữ liệu.
                       </td>
-                      <td><span className={`admin-badge ${inv.plan === 'Premium' ? 'purple' : 'info'}`}>{inv.plan}</span></td>
-                      <td style={{ fontWeight: 700, color: '#059669' }}>{fmt(inv.amount)}</td>
-                      <td>
-                        <span className="admin-badge neutral">
-                          {inv.method === 'VNPay' ? '🏦' : '💳'} {inv.method}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{inv.date}</td>
-                      <td>{statusBadge(inv.status)}</td>
                     </tr>
-                  ))}
+                  ) : (
+                    invoicesList.map(inv => (
+                      <tr key={inv.id}>
+                        <td style={{ fontFamily: 'monospace', color: 'var(--admin-accent, #00F2FE)', fontWeight: 600 }}>{inv.id}</td>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--admin-text)' }}>{inv.user}</div>
+                          <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem' }}>{inv.email}</div>
+                        </td>
+                        <td><span className={`admin-badge ${inv.plan === 'Premium' ? 'purple' : 'info'}`}>{inv.plan}</span></td>
+                        <td style={{ fontWeight: 700, color: '#059669' }}>{fmt(inv.amount)}</td>
+                        <td>
+                          <span className="admin-badge neutral">
+                            {inv.method === 'VNPay' ? '🏦' : '💳'} {inv.method}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{inv.date}</td>
+                        <td>{statusBadge(inv.status)}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

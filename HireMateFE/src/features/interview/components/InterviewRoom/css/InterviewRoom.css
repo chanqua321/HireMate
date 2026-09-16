@@ -582,6 +582,34 @@
   box-shadow: 0 0 0 3px rgba(3, 191, 255, 0.15);
 }
 
+.room-textarea.error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18) !important;
+}
+
+.room-textarea:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+  border-color: #e2e8f0;
+}
+
+.room-input-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ef4444;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-top: 8px;
+  animation: fadeInError 0.2s ease-in-out;
+}
+
+@keyframes fadeInError {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .room-actions-bar {
   display: flex;
   align-items: center;
@@ -615,9 +643,18 @@
   margin-left: auto;
 }
 
-.btn-send-answer:hover {
+.btn-send-answer:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 10px 24px rgba(3, 191, 255, 0.4);
+}
+
+.btn-send-answer:disabled {
+  background: #94a3b8 !important;
+  color: #e2e8f0 !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  opacity: 0.65;
 }
 
 /* --- Right Column: STAR Sidebar --- */

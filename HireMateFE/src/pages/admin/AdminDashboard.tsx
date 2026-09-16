@@ -121,8 +121,18 @@ const AdminDashboard: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Toggle Lock User Account
+  // Toggle Lock User Account (Chặn tự khóa tài khoản Admin hiện tại)
   const handleToggleLock = async (user: AdminUserItem) => {
+    const currentAdminEmail = localStorage.getItem('hm_user_email') || 'admin@gmail.com';
+    const isSelf =
+      (user.email || '').toLowerCase() === currentAdminEmail.toLowerCase() ||
+      Boolean(user.roles && user.roles.some((r) => r.toLowerCase() === 'admin'));
+
+    if (isSelf) {
+      showToast('Không thể tự khóa tài khoản Quản trị viên hiện tại!');
+      return;
+    }
+
     const isLocked = Boolean(user.lockoutEnd);
     const targetLock = !isLocked;
     setActionLoading((prev) => ({ ...prev, [user.id]: true }));
@@ -140,28 +150,6 @@ const AdminDashboard: React.FC = () => {
         showToast(targetLock ? `Đã khóa tài khoản ${user.email}` : `Đã mở khóa tài khoản ${user.email}`);
       } else {
         showToast(`Lỗi: ${res.message || 'Không thể cập nhật khóa'}`);
-      }
-    } catch (e: any) {
-      showToast('Lỗi kết nối máy chủ');
-    } finally {
-      setActionLoading((prev) => ({ ...prev, [user.id]: false }));
-    }
-  };
-
-  // Toggle Premium Status
-  const handleTogglePremium = async (user: AdminUserItem) => {
-    const nextPremium = !user.isPremium;
-    setActionLoading((prev) => ({ ...prev, [user.id]: true }));
-
-    try {
-      const res = await adminService.patchUser(user.id, { isPremium: nextPremium });
-      if (res.ok) {
-        setUsers((prev) =>
-          prev.map((u) => (u.id === user.id ? { ...u, isPremium: nextPremium } : u))
-        );
-        showToast(`Đã đổi gói thành ${nextPremium ? 'Premium' : 'Miễn phí'} cho ${user.email}`);
-      } else {
-        showToast(`Lỗi: ${res.message || 'Không thể cập nhật gói'}`);
       }
     } catch (e: any) {
       showToast('Lỗi kết nối máy chủ');
@@ -334,85 +322,31 @@ const AdminDashboard: React.FC = () => {
 
       {/* Middle Grid: Analytical Deep Dive */}
       <div className="admin-grid-2" style={{ marginBottom: 24 }}>
-        {/* Visual Analytics 1: STAR Breakdown */}
+        {/* Visual Analytics 1: Thống Kê Vận Hành Toàn Sàn */}
         <div className="admin-card">
           <div className="admin-card-header">
             <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={18} color="#38BDF8" /> Phân Tích Kỹ Năng STAR Toàn Sàn
+              <TrendingUp size={18} color="#0085FF" /> Thống Kê Vận Hành Toàn Sàn
             </h3>
             <span style={{ fontSize: '0.813rem', color: '#94A3B8' }}>
-              Điểm trung bình chuẩn hóa
+              Thời gian thực
             </span>
           </div>
           <div className="admin-card-body">
-            <div className="admin-star-meter-wrap">
-              {/* S: Situation */}
-              <div className="admin-star-item">
-                <div className="admin-star-label-row">
-                  <span className="admin-star-name">
-                    <span style={{ color: '#38BDF8', fontWeight: 700 }}>S</span> — Situation (Mô tả tình huống)
-                  </span>
-                  <span className="admin-star-badge">{interviews?.avgS ? interviews.avgS.toFixed(1) : '0.0'}/10</span>
-                </div>
-                <div className="admin-star-track">
-                  <div
-                    className="admin-star-fill s"
-                    style={{ width: `${Math.min(100, ((interviews?.avgS || 0) / 10) * 100)}%` }}
-                  />
-                </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+              <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid rgba(3, 191, 255, 0.15)' }}>
+                <span style={{ fontSize: '0.78rem', color: '#64748B', display: 'block' }}>Tỷ lệ hoàn thành phỏng vấn</span>
+                <b style={{ fontSize: '1.25rem', color: '#001B3F' }}>{analytics?.interviewCompletionRate ?? 0}%</b>
               </div>
-
-              {/* T: Task */}
-              <div className="admin-star-item">
-                <div className="admin-star-label-row">
-                  <span className="admin-star-name">
-                    <span style={{ color: '#818CF8', fontWeight: 700 }}>T</span> — Task (Xác định mục tiêu/nhiệm vụ)
-                  </span>
-                  <span className="admin-star-badge">{interviews?.avgT ? interviews.avgT.toFixed(1) : '0.0'}/10</span>
-                </div>
-                <div className="admin-star-track">
-                  <div
-                    className="admin-star-fill t"
-                    style={{ width: `${Math.min(100, ((interviews?.avgT || 0) / 10) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* A: Action */}
-              <div className="admin-star-item">
-                <div className="admin-star-label-row">
-                  <span className="admin-star-name">
-                    <span style={{ color: '#34D399', fontWeight: 700 }}>A</span> — Action (Hành động triển khai)
-                  </span>
-                  <span className="admin-star-badge">{interviews?.avgA ? interviews.avgA.toFixed(1) : '0.0'}/10</span>
-                </div>
-                <div className="admin-star-track">
-                  <div
-                    className="admin-star-fill a"
-                    style={{ width: `${Math.min(100, ((interviews?.avgA || 0) / 10) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* R: Result */}
-              <div className="admin-star-item">
-                <div className="admin-star-label-row">
-                  <span className="admin-star-name">
-                    <span style={{ color: '#FBBF24', fontWeight: 700 }}>R</span> — Result (Định lượng kết quả)
-                  </span>
-                  <span className="admin-star-badge">{interviews?.avgR ? interviews.avgR.toFixed(1) : '0.0'}/10</span>
-                </div>
-                <div className="admin-star-track">
-                  <div
-                    className="admin-star-fill r"
-                    style={{ width: `${Math.min(100, ((interviews?.avgR || 0) / 10) * 100)}%` }}
-                  />
-                </div>
+              <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid rgba(3, 191, 255, 0.15)' }}>
+                <span style={{ fontSize: '0.78rem', color: '#64748B', display: 'block' }}>Điểm phỏng vấn trung bình</span>
+                <b style={{ fontSize: '1.25rem', color: '#0284C7' }}>
+                  {interviews?.avgStar ? (interviews.avgStar > 10 ? (interviews.avgStar / 10).toFixed(1) : interviews.avgStar.toFixed(1)) : (analytics?.avgSessionScore ? analytics.avgSessionScore.toFixed(1) : '0.0')} / 10
+                </b>
               </div>
             </div>
 
             <div style={{
-              marginTop: 20,
               padding: '12px 14px',
               borderRadius: 10,
               background: 'rgba(3, 191, 255, 0.05)',
@@ -423,8 +357,8 @@ const AdminDashboard: React.FC = () => {
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
-              <span>ARPU (Doanh thu trung bình/User):</span>
-              <b style={{ color: '#001B3F', fontSize: '0.938rem' }}>{formatVND(revenue?.arpu)}</b>
+              <span>Tài khoản kích hoạt Premium:</span>
+              <b style={{ color: '#001B3F', fontSize: '0.938rem' }}>{revenue?.premiumUsers ?? 0} tài khoản</b>
             </div>
           </div>
         </div>
@@ -524,6 +458,10 @@ const AdminDashboard: React.FC = () => {
                 {users.slice(0, 6).map((u) => {
                   const isLocked = Boolean(u.lockoutEnd);
                   const isBusy = actionLoading[u.id];
+                  const currentAdminEmail = localStorage.getItem('hm_user_email') || 'admin@gmail.com';
+                  const isSelf =
+                    (u.email || '').toLowerCase() === currentAdminEmail.toLowerCase() ||
+                    Boolean(u.roles && u.roles.some((r) => r.toLowerCase() === 'admin'));
 
                   return (
                     <tr key={u.id}>
@@ -532,28 +470,29 @@ const AdminDashboard: React.FC = () => {
                         <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{u.email}</div>
                       </td>
                       <td>
-                        <button
-                          onClick={() => handleTogglePremium(u)}
-                          disabled={isBusy}
-                          className={`admin-action-btn-sm ${u.isPremium ? 'premium' : ''}`}
-                          title="Click để chuyển đổi gói Premium/Miễn phí"
-                        >
+                        <span className={`admin-badge ${u.isPremium ? 'primary' : 'neutral'}`} style={{ fontWeight: 650 }}>
                           {u.isPremium ? '⭐ Premium' : 'Free'}
-                        </button>
+                        </span>
                       </td>
                       <td>
                         {statusBadge(isLocked ? 'locked' : 'active')}
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button
-                          onClick={() => handleToggleLock(u)}
-                          disabled={isBusy}
-                          className={`admin-action-btn-sm ${isLocked ? 'unlock' : 'lock'}`}
-                          title={isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
-                        >
-                          {isLocked ? <Unlock size={13} /> : <Lock size={13} />}
-                          <span>{isLocked ? 'Mở khóa' : 'Khóa'}</span>
-                        </button>
+                        {isSelf ? (
+                          <span className="admin-badge neutral" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                            Tài khoản hiện tại
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleToggleLock(u)}
+                            disabled={isBusy}
+                            className={`admin-action-btn-sm ${isLocked ? 'unlock' : 'lock'}`}
+                            title={isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
+                          >
+                            {isLocked ? <Unlock size={13} /> : <Lock size={13} />}
+                            <span>{isLocked ? 'Mở khóa' : 'Khóa'}</span>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

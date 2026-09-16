@@ -121,5 +121,14 @@ export const adminService = {
   async upsertPromo(promo: any): Promise<ApiResponse<any>> {
     return apiClient.post<any>('/Admin/promos', promo);
   },
+
+  // Gamification & Leaderboard
+  async getGamificationBadges(): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>('/Gamification/badges');
+  },
+
+  async getGamificationLeaderboard(): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>('/Gamification/leaderboard');
+  },
 };
 
