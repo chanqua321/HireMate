@@ -488,17 +488,10 @@ export const Home: React.FC = () => {
               className="hm-hero-title"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.15 }}
+              transition={{ duration: 0.55, delay: 0.18 }}
             >
               Luyện phỏng vấn thông minh.
-            </motion.h1>
-
-            <motion.h1
-              className="hm-hero-title"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.25 }}
-            >
+              <br className="hm-hero-br" />
               Nhận việc làm <span className="hm-gradient-text">mơ ước</span>.
             </motion.h1>
 

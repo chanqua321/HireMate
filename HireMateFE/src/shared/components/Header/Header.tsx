@@ -124,24 +124,29 @@ export const Header: React.FC = () => {
               Career OS
               {!isLoggedIn && <Lock size={12} className="nav-lock-badge" />}
             </Link>
-            <Link
-              to="/leaderboard"
-              className={isActive('/leaderboard') ? 'active' : ''}
-            >
-              Bảng vàng
-            </Link>
-            <Link
-              to="/blog"
-              className={isActive('/blog') ? 'active' : ''}
-            >
-              Cẩm nang
-            </Link>
-            <Link
-              to="/resources"
-              className={isActive('/resources') ? 'active' : ''}
-            >
-              Tài nguyên
-            </Link>
+            {/* Các phân hệ chỉ hiển thị khi đã đăng nhập */}
+            {isLoggedIn && (
+              <>
+                <Link
+                  to="/leaderboard"
+                  className={isActive('/leaderboard') ? 'active' : ''}
+                >
+                  Bảng vàng
+                </Link>
+                <Link
+                  to="/blog"
+                  className={isActive('/blog') ? 'active' : ''}
+                >
+                  Cẩm nang
+                </Link>
+                <Link
+                  to="/resources"
+                  className={isActive('/resources') ? 'active' : ''}
+                >
+                  Tài nguyên
+                </Link>
+              </>
+            )}
             <Link
               to="/pricing"
               className={isActive('/pricing') || isActive('/checkout') ? 'active' : ''}
@@ -497,6 +502,30 @@ export const Header: React.FC = () => {
                   <div style={{ padding: '0 14px 8px 14px', fontSize: '0.88rem', fontWeight: 700, color: '#0f172a' }}>
                     Xin chào, {profile.name || 'Ứng viên'}!
                   </div>
+                  <Link
+                    to="/career"
+                    style={{ padding: '10px 14px', color: '#1e293b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}
+                  >
+                    <Compass size={16} color="#03BFFF" /> Hệ điều hành Career OS
+                  </Link>
+                  <Link
+                    to="/leaderboard"
+                    style={{ padding: '10px 14px', color: '#1e293b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}
+                  >
+                    <Award size={16} color="#eab308" /> Bảng vàng & Huy hiệu
+                  </Link>
+                  <Link
+                    to="/blog"
+                    style={{ padding: '10px 14px', color: '#1e293b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}
+                  >
+                    <BookOpen size={16} color="#0284c7" /> Cẩm nang nghề nghiệp
+                  </Link>
+                  <Link
+                    to="/resources"
+                    style={{ padding: '10px 14px', color: '#1e293b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}
+                  >
+                    <FileSearch size={16} color="#10b981" /> Kho tài nguyên tuyển dụng
+                  </Link>
                   <Link
                     to="/dashboard?tab=scan"
                     style={{ padding: '10px 14px', color: '#1e293b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}

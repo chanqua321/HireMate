@@ -60,6 +60,30 @@
   white-space: nowrap;
 }
 
+.dashboard-guide-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #ffffff;
+  color: #0284c7;
+  border: 1.5px solid #bae6fd;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.08);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.dashboard-guide-trigger-btn:hover {
+  background: #f0f9ff;
+  border-color: #0284c7;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.18);
+}
+
 .pro-member-pill:hover {
   background: #bae6fd;
   transform: translateY(-1px);
