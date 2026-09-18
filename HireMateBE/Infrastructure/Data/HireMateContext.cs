@@ -42,6 +42,8 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
         builder.Entity<UserAccount>(entity =>
         {
             entity.Property(u => u.FullName).HasMaxLength(255).IsRequired();
+            entity.Property(u => u.AvatarUrl).HasMaxLength(1000);
+            entity.Property(u => u.EmailOtpHash).HasMaxLength(128);
             entity.Property(u => u.CurrentPlanCode).HasMaxLength(20);
             entity.HasIndex(u => u.Email).IsUnique();
             entity.HasIndex(u => u.CurrentPlanCode);
