@@ -9,6 +9,13 @@ export interface CvItemDto {
   rawText?: string;
   analyzedAt?: string;
   overallScore?: number;
+  formatScore?: number;
+  keywordsScore?: number;
+  readabilityScore?: number;
+  professionalismScore?: number;
+  analysis?: string;
+  targetRole?: string;
+  targetField?: string;
   parsedProfile?: {
     fullName?: string;
     desiredPosition?: string;
@@ -24,6 +31,10 @@ export interface CvAnalysisResultDto {
   cvId: string;
   overallScore: number;
   atsScore?: number;
+  formatScore?: number;
+  keywordsScore?: number;
+  readabilityScore?: number;
+  professionalismScore?: number;
   strengths: string[];
   weaknesses: string[];
   improvements: string[];

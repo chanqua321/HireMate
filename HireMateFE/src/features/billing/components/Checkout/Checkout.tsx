@@ -127,12 +127,18 @@ export const Checkout: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [accountName, setAccountName] = useState('');
+  const cycle = searchParams.get('cycle') || 'monthly';
+  const isAnnual = cycle === 'annual';
+  const effectiveRawPrice = isAnnual && planInfo.rawPrice > 0
+    ? Math.round(planInfo.rawPrice * 0.8 * 12)
+    : planInfo.rawPrice;
+  const effectivePeriod = isAnnual && planInfo.rawPrice > 0 ? '/năm (tiết kiệm 20%)' : planInfo.period;
 
-  const discountAmount = promoApplied ? (planInfo.rawPrice * promoDiscount) / 100 : 0;
-  const finalAmount = Math.max(0, planInfo.rawPrice - discountAmount);
+  const discountAmount = promoApplied ? (effectiveRawPrice * promoDiscount) / 100 : 0;
+  const finalAmount = Math.max(0, effectiveRawPrice - discountAmount);
 
   const handleSelectPlan = (key: string) => {
-    setSearchParams({ plan: key });
+    setSearchParams({ plan: key, cycle });
     setErrorMessage('');
   };
 
@@ -453,22 +459,28 @@ export const Checkout: React.FC = () => {
 
             <div className="order-summary-row">
               <span className="label">Thời hạn</span>
-              <span className="val">{planInfo.period}</span>
+              <span className="val">{effectivePeriod}</span>
             </div>
 
             <div className="order-summary-row">
               <span className="label">Giá gốc</span>
               <span className="val" style={{ textDecoration: 'line-through', color: '#94A3B8' }}>
-                {planInfo.origPrice}
+                {isAnnual && planInfo.rawPrice > 0
+                  ? `${(planInfo.rawPrice * 12).toLocaleString('vi-VN')}đ`
+                  : planInfo.origPrice}
               </span>
             </div>
 
             {planInfo.rawPrice > 0 && (
               <div className="order-summary-row discount">
                 <span className="label" style={{ color: '#16A34A' }}>
-                  Ưu đãi AI Member
+                  {isAnnual ? 'Ưu đãi thanh toán năm (-20%)' : 'Ưu đãi AI Member'}
                 </span>
-                <span className="val">{planInfo.savings}</span>
+                <span className="val">
+                  {isAnnual
+                    ? `-${(planInfo.rawPrice * 12 - effectiveRawPrice).toLocaleString('vi-VN')}đ`
+                    : planInfo.savings}
+                </span>
               </div>
             )}
 

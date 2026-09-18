@@ -1,0 +1,74 @@
+.email-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.email-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.email-result-card {
+  margin-top: 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.email-result-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.email-result-heading {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+  font-weight: 750;
+}
+
+.email-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+
+.email-subject-box {
+  margin-bottom: 10px;
+  background: #ffffff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.email-body-box {
+  background: #ffffff;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.email-tips-box {
+  margin-top: 12px;
+  background: rgba(3, 191, 255, 0.08);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  color: #0369a1;
+}

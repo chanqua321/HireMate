@@ -6,22 +6,13 @@ import { Question, InterviewResult } from '../../../../shared/types';
 import {
   Mic,
   Send,
-  Clock,
   Sparkles,
   Bot,
   Volume2,
-  VolumeX,
-  Keyboard,
-  Star,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  HelpCircle,
-  Video,
   Radio,
-  Check,
-  Play,
-  ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { interviewService } from '../../api/interview.service';
@@ -31,6 +22,7 @@ import {
   getAvailableVietnameseVoice,
 } from '../../../../shared/utils/vietnameseSpeech';
 import { InterviewStepper } from '../InterviewStepper/InterviewStepper';
+import { RoomEntranceOverlay, RoomHeader, RoomSidebar } from './components';
 import './css/InterviewRoom.css';
 
 interface ChatMessage {
@@ -532,153 +524,34 @@ export const InterviewRoom: React.FC = () => {
   return (
     <div className="room-page-container">
       {/* 1. Entrance Loading Animation Overlay with Explicit Start Gesture */}
-      <AnimatePresence>
-        {isEntering && (
-          <motion.div
-            className="room-entrance-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 1.05 }}
-            transition={{ duration: 0.35 }}
-          >
-            <div className="entrance-card">
-              <div className="entrance-scanner-ring">
-                <div className="entrance-inner-icon">
-                  <Bot size={28} />
-                </div>
-              </div>
-              <h2 className="entrance-title">Phòng phỏng vấn AI HireMate</h2>
-              <p className="entrance-subtitle">
-                Đang thiết lập môi trường phỏng vấn ảo cho vị trí{' '}
-                <strong style={{ color: '#38bdf8' }}>
-                  {currentRole}
-                </strong>
-              </p>
-
-              <div className="entrance-checklist">
-                <div className="entrance-check-item">
-                  <Check
-                    size={16}
-                    color={entranceStep >= 1 ? '#22c55e' : '#64748b'}
-                  />
-                  <span>Kiểm tra Micro & Thiết bị tương tác</span>
-                </div>
-                <div className="entrance-check-item">
-                  <Check
-                    size={16}
-                    color={entranceStep >= 2 ? '#22c55e' : '#64748b'}
-                  />
-                  <span>Khởi tạo Cố vấn AI HireMate (Hệ thống giọng nói AI)</span>
-                </div>
-                <div className="entrance-check-item">
-                  <Check
-                    size={16}
-                    color={entranceStep >= 3 ? '#22c55e' : '#64748b'}
-                  />
-                  <span>Kích hoạt khung tiêu chuẩn đánh giá STAR</span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="entrance-start-btn"
-                onClick={handleStartInterview}
-              >
-                <span>Sẵn sàng & Bắt đầu phỏng vấn</span>
-                <ArrowRight size={19} />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <RoomEntranceOverlay
+        isEntering={isEntering}
+        entranceStep={entranceStep}
+        currentRole={currentRole}
+        onStartInterview={handleStartInterview}
+      />
 
       {/* 3-Step Educational Progress Bar */}
       <InterviewStepper currentStep={2} />
 
       {/* Top Header Card */}
-      <motion.div
-        className="room-header-card"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <div className="room-header-left">
-          <div
-            className={`room-interviewer-avatar ${
-              isAiSpeaking ? 'speaking' : ''
-            }`}
-            title={
-              isAiSpeaking
-                ? 'Cố vấn AI đang nói...'
-                : 'Cố vấn AI HireMate đang lắng nghe'
-            }
-          >
-            <Bot size={26} />
-            <span className="avatar-online-dot" />
-          </div>
-
-          <div className="room-role-tag">
-            <span className="room-eyebrow">
-              <Sparkles size={13} /> Phỏng vấn AI thực chiến
-            </span>
-            <h2 className="room-role-title">
-              {currentRole}
-            </h2>
-          </div>
-        </div>
-
-        <div className="room-header-controls">
-          {/* Audio Auto-Speech Toggle */}
-          <button
-            type="button"
-            className={`room-audio-toggle ${isAiSpeaking ? 'speaking' : ''}`}
-            onClick={() => {
-              if (isAiSpeaking) {
-                stopSpeech();
-              } else if (messages.length > 0) {
-                speakVietnamese(messages[messages.length - 1].text);
-              }
-            }}
-            title="Nghe lại câu hỏi bằng giọng AI"
-          >
-            {isAiSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            <span>{isAiSpeaking ? 'AI đang nói...' : 'Phát lại giọng AI'}</span>
-          </button>
-
-          {/* Mode Switcher */}
-          <div className="room-mode-switch">
-            <button
-              type="button"
-              className={`mode-toggle-btn ${
-                activeMode === 'Text' ? 'active' : ''
-              }`}
-              onClick={() => setActiveMode('Text')}
-            >
-              <Keyboard size={15} /> Text Mode
-            </button>
-            <button
-              type="button"
-              className={`mode-toggle-btn ${
-                activeMode === 'Voice' ? 'active' : ''
-              }`}
-              onClick={() => setActiveMode('Voice')}
-            >
-              <Mic size={15} /> Voice Mode
-            </button>
-          </div>
-
-          {/* Timer Badge */}
-          <div className={`room-timer-badge ${timeLeft < 30 ? 'warning' : ''}`}>
-            <Clock size={16} />
-            <span>{formatTime(timeLeft)}</span>
-          </div>
-
-          {/* Question Index Pill */}
-          <div className="room-question-badge">
-            Câu {currentIndex + 1} / {questions.length || 5}
-          </div>
-        </div>
-      </motion.div>
+      <RoomHeader
+        currentRole={currentRole}
+        isAiSpeaking={isAiSpeaking}
+        activeMode={activeMode}
+        timeLeft={timeLeft}
+        currentIndex={currentIndex}
+        totalQuestions={questions.length}
+        onToggleSpeech={() => {
+          if (isAiSpeaking) {
+            stopSpeech();
+          } else if (messages.length > 0) {
+            speakVietnamese(messages[messages.length - 1].text);
+          }
+        }}
+        onModeChange={setActiveMode}
+        formatTime={formatTime}
+      />
 
       {/* Main 2-Column Layout */}
       <div className="room-main-layout">
@@ -939,78 +812,7 @@ export const InterviewRoom: React.FC = () => {
         </motion.div>
 
         {/* Right Column: STAR Coaching Assistant */}
-        <motion.div
-          className="room-sidebar-stack"
-          initial={{ opacity: 0, x: 14 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.35, delay: 0.1 }}
-        >
-          {/* STAR Guide Card */}
-          <div className="sidebar-card dark">
-            <div className="sidebar-title-row">
-              <Star size={18} fill="#38bdf8" color="#38bdf8" />
-              <span>Khung phương pháp STAR</span>
-            </div>
-            <div className="star-rule-list">
-              <div className="star-rule-item">
-                <div className="star-letter-badge">S</div>
-                <div className="star-rule-text">
-                  <strong>Situation (Bối cảnh)</strong>
-                  <span>
-                    Mô tả ngắn gọn bối cảnh dự án, thời điểm và vấn đề phát sinh.
-                  </span>
-                </div>
-              </div>
-              <div className="star-rule-item">
-                <div className="star-letter-badge">T</div>
-                <div className="star-rule-text">
-                  <strong>Task (Nhiệm vụ)</strong>
-                  <span>
-                    Nêu rõ mục tiêu bạn cần giải quyết hoặc KPI được giao.
-                  </span>
-                </div>
-              </div>
-              <div className="star-rule-item">
-                <div className="star-letter-badge">A</div>
-                <div className="star-rule-text">
-                  <strong>Action (Hành động)</strong>
-                  <span>
-                    Trình bày cụ thể các giải pháp, công nghệ bạn trực tiếp áp
-                    dụng.
-                  </span>
-                </div>
-              </div>
-              <div className="star-rule-item">
-                <div className="star-letter-badge">R</div>
-                <div className="star-rule-text">
-                  <strong>Result (Kết quả)</strong>
-                  <span>
-                    Nêu rõ kết quả đạt được bằng số liệu định lượng (%, thời
-                    gian, chất lượng).
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Current Question Live Hint */}
-          {questions[currentIndex]?.hint && (
-            <div className="question-hint-box">
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontWeight: 700,
-                  marginBottom: '4px',
-                }}
-              >
-                <Sparkles size={16} /> Gợi ý trả lời từ Cố vấn AI:
-              </div>
-              <div>{questions[currentIndex].hint}</div>
-            </div>
-          )}
-        </motion.div>
+        <RoomSidebar hint={questions[currentIndex]?.hint} />
       </div>
     </div>
   );

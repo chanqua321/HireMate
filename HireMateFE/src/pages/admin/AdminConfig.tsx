@@ -23,7 +23,7 @@ interface SystemConfigState {
 
 const DEFAULT_SYSTEM_CONFIG: SystemConfigState = {
   platformName: 'HireMate - Nền tảng Luyện Phỏng Vấn AI Thông Minh',
-  version: 'v2.4.0 (SWP-Release)',
+  version: 'v2.4.0 (Official Production)',
   supportEmail: 'support@hiremate.vn',
   hotline: '1900 6868',
   freeMonthlyInterviews: 3,
@@ -105,7 +105,7 @@ const AdminConfig: React.FC = () => {
         </div>
       )}
 
-      {/* SWP SYSTEM CONFIGURATION SECTIONS */}
+      {/* SYSTEM CONFIGURATION SECTIONS */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {/* Section 1: Thông tin chung */}
         <div className="admin-card">
@@ -123,7 +123,7 @@ const AdminConfig: React.FC = () => {
               />
             </div>
             <div className="admin-form-group">
-              <label className="admin-label">Phiên bản phát hành (Build Version)</label>
+              <label className="admin-label">Phiên bản hệ thống (System Version)</label>
               <input
                 className="admin-input"
                 value={systemConfig.version}

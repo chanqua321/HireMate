@@ -1,0 +1,62 @@
+import React from 'react';
+import { motion } from 'framer-motion';
+import { BookOpen, Star } from 'lucide-react';
+import './DashboardHero.css';
+
+interface DashboardHeroProps {
+  greetingName: string;
+  completionPercent: number;
+  isProUser: boolean;
+  onOpenGuideModal: () => void;
+}
+
+export const DashboardHero: React.FC<DashboardHeroProps> = ({
+  greetingName,
+  completionPercent,
+  isProUser,
+  onOpenGuideModal,
+}) => {
+  return (
+    <motion.div
+      className="dashboard-hero-row"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div className="dashboard-hero-text">
+        <h1>Welcome back{greetingName}! 👋</h1>
+        <p className="dashboard-hero-subtitle">
+          Hồ sơ nghề nghiệp (Career Profile) của bạn đã hoàn thiện <strong>{completionPercent}%</strong>.{' '}
+          {completionPercent >= 100
+            ? 'Hồ sơ đã sẵn sàng 100%. Bạn có thể tự tin bắt đầu phỏng vấn AI ngay bây giờ!'
+            : 'Vui lòng hoàn thiện hồ sơ hoặc kích hoạt CV từ kho để AI phỏng vấn sát thực tế nhất.'}
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {!isProUser && (
+          <button
+            type="button"
+            className="dashboard-guide-trigger-btn"
+            onClick={onOpenGuideModal}
+            title="Xem cẩm nang hướng dẫn hoàn thiện hồ sơ"
+          >
+            <BookOpen size={15} color="#0284c7" />
+            <span>Hướng dẫn (Tutorial)</span>
+          </button>
+        )}
+
+        {isProUser ? (
+          <div className="pro-member-pill">
+            <Star size={15} fill="#0284c7" color="#0284c7" />
+            <span>Pro Member</span>
+          </div>
+        ) : (
+          <div className="free-member-badge" title="Gói dịch vụ Miễn phí">
+            <span>Tài khoản Free</span>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};

@@ -1,0 +1,180 @@
+.right-column-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.career-readiness-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 24px 20px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.readiness-label {
+  font-size: 0.85rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 16px;
+}
+
+.donut-gauge-wrapper {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 16px auto;
+}
+
+.donut-gauge-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.donut-gauge-track {
+  fill: none;
+  stroke: #f1f5f9;
+  stroke-width: 12;
+}
+
+.donut-gauge-progress {
+  fill: none;
+  stroke: url(#readinessGrad);
+  stroke-width: 12;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s ease-out;
+}
+
+.donut-gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.donut-score-number {
+  font-size: 2.1rem;
+  font-weight: 850;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.donut-score-max {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.readiness-summary-text {
+  font-size: 0.84rem;
+  color: #475569;
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.readiness-summary-text strong {
+  color: #0284c7;
+}
+
+.improve-score-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f0f9ff;
+  color: #0284c7;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-decoration: none;
+  border: 1px solid #bae6fd;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.improve-score-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+/* AI Coach Card */
+.ai-coach-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-radius: 20px;
+  padding: 22px 20px;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.15);
+}
+
+.coach-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.coach-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 750;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.coach-lightbulb {
+  color: #facc15;
+}
+
+.coach-heading {
+  margin: 0 0 8px 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: #f8fafc;
+}
+
+.coach-quote {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: #cbd5e1;
+  font-style: italic;
+}
+
+/* Metric Tiles */
+.metric-tiles-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.metric-tile {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-tile-label {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: #64748b;
+}
+
+.metric-tile-value {
+  font-size: 1.5rem;
+  font-weight: 850;
+  color: #0f172a;
+}
