@@ -27,3 +27,9 @@ tvc-ref-frames/
 HireMateFE/.env
 HireMateFE/.env.*
 
+# ASP.NET appsettings — NEVER commit / push (secrets live only local)
+HireMateBE/**/appsettings.json
+HireMateBE/**/appsettings.*.json
+HireMateBE/**/appsettings*.json
+!HireMateBE/**/appsettings.Example.json
+
