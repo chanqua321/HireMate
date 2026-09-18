@@ -1,0 +1,351 @@
+/* =====================================================================
+   SECTION 3: PINNED SCROLL-HOLDING STAR 4-STEP REVEAL
+   Scroll is pinned while user scrolls through 185vh
+   ===================================================================== */
+.hm-pinned-star-section-outer {
+  position: relative;
+  width: 100%;
+  height: 185vh;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  z-index: 10;
+}
+
+.hm-pinned-sticky-frame {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 68px;
+  left: 0;
+  width: 100%;
+  height: calc(100vh - 68px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.hm-pinned-content-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 56px;
+  align-items: center;
+  width: 100%;
+}
+
+/* Left Column */
+.hm-pinned-left-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.hm-pinned-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+}
+
+.hm-pinned-title {
+  font-size: clamp(2.2rem, 3.6vw, 3rem);
+  font-weight: 800;
+  color: #0c182c;
+  line-height: 1.2;
+  margin: 0 0 14px 0;
+  letter-spacing: -0.025em;
+}
+
+.hm-pinned-subtitle {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: #475569;
+  margin: 0 0 28px 0;
+}
+
+/* Step Navigator list */
+.hm-star-step-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.hm-star-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: 16px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  text-align: left;
+  width: 100%;
+}
+
+.hm-star-nav-item:hover {
+  border-color: #03bfff;
+  transform: translateX(4px);
+}
+
+.hm-star-nav-item.active {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.hm-nav-letter-pill {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.hm-nav-text-block {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.hm-nav-step-name {
+  font-size: 0.96rem;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.hm-nav-step-tagline {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.hm-nav-active-indicator {
+  position: absolute;
+  right: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.hm-pinned-scroll-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.scroll-hint-bar-wrap {
+  width: 100%;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.scroll-hint-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0284c7 0%, #8b5cf6 50%, #f59e0b 100%);
+  border-radius: 999px;
+}
+
+.scroll-hint-text-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0284c7;
+}
+
+/* Right Column: Showcase Card */
+.hm-pinned-right-col {
+  position: relative;
+  width: 100%;
+}
+
+.hm-star-showcase-card {
+  border-radius: 24px;
+  border: 2px solid #bae6fd;
+  padding: 34px;
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.06);
+}
+
+.showcase-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.showcase-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.showcase-letter-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.showcase-title {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.showcase-vi-subtitle {
+  font-size: 0.88rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.showcase-score-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  border: 1px solid;
+}
+
+.showcase-tagline {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.showcase-desc {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #475569;
+  margin: 0 0 20px 0;
+}
+
+.showcase-example-box {
+  border-left: 4px solid;
+  border-radius: 0 14px 14px 0;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+
+.showcase-example-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.showcase-example-text {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #1e293b;
+  font-style: italic;
+  margin: 0;
+}
+
+.showcase-insight-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 22px;
+}
+
+.insight-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.insight-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.showcase-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.showcase-weight-tag {
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.showcase-progress-indicator {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+/* =====================================================================
+   RESPONSIVE DESIGN (Tablets & Mobile)
+   ===================================================================== */
+@media (max-width: 1024px) {
+  .hm-pinned-content-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .hm-pinned-star-section-outer {
+    height: auto;
+  }
+  .hm-pinned-sticky-frame {
+    position: relative;
+    top: 0;
+    height: auto;
+    padding: 60px 0;
+  }
+}

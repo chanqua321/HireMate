@@ -11,6 +11,7 @@ import {
   Award,
   ChevronDown,
 } from 'lucide-react';
+import './components/PinnedStarScrollSection.css';
 
 interface StarStepData {
   letter: 'S' | 'T' | 'A' | 'R';

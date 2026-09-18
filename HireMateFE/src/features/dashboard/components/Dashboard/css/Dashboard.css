@@ -52,18 +52,21 @@
   gap: 4px;
 }
 
+.quick-action-card .card-tag,
 .card-tag {
   font-size: 0.72rem;
   font-weight: 750;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  opacity: 0.85;
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 
+.quick-action-card .card-title,
 .card-title {
   margin: 0;
   font-size: 1.2rem;
   font-weight: 800;
+  color: #ffffff !important;
 }
 
 .card-icon-right {
@@ -75,6 +78,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #ffffff !important;
 }
 
 /* --- 2-Column Layout Grid --- */

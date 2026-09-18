@@ -17,23 +17,9 @@ import {
   Eye,
   FileText,
   Check,
-  Trash2,
 } from 'lucide-react';
 import { UserCvCard } from '../Dashboard';
 import './MultiCvHub.css';
-
-interface SampleCV {
-  id: string;
-  label: string;
-  name: string;
-  role: string;
-  field: string;
-  exp: string;
-  education: string;
-  skills: string[];
-  bio: string;
-  filename: string;
-}
 
 interface MultiCvHubProps {
   userCvs: UserCvCard[];
@@ -46,9 +32,7 @@ interface MultiCvHubProps {
   scanProgress: number;
   scanStatusText: string;
   fileInputRef: React.RefObject<HTMLInputElement>;
-  sampleCvs: SampleCV[];
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onAddSample: (sample: SampleCV) => void;
   onSelectActiveCv: (cv: UserCvCard) => void;
   onDeleteCv: (id: string, title: string) => void;
   onOpenDetailModal: (cv: UserCvCard) => void;
@@ -67,9 +51,7 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
   scanProgress,
   scanStatusText,
   fileInputRef,
-  sampleCvs,
   onFileUpload,
-  onAddSample,
   onSelectActiveCv,
   onDeleteCv,
   onOpenDetailModal,
@@ -154,26 +136,7 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
               </button>
             </div>
 
-            {/* Quick Demo Pre-loaded Sample CVs to Add */}
-            <div className="demo-samples-section" style={{ marginTop: '16px' }}>
-              <div className="demo-samples-label">
-                <Sparkles size={14} /> Hoặc thêm nhanh mẫu CV chuẩn ATS vào kho:
-              </div>
-              <div className="demo-samples-grid">
-                {sampleCvs.map((sample) => (
-                  <button
-                    key={sample.id}
-                    type="button"
-                    className="sample-cv-btn"
-                    onClick={() => onAddSample(sample)}
-                    title="Thêm CV này vào kho của bạn"
-                  >
-                    <span>{sample.label}</span>
-                    <Plus size={13} style={{ marginLeft: '4px', opacity: 0.7 }} />
-                  </button>
-                ))}
-              </div>
-            </div>
+
 
             {/* Scanning Progress */}
             {isScanning && (
@@ -198,6 +161,35 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Empty State — no CVs uploaded yet */}
+      {userCvs.length === 0 && !isScanning && (
+        <div style={{
+          textAlign: 'center',
+          padding: '48px 24px',
+          background: '#F8FAFC',
+          borderRadius: '16px',
+          border: '2px dashed #CBD5E1',
+          margin: '16px 0',
+        }}>
+          <FileText size={42} color="#94A3B8" style={{ marginBottom: '12px' }} />
+          <h4 style={{ color: '#334155', fontSize: '1rem', fontWeight: 700, margin: '0 0 6px' }}>
+            Chưa có CV nào trong kho
+          </h4>
+          <p style={{ color: '#64748B', fontSize: '0.85rem', margin: '0 0 16px' }}>
+            Tải lên CV đầu tiên của bạn để bắt đầu luyện phỏng vấn AI và so khớp JD.
+          </p>
+          <button
+            type="button"
+            className="add-cv-toggle-btn"
+            onClick={() => setShowAddCvForm(true)}
+            style={{ margin: '0 auto' }}
+          >
+            <Plus size={15} />
+            <span>Tải lên CV ngay</span>
+          </button>
+        </div>
+      )}
 
       {/* Section 1: Active CV Spotlight Banner */}
       {activeCv && (
@@ -354,14 +346,6 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                       title="Xem chi tiết điểm ATS và kỹ năng"
                     >
                       <Eye size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-delete-btn"
-                      onClick={() => onDeleteCv(cv.id, cv.title)}
-                      title="Xóa CV này khỏi kho"
-                    >
-                      <Trash2 size={15} />
                     </button>
                   </div>
                 </div>

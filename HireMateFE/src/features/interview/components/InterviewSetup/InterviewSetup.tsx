@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
 import { interviewService } from '../../api/interview.service';
-import { profileService } from '../../../../shared/services/profile.service';
+import { careerService } from '../../../../shared/services/career.service';
 import { INDUSTRY_ROLES, normalizeRole, normalizeIndustry } from '../../../../shared/data/questionBank';
 import {
   Settings,
@@ -143,6 +143,12 @@ export const InterviewSetup: React.FC = () => {
     return null;
   });
 
+  // Career Profile extra info from GET /api/Career/profile
+  const [careerSkills, setCareerSkills] = useState<string[]>([]);
+  const [careerExp, setCareerExp] = useState<string>('');
+  const [careerUniversity, setCareerUniversity] = useState<string>('');
+  const [careerSessionsCount, setCareerSessionsCount] = useState<number>(0);
+
   const industries = Object.keys(INDUSTRY_ROLES);
 
   // Priority order for field & role:
@@ -212,22 +218,37 @@ export const InterviewSetup: React.FC = () => {
       }
     } catch {}
 
-    // 3. Real API call to fetch latest profile from backend database
+    // 3. Real API call to fetch Career Profile from backend (GET /api/Career/profile)
     if (localStorage.getItem('hm_access_token')) {
-      profileService
-        .getProfile()
+      careerService
+        .getProfileHub()
         .then((res) => {
           if (res.ok && res.data) {
-            const beData: any = res.data;
-            const pos = beData.desiredPosition || beData.role;
-            const ind = beData.desiredIndustry || beData.field;
-            if (pos || ind) {
-              const f = normalizeIndustry(ind || field);
-              const r = normalizeRole(pos || role, f);
-              setField(f);
-              setRole(r);
-              updateInterviewConfig({ field: f, role: r });
+            const hub: any = res.data;
+            const cp = hub.profile;
+            if (cp) {
+              const pos = cp.desiredPosition || '';
+              const ind = cp.desiredIndustry || '';
+              if (pos || ind) {
+                const f = normalizeIndustry(ind || field);
+                const r = normalizeRole(pos || role, f);
+                setField(f);
+                setRole(r);
+                updateInterviewConfig({ field: f, role: r });
+              }
+              // Parse skills from JSON string or array
+              try {
+                const rawSkills = cp.skillsJson || cp.skills;
+                if (typeof rawSkills === 'string') {
+                  setCareerSkills(JSON.parse(rawSkills));
+                } else if (Array.isArray(rawSkills)) {
+                  setCareerSkills(rawSkills);
+                }
+              } catch {}
+              if (cp.experienceLevel) setCareerExp(cp.experienceLevel);
+              if (cp.university) setCareerUniversity(cp.university);
             }
+            if (typeof hub.sessionsCount === 'number') setCareerSessionsCount(hub.sessionsCount);
           }
         })
         .catch(() => {});
@@ -407,52 +428,103 @@ export const InterviewSetup: React.FC = () => {
                   </div>
                 </motion.div>
               )}
-            {/* Active CV indicator banner */}
+            {/* Active CV & Career Profile indicator banner */}
             <div
               style={{
                 marginBottom: '20px',
-                padding: '12px 16px',
+                padding: '14px 18px',
                 background: 'linear-gradient(135deg, #F0F9FF 0%, #FFFFFF 100%)',
                 border: '1.5px solid #BAE6FD',
                 borderRadius: '14px',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
+                flexDirection: 'column',
                 gap: '10px',
                 fontSize: '0.86rem',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0369A1' }}>
-                <Target size={17} color="#0284C7" />
-                <span>
-                  Hồ sơ phỏng vấn: <strong style={{ color: '#0F172A' }}>{role}</strong> ({field})
-                  {activeCvInfo?.title && (
-                    <span style={{ color: '#0284C7', opacity: 0.85, marginLeft: '6px', fontSize: '0.8rem', fontWeight: 500 }}>
-                      • từ CV: <em>{activeCvInfo.title}</em>
+              {/* Row 1: Role & CV title */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0369A1' }}>
+                  <Target size={17} color="#0284C7" />
+                  <span>
+                    Hồ sơ phỏng vấn: <strong style={{ color: '#0F172A' }}>{role}</strong> ({field})
+                    {activeCvInfo?.title && (
+                      <span style={{ color: '#0284C7', opacity: 0.85, marginLeft: '6px', fontSize: '0.8rem', fontWeight: 500 }}>
+                        • từ CV: <em>{activeCvInfo.title}</em>
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <Link
+                  to="/dashboard?tab=scan"
+                  style={{
+                    color: '#0284C7',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                    fontSize: '0.82rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: '#E0F2FE',
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                  }}
+                  title="Chọn một CV khác trong kho CV của bạn"
+                >
+                  <span>Đổi CV khác</span>
+                  <ArrowRight size={13} />
+                </Link>
+              </div>
+
+              {/* Row 2: Career Profile details (skills, exp, sessions) */}
+              {(careerSkills.length > 0 || careerExp || careerSessionsCount > 0) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', paddingTop: '6px', borderTop: '1px solid #E0F2FE' }}>
+                  {careerExp && (
+                    <span style={{
+                      background: '#DBEAFE',
+                      color: '#1E40AF',
+                      padding: '3px 10px',
+                      borderRadius: '20px',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}>
+                      <Layers size={12} /> {careerExp}
                     </span>
                   )}
-                </span>
-              </div>
-              <Link
-                to="/dashboard?tab=scan"
-                style={{
-                  color: '#0284C7',
-                  fontWeight: 700,
-                  textDecoration: 'none',
-                  fontSize: '0.82rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  background: '#E0F2FE',
-                  padding: '4px 10px',
-                  borderRadius: '8px',
-                }}
-                title="Chọn một CV khác trong kho CV của bạn"
-              >
-                <span>Đổi CV khác</span>
-                <ArrowRight size={13} />
-              </Link>
+                  {careerSkills.slice(0, 5).map((sk) => (
+                    <span
+                      key={sk}
+                      style={{
+                        background: '#F0F9FF',
+                        color: '#0369A1',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontSize: '0.76rem',
+                        fontWeight: 500,
+                        border: '1px solid #BAE6FD',
+                      }}
+                    >
+                      {sk}
+                    </span>
+                  ))}
+                  {careerSkills.length > 5 && (
+                    <span style={{ color: '#64748B', fontSize: '0.76rem' }}>+{careerSkills.length - 5} skills</span>
+                  )}
+                  {careerSessionsCount > 0 && (
+                    <span style={{
+                      marginLeft: 'auto',
+                      color: '#64748B',
+                      fontSize: '0.78rem',
+                      fontWeight: 500,
+                    }}>
+                      📊 {careerSessionsCount} buổi phỏng vấn
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSubmit}>
