@@ -343,7 +343,7 @@ export const Checkout: React.FC = () => {
               </button>
             </form>
 
-            <div
+            {/* <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -355,7 +355,7 @@ export const Checkout: React.FC = () => {
               }}
             >
               <ShieldCheck size={16} color="#16A34A" /> Hoàn tiền 100% trong 7 ngày nếu không hài lòng
-            </div>
+            </div> */}
           </div>
 
           <div className="checkout-card">
