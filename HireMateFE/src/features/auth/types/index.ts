@@ -25,6 +25,8 @@ export interface AuthResponseData {
   roles?: string[];
   onboardingCompleted?: boolean;
   isPremium?: boolean;
-  confirmLinkDev?: string;
+  avatarUrl?: string;
+  otpDev?: string;
+  verifyOtp?: boolean;
   user?: AuthUser;
 }

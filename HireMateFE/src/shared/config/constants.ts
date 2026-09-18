@@ -24,6 +24,7 @@ export const DEFAULT_PROFILE: Profile = {
   bio: '',
   exp: '',
   hobbies: [],
+  avatarUrl: '',
 };
 
 export const DEFAULT_INTERVIEW_CONFIG: InterviewConfig = {

@@ -5,6 +5,7 @@ import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
 import { authService, isSoleAdminSession } from '../../api/auth.service';
+import { isSoleAdminEmail } from '../../../../shared/config/constants';
 import { resolveAuthDisplayName } from '../../utils/displayName';
 import { useConfetti } from '../../../../shared/hooks';
 import '../../styles/auth-forms.css';
@@ -71,7 +72,20 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         await refreshProfile();
         navigate(isSoleAdminSession(res.data) ? '/admin' : '/dashboard');
         return;
-      } else if (res.status !== 0 && res.message) {
+      }
+
+      // Cần OTP → nhảy thẳng trang nhập OTP (không ở lại login)
+      const payload: any = res.data;
+      const needsOtp =
+        !isSoleAdminEmail(form.email) &&
+        (payload?.requireOtp === true ||
+          /otp|xác nhận email|chua duoc xac nhan|chưa được xác nhận/i.test(res.message || ''));
+      if (needsOtp) {
+        navigate(`/verify-otp?email=${encodeURIComponent(form.email.trim())}`, { replace: true });
+        return;
+      }
+
+      if (res.message) {
         setError(res.message);
         return;
       }
@@ -82,11 +96,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
       }
     }
 
-    // Fallback
-    const prefix = form.email.split('@')[0] || 'Người dùng';
-    const displayName = prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase();
-    login(displayName);
-    navigate('/dashboard');
+    setError('Đăng nhập thất bại. Vui lòng thử lại.');
   };
 
   const handleGoogleSuccess = async (credRes: CredentialResponse) => {
@@ -108,9 +118,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         triggerConfetti();
         navigate(isSoleAdminSession(res.data) ? '/admin' : '/dashboard');
         return;
-      } else {
-        setError(res.message || 'Đăng nhập Google thất bại.');
       }
+      setError(res.message || 'Đăng nhập Google thất bại.');
     } catch (err: any) {
       setError(err?.message || 'Lỗi kết nối khi đăng nhập với Google.');
     } finally {
@@ -119,6 +128,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
   };
 
   const handleGoogleError = () => {
+    setGoogleLoading(false);
     const origin = window.location.origin;
     setError(
       `Google từ chối origin ${origin} (lỗi origin_mismatch). Thêm đúng origin này vào Authorized JavaScript origins của Client ID Google, rồi mở lại http://localhost:3000.`

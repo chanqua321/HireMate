@@ -48,3 +48,10 @@ export const resolveAuthDisplayName = (authData: any, idToken?: string) => {
   const local = String(email).split('@')[0];
   return local || 'Người dùng';
 };
+
+/** Lấy email từ Google idToken (JWT) khi BE chưa trả email trong payload OTP. */
+export const emailFromGoogleIdToken = (idToken?: string): string => {
+  if (!idToken) return '';
+  const payload = decodeJwtPayload(idToken);
+  return typeof payload?.email === 'string' ? payload.email.trim() : '';
+};

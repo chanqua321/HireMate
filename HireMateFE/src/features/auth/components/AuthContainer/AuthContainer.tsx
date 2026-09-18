@@ -102,7 +102,8 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
           }}
           transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
         >
-          <LoginForm onSwitchMode={() => handleModeChange('register')} />
+          {/* Chỉ mount form đang active để tránh GSI initialize() 2 lần */}
+          {isLogin && <LoginForm onSwitchMode={() => handleModeChange('register')} />}
         </motion.div>
 
         {/* ==================== REGISTER FORM PANEL ==================== */}
@@ -119,10 +120,12 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
           }}
           transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
         >
-          <RegisterForm 
-            onSwitchMode={() => handleModeChange('login')} 
-            onSuccessSwitchToLogin={handleSuccessSwitchToLogin}
-          />
+          {!isLogin && (
+            <RegisterForm
+              onSwitchMode={() => handleModeChange('login')}
+              onSuccessSwitchToLogin={handleSuccessSwitchToLogin}
+            />
+          )}
         </motion.div>
 
         {/* ==================== SLIDING OVERLAY PANEL (AI-Study-Hub Style) ==================== */}

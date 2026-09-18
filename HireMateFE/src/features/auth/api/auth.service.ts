@@ -26,6 +26,10 @@ const persistSession = (data: AuthResponseData | any) => {
   const email = emailFromAuthData(data);
   if (email) localStorage.setItem('hm_user_email', email);
 
+  const avatar = data?.avatarUrl || data?.user?.avatarUrl;
+  if (avatar) localStorage.setItem('hm_avatar_url', String(avatar));
+  else localStorage.removeItem('hm_avatar_url');
+
   const roles = data?.roles || data?.user?.roles || [];
   if (Array.isArray(roles) && roles.length > 0) {
     localStorage.setItem('hm_roles', JSON.stringify(roles));
@@ -74,6 +78,7 @@ export const authService = {
     localStorage.removeItem('hm_refresh_token');
     localStorage.removeItem('hm_user_email');
     localStorage.removeItem('hm_roles');
+    localStorage.removeItem('hm_avatar_url');
     return res;
   },
 
@@ -87,6 +92,10 @@ export const authService = {
 
   async resendConfirmEmail(email: string): Promise<ApiResponse<any>> {
     return apiClient.post('/Auth/resend-confirm-email', { email }, { skipAuth: true });
+  },
+
+  async verifyEmailOtp(email: string, otp: string): Promise<ApiResponse<any>> {
+    return apiClient.post('/Auth/verify-otp', { email, otp }, { skipAuth: true });
   },
 
   async getMe(): Promise<ApiResponse<any>> {
