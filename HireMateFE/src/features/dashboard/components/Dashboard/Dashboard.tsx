@@ -4,90 +4,32 @@ import { useApp } from '../../../../app/context/AppContext';
 import {
   profileService,
   cvService,
-  growthService,
   matchService,
   emailService,
 } from '../../../../shared/services';
 import { dashboardService } from '../../api/dashboard.service';
 import {
   Video,
-  FileText,
-  TrendingUp,
-  Star,
-  Sparkles,
-  Bot,
-  Lightbulb,
-  Check,
-  CheckCircle2,
-  UploadCloud,
-  Camera,
-  Save,
   User,
-  Briefcase,
-  GraduationCap,
-  Plus,
-  X,
-  RefreshCw,
-  Cpu,
-  Layers,
-  Award,
-  Loader2,
-  Copy,
+  FolderOpen,
   Target,
   Mail,
-  Send,
-  HelpCircle,
-  Compass,
-  ArrowRight,
-  ArrowLeft,
-  Edit3,
-  BookOpen,
-  ChevronDown,
+  Eye,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { DashboardGuideModal } from '../DashboardGuideModal/DashboardGuideModal';
+import { DashboardHero } from './components/DashboardHero';
+import { CareerProfileForm } from './components/CareerProfileForm';
+import { MultiCvHub } from './components/MultiCvHub';
+import { JdMatcher } from './components/JdMatcher';
+import { AiEmailGenerator } from './components/AiEmailGenerator';
+import { DashboardSidebar } from './components/DashboardSidebar';
+import { CvDetailModal } from './components/CvDetailModal';
+import { CheckCvModal } from './components/CheckCvModal';
 import './css/Dashboard.css';
 
-// Popular job roles
-const POPULAR_ROLES = [
-  'Frontend Developer',
-  'Backend Developer',
-  'Fullstack Developer',
-  'Data Analyst',
-  'AI / ML Engineer',
-  'Product Manager',
-  'UI/UX Designer',
-];
-
-// Experience levels
-const EXP_LEVELS = [
-  'Chưa có KN (Intern / Fresher)',
-  'Dưới 1 năm (Junior)',
-  '1 - 3 năm (Mid-level)',
-  '3 - 5 năm (Senior)',
-  '5+ năm (Lead / Manager)',
-];
-
-// Suggested Skills to quick-add
-const SUGGESTED_SKILLS = [
-  'React',
-  'TypeScript',
-  'JavaScript',
-  'Node.js',
-  'Python',
-  'SQL',
-  'TailwindCSS',
-  'Git',
-  'Docker',
-  'REST API',
-  'Figma',
-  'Agile/Scrum',
-  'STAR Method',
-  'Problem Solving',
-];
-
-// Sample CVs for instant AI scan demo
-interface SampleCV {
+// Sample CVs for instant demo
+export interface SampleCV {
   id: string;
   label: string;
   name: string;
@@ -103,7 +45,7 @@ interface SampleCV {
 const SAMPLE_CVS: SampleCV[] = [
   {
     id: 'fe-dev',
-    label: '📄 CV Lập trình viên Frontend (2 năm KN)',
+    label: '📄 CV Frontend Developer (2 năm KN)',
     name: 'Nguyễn Minh Anh',
     role: 'Frontend Developer',
     field: 'Công nghệ thông tin',
@@ -127,7 +69,7 @@ const SAMPLE_CVS: SampleCV[] = [
   },
   {
     id: 'pm-lead',
-    label: '🚀 CV Quản lý Sản phẩm / E-Commerce (3+ năm KN)',
+    label: '🚀 CV Quản lý Sản phẩm (Product Manager 3+ năm)',
     name: 'Lê Thanh Thảo',
     role: 'Product Manager',
     field: 'Thương mại điện tử (E-Commerce)',
@@ -139,34 +81,107 @@ const SAMPLE_CVS: SampleCV[] = [
   },
 ];
 
+// Multi-CV Data Model
+export interface UserCvCard {
+  id: string;
+  title: string;
+  filename: string;
+  role: string;
+  field: string;
+  exp: string;
+  education: string;
+  skills: string[];
+  bio: string;
+  uploadedAt: string;
+  atsScore: number;
+  formatScore?: number;
+  keywordsScore?: number;
+  readabilityScore?: number;
+  isBackendDoc?: boolean;
+}
+
+const DEFAULT_USER_CVS: UserCvCard[] = [
+  {
+    id: 'cv-fe-01',
+    title: 'CV_Frontend_Developer_React.pdf',
+    filename: 'CV_Frontend_Developer_React.pdf',
+    role: 'Frontend Developer',
+    field: 'Công nghệ thông tin',
+    exp: '1 - 3 năm (Mid-level)',
+    education: 'Đại học Bách Khoa TP.HCM - Kỹ thuật Phần mềm',
+    skills: ['React', 'TypeScript', 'TailwindCSS', 'Redux Toolkit', 'REST API', 'Next.js', 'Git'],
+    bio: 'Kỹ sư Frontend với hơn 2 năm kinh nghiệm xây dựng ứng dụng web SPA hiệu năng cao, đam mê UI/UX tối giản và tối ưu trải nghiệm người dùng.',
+    uploadedAt: '18/09/2026',
+    atsScore: 88,
+    formatScore: 92,
+    keywordsScore: 85,
+    readabilityScore: 88,
+  },
+  {
+    id: 'cv-be-02',
+    title: 'CV_Backend_Engineer_DotNet.pdf',
+    filename: 'CV_Backend_Engineer_DotNet.pdf',
+    role: 'Backend Engineer (C# / .NET)',
+    field: 'Công nghệ thông tin',
+    exp: '2 - 4 năm kinh nghiệm',
+    education: 'Đại học Bách Khoa TP.HCM - Khoa học Máy tính',
+    skills: ['C#', '.NET Core', 'SQL Server', 'REST API', 'Docker', 'Microservices', 'Redis'],
+    bio: 'Kỹ sư Backend chuyên sâu kiến trúc hệ thống phân tán, xử lý dữ liệu lớn, thiết kế RESTful API an toàn và tối ưu truy vấn Database.',
+    uploadedAt: '16/09/2026',
+    atsScore: 92,
+    formatScore: 95,
+    keywordsScore: 90,
+    readabilityScore: 91,
+  },
+  {
+    id: 'cv-pm-03',
+    title: 'CV_Product_Manager_Fintech.pdf',
+    filename: 'CV_Product_Manager_Fintech.pdf',
+    role: 'Product Manager',
+    field: 'Tài chính - Ngân hàng (Fintech)',
+    exp: '3 - 5 năm (Senior)',
+    education: 'Đại học Kinh Tế TP.HCM - Hệ thống thông tin quản trị',
+    skills: ['Product Strategy', 'Agile/Scrum', 'User Research', 'Figma', 'Roadmapping', 'Jira', 'Data-driven Decision'],
+    bio: 'Product Manager với kinh nghiệm dẫn dắt đội ngũ kỹ thuật và thiết kế ra mắt các sản phẩm Fintech B2B/B2C tăng trưởng người dùng 40% hàng quý.',
+    uploadedAt: '14/09/2026',
+    atsScore: 85,
+    formatScore: 88,
+    keywordsScore: 82,
+    readabilityScore: 86,
+  },
+];
+
 export const Dashboard: React.FC = () => {
   const { profile, updateProfile, history, lastResult } = useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const tabQuery = searchParams.get('tab');
-
   const initialTab =
     tabQuery && ['manual', 'scan', 'match', 'email'].includes(tabQuery)
       ? (tabQuery as 'manual' | 'scan' | 'match' | 'email')
       : 'manual';
 
-  // Active Tab: 'manual' (Tự động tạo CV / Điền hồ sơ) | 'scan' (Tải lên CV) | 'match' | 'email'
+  // Active Tab: 'manual' (Hồ sơ nghề nghiệp) | 'scan' (Kho CV cá nhân) | 'match' | 'email'
   const [activeTab, setActiveTab] = useState<'manual' | 'scan' | 'match' | 'email'>(initialTab);
   const [checkCvModalOpen, setCheckCvModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (tabQuery && ['manual', 'scan', 'match', 'email'].includes(tabQuery)) {
-      setActiveTab(tabQuery as 'manual' | 'scan' | 'match' | 'email');
-    }
-  }, [tabQuery]);
+  // Multi-CV Hub State
+  const [userCvs, setUserCvs] = useState<UserCvCard[]>([]);
+  const [activeCvId, setActiveCvId] = useState<string>('');
+  const [selectedCvForDetail, setSelectedCvForDetail] = useState<UserCvCard | null>(null);
+  const [cvDetailModalOpen, setCvDetailModalOpen] = useState<boolean>(false);
+  const [showAddCvForm, setShowAddCvForm] = useState<boolean>(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [selectedMatchCvId, setSelectedMatchCvId] = useState<string>('');
 
-  const handleTabChange = (tab: 'manual' | 'scan' | 'match' | 'email') => {
-    setActiveTab(tab);
-    setSearchParams({ tab });
-  };
+  // Scanning & Upload state
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanStatusText, setScanStatusText] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Manual Profile Form State (Đa ngành, để trống ban đầu nếu chưa điền)
+  // Career Profile Form State (Hồ sơ nghề nghiệp - dbo.CareerProfiles)
   const [name, setName] = useState(profile.name || '');
   const [role, setRole] = useState(profile.role || '');
   const [field, setField] = useState(profile.field || '');
@@ -177,19 +192,8 @@ export const Dashboard: React.FC = () => {
   const [skills, setSkills] = useState<string[]>(
     profile.skills && profile.skills.length > 0 ? profile.skills : []
   );
-  const [newSkillInput, setNewSkillInput] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [savingManual, setSavingManual] = useState(false);
-
-  // AI CV Scanner State
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [scanStatusText, setScanStatusText] = useState('');
-  const [extractedData, setExtractedData] = useState<SampleCV | null>(null);
-  const [selectedSampleId, setSelectedSampleId] = useState<string>('');
-  const [appliedToast, setAppliedToast] = useState(false);
-  const [dashboardStats, setDashboardStats] = useState<any>(null);
 
   // JD Matcher State
   const [jdText, setJdText] = useState('');
@@ -205,31 +209,22 @@ export const Dashboard: React.FC = () => {
   const [generatedEmail, setGeneratedEmail] = useState<any>(null);
   const [copiedEmail, setCopiedEmail] = useState(false);
 
-  // Tutorial Popup State (Chỉ popup 1 lần duy nhất cho tài khoản mới chưa điền đủ 100% hồ sơ)
+  // Stats & Guide
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
 
-  // Combobox Dropdown States for Field & Experience
-  const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false);
-  const [expDropdownOpen, setExpDropdownOpen] = useState(false);
-  const fieldWrapperRef = useRef<HTMLDivElement>(null);
-  const expWrapperRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (fieldWrapperRef.current && !fieldWrapperRef.current.contains(e.target as Node)) {
-        setFieldDropdownOpen(false);
-      }
-      if (expWrapperRef.current && !expWrapperRef.current.contains(e.target as Node)) {
-        setExpDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    if (tabQuery && ['manual', 'scan', 'match', 'email'].includes(tabQuery)) {
+      setActiveTab(tabQuery as 'manual' | 'scan' | 'match' | 'email');
+    }
+  }, [tabQuery]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleTabChange = (tab: 'manual' | 'scan' | 'match' | 'email') => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
-  // Sync state when profile changes
+  // Sync profile when AppContext updates
   useEffect(() => {
     if (profile.name) setName(profile.name);
     if (profile.role) {
@@ -244,14 +239,319 @@ export const Dashboard: React.FC = () => {
     if (profile.skills && profile.skills.length > 0) setSkills(profile.skills);
   }, [profile]);
 
+  // Load CV Collection
+  useEffect(() => {
+    const loadCvs = async () => {
+      try {
+        let loadedCvs: UserCvCard[] = [];
+
+        if (localStorage.getItem('hm_access_token')) {
+          try {
+            const res = await cvService.listCvs();
+            if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+              loadedCvs = res.data.map((d: any) => ({
+                id: d.id,
+                title: d.fileName || 'CV Document.pdf',
+                filename: d.fileName || 'CV Document.pdf',
+                role:
+                  d.parsedProfile?.desiredPosition ||
+                  (d.fileName.toLowerCase().includes('backend')
+                    ? 'Backend Developer'
+                    : d.fileName.toLowerCase().includes('data')
+                    ? 'Data Analyst'
+                    : 'Frontend Developer'),
+                field: d.parsedProfile?.desiredIndustry || 'Công nghệ thông tin',
+                exp: d.parsedProfile?.experienceYears || '1 - 3 năm (Mid-level)',
+                education: d.parsedProfile?.education || 'Đại học Bách Khoa TP.HCM',
+                skills: d.parsedProfile?.skills || ['React', 'TypeScript', 'REST API', 'Git'],
+                bio: d.parsedProfile?.bio || 'Hồ sơ nghề nghiệp đã được phân tích bởi HireMate AI.',
+                uploadedAt: d.uploadedAt
+                  ? new Date(d.uploadedAt).toLocaleDateString('vi-VN')
+                  : '18/09/2026',
+                atsScore: d.overallScore || d.formatScore || 88,
+                formatScore: d.formatScore || 90,
+                keywordsScore: d.keywordsScore || 85,
+                readabilityScore: d.readabilityScore || 89,
+                isBackendDoc: true,
+              }));
+            }
+          } catch (e) {}
+        }
+
+        if (loadedCvs.length === 0) {
+          const localSaved = localStorage.getItem('hm_saved_user_cvs');
+          if (localSaved) {
+            try {
+              loadedCvs = JSON.parse(localSaved);
+            } catch {}
+          }
+        }
+
+        if (loadedCvs.length === 0) {
+          loadedCvs = DEFAULT_USER_CVS;
+        }
+
+        setUserCvs(loadedCvs);
+
+        const savedActiveId = localStorage.getItem('hm_active_cv_id');
+        const foundActive = loadedCvs.find((c) => c.id === savedActiveId);
+        if (foundActive) {
+          setActiveCvId(foundActive.id);
+          setSelectedMatchCvId(foundActive.id);
+        } else if (loadedCvs.length > 0) {
+          setActiveCvId(loadedCvs[0].id);
+          setSelectedMatchCvId(loadedCvs[0].id);
+          localStorage.setItem('hm_active_cv_id', loadedCvs[0].id);
+        }
+      } catch (err) {
+        setUserCvs(DEFAULT_USER_CVS);
+        setActiveCvId(DEFAULT_USER_CVS[0].id);
+      }
+    };
+
+    loadCvs();
+  }, []);
+
+  // Fetch Dashboard Stats
+  useEffect(() => {
+    if (localStorage.getItem('hm_access_token')) {
+      dashboardService.getDashboardStats().then((res) => {
+        if (res.ok && res.data) {
+          setDashboardStats(res.data);
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  // Set Active CV: Updates Career Profile context and storage
+  const handleSelectActiveCv = (cv: UserCvCard) => {
+    setActiveCvId(cv.id);
+    setSelectedMatchCvId(cv.id);
+    localStorage.setItem('hm_active_cv_id', cv.id);
+
+    setName(cv.title.replace(/^CV_/, '').replace(/\.pdf$/, '').replace(/_/g, ' ') || name);
+    setRole(cv.role);
+    setField(cv.field);
+    setExp(cv.exp);
+    setEducation(cv.education);
+    setSkills(cv.skills);
+    setBio(cv.bio);
+
+    updateProfile({
+      role: cv.role,
+      field: cv.field,
+      exp: cv.exp,
+      education: cv.education,
+      skills: cv.skills,
+      bio: cv.bio,
+    });
+
+    setToastMsg(`🎯 Đã kích hoạt CV "${cv.title}" làm hồ sơ phỏng vấn chính!`);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const handleDeleteCv = (id: string, title: string) => {
+    const remaining = userCvs.filter((c) => c.id !== id);
+    setUserCvs(remaining);
+    localStorage.setItem('hm_saved_user_cvs', JSON.stringify(remaining));
+
+    if (activeCvId === id && remaining.length > 0) {
+      handleSelectActiveCv(remaining[0]);
+    }
+    setToastMsg(`🗑️ Đã xóa CV "${title}" khỏi kho.`);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  // Upload New CV into user's collection
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    setScanProgress(15);
+    setScanStatusText(`📤 Đang tải lên file "${file.name}"...`);
+
+    let newCvCard: UserCvCard;
+
+    if (localStorage.getItem('hm_access_token')) {
+      try {
+        const uploadRes = await cvService.uploadCv(file);
+        if (uploadRes.ok && uploadRes.data?.id) {
+          setScanProgress(55);
+          setScanStatusText('🤖 AI đang phân tích toàn diện nội dung CV...');
+          const analyzeRes = await cvService.analyzeCv(uploadRes.data.id);
+          const ai = analyzeRes.ok && analyzeRes.data ? analyzeRes.data : null;
+
+          newCvCard = {
+            id: uploadRes.data.id,
+            title: file.name,
+            filename: file.name,
+            role:
+              ai?.parsedRole ||
+              (file.name.toLowerCase().includes('backend')
+                ? 'Backend Developer'
+                : file.name.toLowerCase().includes('data')
+                ? 'Data Analyst'
+                : file.name.toLowerCase().includes('pm') || file.name.toLowerCase().includes('manager')
+                ? 'Product Manager'
+                : 'Frontend Developer'),
+            field: field || 'Công nghệ thông tin',
+            exp: ai?.parsedExp || exp || '1 - 3 năm (Mid-level)',
+            education: ai?.parsedEducation || education || 'Đại học Bách Khoa TP.HCM',
+            skills:
+              Array.isArray(ai?.parsedSkills) && ai?.parsedSkills.length > 0
+                ? ai.parsedSkills
+                : ['React', 'TypeScript', 'REST API', 'Git'],
+            bio: ai?.parsedBio || 'Hồ sơ nghề nghiệp được trích xuất và phân tích bởi HireMate AI.',
+            uploadedAt: new Date().toLocaleDateString('vi-VN'),
+            atsScore: ai?.overallScore || ai?.formatScore || 90,
+            formatScore: ai?.formatScore || 92,
+            keywordsScore: ai?.keywordsScore || 88,
+            readabilityScore: ai?.readabilityScore || 90,
+            isBackendDoc: true,
+          };
+
+          setScanProgress(100);
+          setScanStatusText('✅ Đã lưu CV mới vào kho CV của bạn!');
+          setIsScanning(false);
+
+          const updatedList = [newCvCard, ...userCvs];
+          setUserCvs(updatedList);
+          localStorage.setItem('hm_saved_user_cvs', JSON.stringify(updatedList));
+          setShowAddCvForm(false);
+          setToastMsg(`🎉 Đã thêm thành công CV "${file.name}" vào kho!`);
+          setTimeout(() => setToastMsg(null), 3500);
+          return;
+        }
+      } catch (err) {}
+    }
+
+    // Local simulation fallback
+    const roleGuess = file.name.toLowerCase().includes('backend')
+      ? 'Backend Developer'
+      : file.name.toLowerCase().includes('data')
+      ? 'Data Analyst'
+      : file.name.toLowerCase().includes('manager') || file.name.toLowerCase().includes('pm')
+      ? 'Product Manager'
+      : 'Frontend Developer';
+
+    newCvCard = {
+      id: `cv-local-${Date.now()}`,
+      title: file.name,
+      filename: file.name,
+      role: roleGuess,
+      field: roleGuess === 'Data Analyst' ? 'Tài chính - Ngân hàng (Fintech)' : 'Công nghệ thông tin',
+      exp: '1 - 3 năm (Mid-level)',
+      education: 'Đại học Bách Khoa TP.HCM',
+      skills:
+        roleGuess === 'Backend Developer'
+          ? ['C#', '.NET Core', 'SQL Server', 'Docker', 'REST API']
+          : roleGuess === 'Data Analyst'
+          ? ['SQL', 'Python', 'Power BI', 'Excel Advanced', 'Pandas']
+          : ['React', 'TypeScript', 'TailwindCSS', 'Redux Toolkit', 'Git'],
+      bio: `Hồ sơ ${roleGuess} chuyên môn đã được tải lên và lưu vào kho CV HireMate.`,
+      uploadedAt: new Date().toLocaleDateString('vi-VN'),
+      atsScore: Math.floor(Math.random() * 8) + 88,
+      formatScore: 92,
+      keywordsScore: 88,
+      readabilityScore: 90,
+    };
+
+    setScanProgress(100);
+    setIsScanning(false);
+    const updatedList = [newCvCard, ...userCvs];
+    setUserCvs(updatedList);
+    localStorage.setItem('hm_saved_user_cvs', JSON.stringify(updatedList));
+    setShowAddCvForm(false);
+    setToastMsg(`🎉 Đã thêm thành công CV "${file.name}" vào kho!`);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const handleAddSampleCvToHub = (sample: SampleCV) => {
+    const newCvCard: UserCvCard = {
+      id: `cv-sample-${Date.now()}`,
+      title: sample.filename,
+      filename: sample.filename,
+      role: sample.role,
+      field: sample.field,
+      exp: sample.exp,
+      education: sample.education,
+      skills: sample.skills,
+      bio: sample.bio,
+      uploadedAt: new Date().toLocaleDateString('vi-VN'),
+      atsScore: Math.floor(Math.random() * 6) + 88,
+      formatScore: 92,
+      keywordsScore: 89,
+      readabilityScore: 91,
+    };
+
+    const updatedList = [newCvCard, ...userCvs];
+    setUserCvs(updatedList);
+    localStorage.setItem('hm_saved_user_cvs', JSON.stringify(updatedList));
+    setShowAddCvForm(false);
+    setToastMsg(`🎉 Đã thêm CV "${sample.filename}" vào kho của bạn!`);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  // Save Career Profile (writes to dbo.CareerProfiles)
+  const handleSaveManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingManual(true);
+    const parsedGradYear =
+      typeof graduationYear === 'number'
+        ? graduationYear
+        : parseInt(String(graduationYear), 10) || 2026;
+
+    const updated = {
+      name: name.trim(),
+      fullName: name.trim(),
+      role: role.trim() || 'Lập trình viên Backend',
+      desiredPosition: role.trim() || 'Lập trình viên Backend',
+      field: field.trim(),
+      desiredIndustry: field.trim(),
+      exp: exp.trim(),
+      experienceLevel: exp.trim(),
+      experienceYears: exp.trim(),
+      education: education.trim(),
+      university: education.trim(),
+      major: 'Công nghệ thông tin',
+      graduationYear: parsedGradYear,
+      skills: skills,
+      hobbies: skills,
+      bio: bio.trim(),
+    };
+
+    updateProfile(updated);
+
+    try {
+      await profileService.updateProfile(updated);
+    } catch (err) {}
+
+    setSavingManual(false);
+    setSavedSuccess(true);
+    setCheckCvModalOpen(true);
+    setTimeout(() => setSavedSuccess(false), 2800);
+  };
+
+  // JD Matcher Handler
   const handleMatchJd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!jdText.trim()) return;
     setIsMatching(true);
     setMatchResult(null);
 
+    const targetCv =
+      userCvs.find((c) => c.id === selectedMatchCvId) ||
+      userCvs.find((c) => c.id === activeCvId);
+    const targetSkills =
+      targetCv?.skills && targetCv.skills.length > 0 ? targetCv.skills : skills;
+
     try {
-      const res = await matchService.match({ jdText: jdText.trim() });
+      const res = await matchService.match({
+        jdText: jdText.trim(),
+        cvDocumentId: targetCv?.isBackendDoc ? targetCv.id : undefined,
+      });
+
       if (res.ok && res.data) {
         let parsedJson: any = null;
         if (typeof res.data.resultJson === 'string') {
@@ -263,7 +563,7 @@ export const Dashboard: React.FC = () => {
         }
 
         const score = res.data.overallScore || parsedJson?.overall || 85;
-        const matching = parsedJson?.skills || parsedJson?.matchingSkills || skills.slice(0, 4);
+        const matching = parsedJson?.skills || parsedJson?.matchingSkills || targetSkills.slice(0, 4);
         const gaps = parsedJson?.gaps || parsedJson?.missingSkills || ['CI/CD Pipeline', 'Microservices'];
         const suggestions = parsedJson?.suggestions || parsedJson?.recommendations || [
           'Chuẩn bị kỹ câu trả lời STAR cho các kỹ năng cốt lõi.',
@@ -290,6 +590,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  // AI Email Generator Handler
   const handleGenerateEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsGeneratingEmail(true);
@@ -351,42 +652,21 @@ export const Dashboard: React.FC = () => {
     setTimeout(() => setCopiedEmail(false), 2500);
   };
 
-  // Fetch real Dashboard stats on mount
-  useEffect(() => {
-    if (localStorage.getItem('hm_access_token')) {
-      dashboardService.getDashboardStats().then((res) => {
-        if (res.ok && res.data) {
-          setDashboardStats(res.data);
-        }
-      }).catch(() => {});
-    }
-  }, []);
-
-  // Calculate profile completion percentage accurately (bắt buộc hoàn thiện thông tin cơ bản để đạt 100%)
+  // Completion calculation
   const calculateCompletion = () => {
     let score = 0;
-    // 1. Họ và tên ứng viên (Bắt buộc)
     if (name && name.trim().length >= 2 && !name.toLowerCase().includes('google user')) score += 15;
-    // 2. Vị trí mục tiêu (Bắt buộc)
     if (role && role.trim().length >= 2) score += 20;
-    // 3. Ngành nghề / Lĩnh vực (Bắt buộc)
     if (field && field.trim().length >= 2 && !field.includes('--')) score += 20;
-    // 4. Số năm kinh nghiệm (Bắt buộc)
     if (exp && exp.trim().length >= 2 && !exp.includes('--')) score += 15;
-    // 5. Học vấn / Trường ĐH (Bắt buộc)
     if (education && education.trim().length >= 2) score += 15;
-    // 6. Kỹ năng chuyên môn (Bắt buộc tối thiểu 2 kỹ năng)
     if (skills && skills.length >= 2) score += 10;
     else if (skills && skills.length === 1) score += 5;
-    // 7. Giới thiệu / Mục tiêu hoặc Năm tốt nghiệp
     if ((bio && bio.trim().length >= 10) || graduationYear) score += 5;
-
     return Math.min(score, 100);
   };
 
   const completionPercent = calculateCompletion();
-
-  // Kiểm tra tài khoản Pro / Premium dựa trên dữ liệu thật từ Backend
   const isProUser = Boolean(
     profile.isPremium ||
     (profile.currentPlanCode && profile.currentPlanCode.toLowerCase() !== 'free')
@@ -397,220 +677,12 @@ export const Dashboard: React.FC = () => {
     .toLowerCase()
     .replace(/\s+/g, '_');
 
-  // Tutorial Auto Popup (Chỉ popup 1 lần duy nhất cho tài khoản mới chưa điền đủ 100% hồ sơ)
-  useEffect(() => {
-    // Dọn dẹp cơ chế cũ theo ngày
-    localStorage.removeItem('hm_daily_guide_last_seen');
-
-    const seenKey = `hm_tutorial_seen_${accountKey}`;
-    const alreadySeen = localStorage.getItem(seenKey) === 'true';
-
-    // Chỉ tự động popup khi: tài khoản chưa từng xem lần nào VÀ hồ sơ chưa điền đủ 100%
-    const isProfileIncomplete = completionPercent < 100 || !profile.onboardingCompleted;
-
-    if (!alreadySeen && isProfileIncomplete) {
-      const timer = setTimeout(() => {
-        setGuideModalOpen(true);
-      }, 700);
-      return () => clearTimeout(timer);
-    }
-  }, [accountKey, completionPercent, profile.onboardingCompleted]);
-
-  // Fallback / dynamic scores for gauge
   const readinessScore =
     dashboardStats?.readinessScore ||
     lastResult?.overall ||
     (history.length ? history[history.length - 1].score : 86);
   const totalInterviews =
-    dashboardStats?.totalInterviews ||
-    (history.length > 0 ? history.length : 4);
-
-  // Donut Gauge calculations
-  const radius = 56;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (readinessScore / 100) * circumference;
-
-  // Handle Add / Remove Skill
-  const handleAddSkill = (skillToAdd?: string) => {
-    const s = (skillToAdd || newSkillInput).trim();
-    if (s && !skills.some((item) => item.toLowerCase() === s.toLowerCase())) {
-      setSkills([...skills, s]);
-      setNewSkillInput('');
-    }
-  };
-
-  const handleRemoveSkill = (skillToRemove: string) => {
-    setSkills(skills.filter((s) => s !== skillToRemove));
-  };
-
-  // Handle Manual Save
-  const handleSaveManual = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingManual(true);
-    const parsedGradYear =
-      typeof graduationYear === 'number'
-        ? graduationYear
-        : parseInt(String(graduationYear), 10);
-    const updated = {
-      name: name.trim(),
-      fullName: name.trim(),
-      role: role.trim(),
-      desiredPosition: role.trim(),
-      field: field.trim(),
-      desiredIndustry: field.trim(),
-      exp: exp.trim(),
-      experienceLevel: exp.trim(),
-      experienceYears: exp.trim(),
-      education: education.trim(),
-      university: education.trim(),
-      graduationYear: Number.isFinite(parsedGradYear) && parsedGradYear > 0 ? parsedGradYear : undefined,
-      skills: skills,
-      hobbies: skills,
-      bio: bio.trim(),
-    };
-
-    updateProfile(updated);
-
-    try {
-      await profileService.updateProfile(updated);
-    } catch (err) {
-      // Fallback gracefully
-    }
-
-    setSavingManual(false);
-    setSavedSuccess(true);
-    setCheckCvModalOpen(true);
-    setTimeout(() => {
-      setSavedSuccess(false);
-    }, 2800);
-  };
-
-  // Handle AI Scan Trigger
-  const runAIScanningProcess = (dataToExtract: SampleCV) => {
-    setIsScanning(true);
-    setScanProgress(10);
-    setScanStatusText('🔍 Đang khởi tạo bộ phân giải OCR thị giác máy học...');
-    setExtractedData(null);
-
-    setTimeout(() => {
-      setScanProgress(38);
-      setScanStatusText('📑 Đang bóc tách cấu trúc CV & nhận diện các phân vùng thông tin...');
-    }, 600);
-
-    setTimeout(() => {
-      setScanProgress(72);
-      setScanStatusText('⚡ AI trích xuất thông tin: Họ tên, Kinh nghiệm, Kỹ năng, Học vấn...');
-    }, 1200);
-
-    setTimeout(() => {
-      setScanProgress(100);
-      setScanStatusText('✅ Đã nhận diện và trích xuất thành công 100% dữ liệu!');
-      setIsScanning(false);
-      setExtractedData(dataToExtract);
-    }, 1800);
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFile(file);
-      setIsScanning(true);
-      setScanProgress(15);
-      setScanStatusText(`📤 Đang tải lên file "${file.name}"...`);
-
-      if (localStorage.getItem('hm_access_token')) {
-        try {
-          const uploadRes = await cvService.uploadCv(file);
-          if (uploadRes.ok && uploadRes.data?.id) {
-            setScanProgress(45);
-            setScanStatusText('🤖 AI đang phân tích toàn diện nội dung CV...');
-            const analyzeRes = await cvService.analyzeCv(uploadRes.data.id);
-            if (analyzeRes.ok && analyzeRes.data) {
-              const ai = analyzeRes.data;
-              const extracted: SampleCV = {
-                id: ai.id || uploadRes.data.id,
-                label: `📄 ${file.name}`,
-                name: ai.parsedName || name || '',
-                role: ai.parsedRole || role || '',
-                field: field,
-                exp: ai.parsedExp || exp || '',
-                education: ai.parsedEducation || education || '',
-                skills: Array.isArray(ai.parsedSkills) && ai.parsedSkills.length > 0 ? ai.parsedSkills : skills,
-                bio: ai.parsedBio || bio || '',
-                filename: file.name,
-              };
-              setScanProgress(100);
-              setScanStatusText('✅ Đã bóc tách thành công thông tin từ CV!');
-              setIsScanning(false);
-              setExtractedData(extracted);
-              return;
-            }
-          }
-        } catch (err) {
-          setIsScanning(false);
-          setScanStatusText('');
-          alert('Phân tích CV thất bại. Kiểm tra kết nối API / gói dịch vụ rồi thử lại.');
-          return;
-        }
-      }
-
-      setIsScanning(false);
-      setScanStatusText('');
-      alert('Không phân tích được CV. Vui lòng thử lại.');
-    }
-  };
-
-  const handleSelectSample = (sample: SampleCV) => {
-    setSelectedSampleId(sample.id);
-    setUploadedFile(null);
-    runAIScanningProcess(sample);
-  };
-
-  // Apply Scanned Data to Profile & Save
-  const handleApplyScannedData = async () => {
-    if (!extractedData) return;
-
-    // Update local form state
-    setName(extractedData.name);
-    setRole(extractedData.role);
-    setField(extractedData.field);
-    setExp(extractedData.exp);
-    setEducation(extractedData.education);
-    setSkills(extractedData.skills);
-    setBio(extractedData.bio);
-
-    const payload = {
-      name: extractedData.name,
-      fullName: extractedData.name,
-      role: extractedData.role,
-      desiredPosition: extractedData.role,
-      field: extractedData.field,
-      desiredIndustry: extractedData.field,
-      exp: extractedData.exp,
-      experienceYears: extractedData.exp,
-      education: extractedData.education,
-      skills: extractedData.skills,
-      bio: extractedData.bio,
-    };
-
-    // Save to AppContext
-    updateProfile(payload);
-
-    // Save to Backend
-    if (localStorage.getItem('hm_access_token')) {
-      try {
-        await profileService.updateProfile(payload);
-      } catch (e) {}
-    }
-
-    setAppliedToast(true);
-    setTimeout(() => {
-      setAppliedToast(false);
-      setActiveTab('manual');
-      setCheckCvModalOpen(true);
-    }, 1200);
-  };
-
+    dashboardStats?.totalInterviews || (history.length > 0 ? history.length : 4);
 
   const getGreetingName = () => {
     const rawName = (profile.name || name || '').trim();
@@ -625,1360 +697,274 @@ export const Dashboard: React.FC = () => {
     return `, ${rawName}`;
   };
 
+  const activeCv = userCvs.find((c) => c.id === activeCvId) || userCvs[0];
+  const otherCvs = userCvs.filter((c) => c.id !== activeCv?.id);
+
   return (
     <div className="dashboard-vibe-container">
       {/* 1. Top Hero Section */}
+      <DashboardHero
+        greetingName={getGreetingName()}
+        completionPercent={completionPercent}
+        isProUser={isProUser}
+        onOpenGuideModal={() => setGuideModalOpen(true)}
+      />
+
+      {/* 2. Quick Action Cards */}
       <motion.div
-        className="dashboard-hero-row"
-        initial={{ opacity: 0, y: -10 }}
+        className="quick-actions-grid"
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
+        transition={{ duration: 0.4, delay: 0.08 }}
       >
-        <div className="dashboard-hero-text">
-          <h1>
-            Welcome back{getGreetingName()}! 👋
-          </h1>
-          <p className="dashboard-hero-subtitle">
-            Hồ sơ của bạn đã hoàn thiện <strong>{completionPercent}%</strong>.{' '}
-            {completionPercent >= 100
-              ? 'Hồ sơ đã sẵn sàng 100%. Bạn có thể tự tin bắt đầu phỏng vấn AI ngay bây giờ!'
-              : 'Vui lòng hoàn thiện hồ sơ hoặc tải lên CV để nhận câu hỏi phỏng vấn sát thực tế nhất.'}
-          </p>
-        </div>
+        <Link to="/interview-setup" className="quick-action-card card-teal">
+          <div className="card-content-left">
+            <span className="card-tag">Interactive</span>
+            <h3 className="card-title">Phỏng vấn AI</h3>
+          </div>
+          <div className="card-icon-right">
+            <Video size={22} />
+          </div>
+        </Link>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Nút Tutorial chỉ hiển thị cho tài khoản Free (nếu là Pro Member thì ẩn đi vì họ đã biết cách dùng) */}
-          {!isProUser && (
-            <button
-              type="button"
-              className="dashboard-guide-trigger-btn"
-              onClick={() => setGuideModalOpen(true)}
-              title="Xem cẩm nang hướng dẫn hoàn thiện hồ sơ"
-            >
-              <BookOpen size={15} color="#0284c7" />
-              <span>Hướng dẫn (Tutorial)</span>
-            </button>
-          )}
-
-          {isProUser ? (
-            <div className="pro-member-pill">
-              <Star size={15} fill="#0284c7" color="#0284c7" />
-              <span>Pro Member</span>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: '#F1F5F9',
-                padding: '6px 14px',
-                borderRadius: '999px',
-                fontSize: '0.813rem',
-                color: '#475569',
-                fontWeight: 650,
-                border: '1px solid #E2E8F0',
-              }}
-              title="Gói dịch vụ Miễn phí"
-            >
-              <span>Tài khoản Free</span>
-            </div>
-          )}
+        <div
+          onClick={() => {
+            handleTabChange('scan');
+            window.scrollTo({ top: 260, behavior: 'smooth' });
+          }}
+          className="quick-action-card card-navy"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="card-content-left">
+            <span className="card-tag">AI OCR</span>
+            <h3 className="card-title">Kho CV của bạn</h3>
+          </div>
+          <div className="card-icon-right">
+            <FolderOpen size={22} />
+          </div>
         </div>
       </motion.div>
 
-      {/* Main Profile & CV Hub */}
-      <div>
-        {/* 2. Quick Action Cards (2 Focused Cards) */}
+      {/* 3. Main 2-Column Grid */}
+      <div className="dashboard-main-grid">
+        {/* Left Column: Career Profile & Multi-CV Hub Tabs */}
         <motion.div
-          className="quick-actions-grid"
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.08 }}
+          className="candidate-profile-card"
+          initial={{ opacity: 0, x: -15 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.45, delay: 0.15 }}
         >
-          {/* Card 1: Mock Interview */}
-          <Link to="/interview-setup" className="quick-action-card card-teal">
-            <div className="card-content-left">
-              <span className="card-tag">Interactive</span>
-              <h3 className="card-title">Phỏng vấn AI</h3>
-            </div>
-            <div className="card-icon-right">
-              <Video size={22} />
-            </div>
-          </Link>
-
-          {/* Card 2: Upload CV */}
-          <div
-            onClick={() => {
-              handleTabChange('scan');
-              window.scrollTo({ top: 260, behavior: 'smooth' });
-            }}
-            className="quick-action-card card-navy"
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="card-content-left">
-              <span className="card-tag">AI OCR</span>
-              <h3 className="card-title">Tải lên & Quét CV</h3>
-            </div>
-            <div className="card-icon-right">
-              <UploadCloud size={22} />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 3. Main 2-Column Grid */}
-        <div className="dashboard-main-grid">
-          {/* Left Column: Candidate Profile & AI CV Scanner Hub */}
-          <motion.div
-            className="candidate-profile-card"
-            initial={{ opacity: 0, x: -15 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.15 }}
-          >
-            {/* Card Top Switcher Tabs */}
-            <div className="profile-card-header">
-              <div className="profile-title-group">
-                <div className="profile-icon-badge">
-                  <User size={20} />
-                </div>
-                <div>
-                  <h2>Hồ sơ ứng viên & AI CV Scanner</h2>
-                  <p className="profile-header-subtitle">
-                    Tùy chỉnh thông tin mục tiêu hoặc dùng AI trích xuất tự động từ CV
-                  </p>
-                </div>
+          {/* Card Top Switcher Tabs */}
+          <div className="profile-card-header">
+            <div className="profile-title-group">
+              <div className="profile-icon-badge">
+                <User size={20} />
               </div>
-
-              {/* Segmented Control Switcher (Compact 1-Row Capsule) */}
-              <div className="profile-segmented-nav">
-                <button
-                  type="button"
-                  className={`segmented-tab-btn ${activeTab === 'manual' ? 'active priority-tab' : ''}`}
-                  onClick={() => handleTabChange('manual')}
-                >
-                  <span>Điền hồ sơ</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`segmented-tab-btn ${activeTab === 'scan' ? 'active priority-tab' : ''}`}
-                  onClick={() => handleTabChange('scan')}
-                >
-                  <UploadCloud size={13} />
-                  <span>Tải lên CV (Upload CV)</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`segmented-tab-btn ${activeTab === 'match' ? 'active' : ''}`}
-                  onClick={() => handleTabChange('match')}
-                >
-                  <Target size={13} />
-                  <span>So khớp JD</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`segmented-tab-btn ${activeTab === 'email' ? 'active' : ''}`}
-                  onClick={() => handleTabChange('email')}
-                >
-                  <Mail size={13} />
-                  <span>Thư AI</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Profile Completeness Mini Bar */}
-            <div className="completion-bar-wrapper">
-              <div className="completion-bar-header">
-                <span className="completion-label">Mức độ hoàn thiện hồ sơ</span>
-                <span className="completion-percent">{completionPercent}%</span>
-              </div>
-              <div className="completion-track">
-                <motion.div
-                  className="completion-fill"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${completionPercent}%` }}
-                  transition={{ duration: 0.6, ease: 'easeOut' }}
-                />
-              </div>
-            </div>
-
-            {/* TAB 1: MANUAL PROFILE INPUT (TỰ ĐỘNG TẠO CV CHO NGƯỜI CHƯA CÓ CV) */}
-            {activeTab === 'manual' && (
-              <motion.form
-                key="manual-tab"
-                onSubmit={handleSaveManual}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-                className="manual-profile-form"
-              >
-                {/* Row 1: Full Name & Target Role */}
-                <div className="form-two-col">
-                  <div className="form-group">
-                    <label className="form-label">
-                      <User size={15} />
-                      <span>Họ và tên ứng viên</span>
-                      <span className="required-dot">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="custom-form-input"
-                      placeholder="VD: Nguyễn Văn A"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      <Briefcase size={15} />
-                      <span>Vị trí ứng tuyển mục tiêu</span>
-                      <span className="required-dot">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="custom-form-input"
-                      placeholder="VD: Chuyên viên Phân tích, Nhân viên Marketing, Kỹ sư..."
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: Field & Experience (Cho phép nhập tự do hoặc chọn nhanh từ dropdown có bộ lọc tìm kiếm) */}
-                <div className="form-two-col">
-                  {/* Ngành nghề / Lĩnh vực */}
-                  <div className="form-group" ref={fieldWrapperRef} style={{ position: 'relative' }}>
-                    <label className="form-label">
-                      <Layers size={15} />
-                      <span>Ngành nghề / Lĩnh vực</span>
-                      <span className="required-dot">*</span>
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="text"
-                        className="custom-form-input"
-                        placeholder="Nhập hoặc chọn ngành nghề (VD: Công nghệ thông tin, Marketing...)"
-                        value={field}
-                        onChange={(e) => {
-                          setField(e.target.value);
-                          setFieldDropdownOpen(true);
-                        }}
-                        onFocus={() => setFieldDropdownOpen(true)}
-                        autoComplete="off"
-                        required
-                        style={{ paddingRight: '2.2rem' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setFieldDropdownOpen((prev) => !prev)}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: '#64748B',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                        }}
-                        tabIndex={-1}
-                      >
-                        <ChevronDown size={16} />
-                      </button>
-                    </div>
-
-                    {fieldDropdownOpen && (
-                      <ul
-                        style={{
-                          position: 'absolute',
-                          top: '100%',
-                          left: 0,
-                          right: 0,
-                          background: '#FFFFFF',
-                          border: '1px solid #CBD5E1',
-                          borderRadius: '10px',
-                          boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
-                          zIndex: 60,
-                          maxHeight: '220px',
-                          overflowY: 'auto',
-                          padding: '6px 0',
-                          margin: '4px 0 0',
-                          listStyle: 'none',
-                        }}
-                      >
-                        {[
-                          'Công nghệ thông tin',
-                          'Tài chính - Ngân hàng (Fintech)',
-                          'Thương mại điện tử (E-Commerce)',
-                          'Marketing & Truyền thông',
-                          'Quản trị Nhân sự & Tuyển dụng',
-                          'Kinh doanh & Bán lẻ (Sales / Retail)',
-                          'Thiết kế Đồ họa / UI-UX',
-                          'Logistics & Chuỗi cung ứng',
-                          'Giáo dục & Đào tạo',
-                          'Y tế & Chăm sóc sức khỏe',
-                          'Khách sạn & Du lịch',
-                          'Bất động sản & Xây dựng',
-                          'Kỹ thuật & Cơ khí',
-                        ]
-                          .filter((item) =>
-                            !field.trim() || item.toLowerCase().includes(field.trim().toLowerCase())
-                          )
-                          .map((item) => (
-                            <li
-                              key={item}
-                              onClick={() => {
-                                setField(item);
-                                setFieldDropdownOpen(false);
-                              }}
-                              style={{
-                                padding: '8px 14px',
-                                fontSize: '0.875rem',
-                                cursor: 'pointer',
-                                color: '#0F172A',
-                                background: field === item ? '#EFF6FF' : 'transparent',
-                                fontWeight: field === item ? 600 : 400,
-                              }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.background = field === item ? '#EFF6FF' : 'transparent')
-                              }
-                            >
-                              {item}
-                            </li>
-                          ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  {/* Số năm kinh nghiệm */}
-                  <div className="form-group" ref={expWrapperRef} style={{ position: 'relative' }}>
-                    <label className="form-label">
-                      <Award size={15} />
-                      <span>Số năm kinh nghiệm</span>
-                      <span className="required-dot">*</span>
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="text"
-                        className="custom-form-input"
-                        placeholder="Nhập hoặc chọn kinh nghiệm (VD: 2 năm, Chưa có KN...)"
-                        value={exp}
-                        onChange={(e) => {
-                          setExp(e.target.value);
-                          setExpDropdownOpen(true);
-                        }}
-                        onFocus={() => setExpDropdownOpen(true)}
-                        autoComplete="off"
-                        required
-                        style={{ paddingRight: '2.2rem' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setExpDropdownOpen((prev) => !prev)}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: '#64748B',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                        }}
-                        tabIndex={-1}
-                      >
-                        <ChevronDown size={16} />
-                      </button>
-                    </div>
-
-                    {expDropdownOpen && (
-                      <ul
-                        style={{
-                          position: 'absolute',
-                          top: '100%',
-                          left: 0,
-                          right: 0,
-                          background: '#FFFFFF',
-                          border: '1px solid #CBD5E1',
-                          borderRadius: '10px',
-                          boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
-                          zIndex: 60,
-                          maxHeight: '220px',
-                          overflowY: 'auto',
-                          padding: '6px 0',
-                          margin: '4px 0 0',
-                          listStyle: 'none',
-                        }}
-                      >
-                        {[
-                          'Chưa có KN (Intern / Fresher)',
-                          'Dưới 1 năm (Junior)',
-                          '1 - 2 năm kinh nghiệm',
-                          '2 - 3 năm (Mid-level)',
-                          '3 - 5 năm (Senior)',
-                          '5+ năm (Lead / Manager)',
-                        ]
-                          .filter((item) =>
-                            !exp.trim() || item.toLowerCase().includes(exp.trim().toLowerCase())
-                          )
-                          .map((item) => (
-                            <li
-                              key={item}
-                              onClick={() => {
-                                setExp(item);
-                                setExpDropdownOpen(false);
-                              }}
-                              style={{
-                                padding: '8px 14px',
-                                fontSize: '0.875rem',
-                                cursor: 'pointer',
-                                color: '#0F172A',
-                                background: exp === item ? '#EFF6FF' : 'transparent',
-                                fontWeight: exp === item ? 600 : 400,
-                              }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.background = exp === item ? '#EFF6FF' : 'transparent')
-                              }
-                            >
-                              {item}
-                            </li>
-                          ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-
-                {/* Row 3: Education & Graduation Year */}
-                <div className="form-two-col">
-                  <div className="form-group" style={{ flex: 1.8 }}>
-                    <label className="form-label">
-                      <GraduationCap size={15} />
-                      <span>Trình độ học vấn & Trường ĐH</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="custom-form-input"
-                      placeholder="VD: Đại học Kinh Tế TP.HCM / ĐH Bách Khoa..."
-                      value={education}
-                      onChange={(e) => setEducation(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label className="form-label">
-                      <Award size={15} />
-                      <span>Năm tốt nghiệp</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="1980"
-                      max="2100"
-                      className="custom-form-input"
-                      placeholder="2026"
-                      value={graduationYear}
-                      onChange={(e) => setGraduationYear(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                    />
-                  </div>
-                </div>
-
-                {/* Row 4: Skills Tag Manager */}
-                <div className="form-group">
-                  <label className="form-label">
-                    <Cpu size={15} />
-                    <span>Kỹ năng chuyên môn chính ({skills.length})</span>
-                  </label>
-
-                  {/* Active Skills Tags */}
-                  <div className="skills-tags-container">
-                    {skills.map((skill) => (
-                      <span key={skill} className="skill-pill-item">
-                        {skill}
-                        <button
-                          type="button"
-                          className="skill-remove-btn"
-                          onClick={() => handleRemoveSkill(skill)}
-                          title="Xóa kỹ năng"
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))}
-
-                    {/* Add skill inline input */}
-                    <div className="skill-add-wrapper">
-                      <input
-                        type="text"
-                        className="skill-inline-input"
-                        placeholder="+ Nhập kỹ năng rồi nhấn Enter..."
-                        value={newSkillInput}
-                        onChange={(e) => setNewSkillInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddSkill();
-                          }
-                        }}
-                      />
-                      {newSkillInput.trim() && (
-                        <button
-                          type="button"
-                          className="skill-add-btn"
-                          onClick={() => handleAddSkill()}
-                        >
-                          <Plus size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                    {/* Row 5: Bio / Career Goals */}
-                    <div className="form-group">
-                      <label className="form-label">
-                        <FileText size={15} />
-                        <span>Mục tiêu nghề nghiệp & Giới thiệu ngắn</span>
-                      </label>
-                      <textarea
-                        className="custom-form-textarea"
-                        rows={3}
-                        placeholder="Tóm tắt ngắn về điểm mạnh, kinh nghiệm nổi bật hoặc mục tiêu ứng tuyển của bạn..."
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                      />
-                    </div>
-
-                    {/* Form Action Footer */}
-                    <div className="profile-form-footer">
-                      <div className="footer-status-left">
-                        {savedSuccess ? (
-                          <motion.div
-                            className="save-success-indicator"
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                          >
-                            <CheckCircle2 size={16} />
-                            <span>Đã lưu thành công hồ sơ vào Database!</span>
-                          </motion.div>
-                        ) : (
-                          <span className="footer-hint-text">
-                            💡 Dữ liệu hồ sơ sẽ được đồng bộ trực tiếp với hệ thống câu hỏi AI.
-                          </span>
-                        )}
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="save-profile-btn"
-                        disabled={savingManual}
-                      >
-                        {savingManual ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>Đang lưu...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Save size={16} />
-                            <span>Lưu thay đổi hồ sơ</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </motion.form>
-                )}
-
-                {/* TAB 2: AI CV SCANNER (BÓC TÁCH TỰ ĐỘNG) */}
-                {activeTab === 'scan' && (
-                  <motion.div
-                    key="scan-tab"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.25 }}
-                    className="scanner-tab-content"
-                  >
-                    {/* Upload Drag & Drop Area */}
-                    <div
-                      className={`cv-upload-dropzone ${isScanning ? 'scanning' : ''}`}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileUpload}
-                        accept=".pdf,.docx,.doc"
-                        style={{ display: 'none' }}
-                      />
-
-                      <div className="dropzone-icon-circle">
-                        <UploadCloud size={28} />
-                      </div>
-
-                      <div className="dropzone-text-group">
-                        <div className="dropzone-title">
-                          Tải lên CV của bạn (.PDF, .DOCX)
-                        </div>
-                        <div className="dropzone-subtitle">
-                          Kéo thả file vào đây hoặc nhấn để chọn từ thiết bị của bạn (Tối đa 10MB)
-                        </div>
-                      </div>
-
-                      <button type="button" className="choose-file-btn">
-                        <Camera size={15} />
-                        <span>Chọn file CV</span>
-                      </button>
-                    </div>
-
-                    {/* Quick Demo Pre-loaded Sample CVs */}
-                    <div className="demo-samples-section">
-                      <div className="demo-samples-label">
-                        <Sparkles size={14} /> Hoặc thử nghiệm nhanh với CV mẫu chuẩn ATS:
-                      </div>
-                      <div className="demo-samples-grid">
-                        {SAMPLE_CVS.map((sample) => (
-                          <button
-                            key={sample.id}
-                            type="button"
-                            className={`sample-cv-btn ${selectedSampleId === sample.id ? 'active' : ''}`}
-                            onClick={() => handleSelectSample(sample)}
-                            disabled={isScanning}
-                          >
-                            <span>{sample.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Scanning Progress Bar */}
-                    {isScanning && (
-                      <motion.div
-                        className="scanning-progress-box"
-                        initial={{ opacity: 0, scale: 0.96 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                      >
-                        <div className="scanning-status-text">
-                          <Loader2 size={16} className="animate-spin" color="#03BFFF" />
-                          <span>{scanStatusText}</span>
-                        </div>
-                        <div className="scanning-progress-track">
-                          <motion.div
-                            className="scanning-progress-bar"
-                            style={{ width: `${scanProgress}%` }}
-                          />
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* Extracted Data Result Preview Card */}
-                    {extractedData && !isScanning && (
-                      <motion.div
-                        className="extracted-result-card"
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <div className="extracted-header">
-                          <div className="extracted-title-left">
-                            <span className="extracted-badge">
-                              <CheckCircle2 size={14} /> Đã phân tích thành công
-                            </span>
-                            <h4>{extractedData.name} — {extractedData.role}</h4>
-                          </div>
-
-                          <button
-                            type="button"
-                            className="apply-data-btn"
-                            onClick={handleApplyScannedData}
-                          >
-                            <Check size={16} />
-                            <span>Áp dụng vào Hồ sơ</span>
-                          </button>
-                        </div>
-
-                        {/* Scanned Key Value Grid */}
-                        <div className="extracted-grid">
-                          <div className="extracted-item">
-                            <span className="item-label">Ngành nghề</span>
-                            <span className="item-value">{extractedData.field}</span>
-                          </div>
-
-                          <div className="extracted-item">
-                            <span className="item-label">Kinh nghiệm</span>
-                            <span className="item-value">{extractedData.exp}</span>
-                          </div>
-
-                          <div className="extracted-item full-width">
-                            <span className="item-label">Học vấn</span>
-                            <span className="item-value">{extractedData.education}</span>
-                          </div>
-
-                          <div className="extracted-item full-width">
-                            <span className="item-label">Kỹ năng nhận diện ({extractedData.skills.length})</span>
-                            <div className="extracted-skills-list">
-                              {extractedData.skills.map((s) => (
-                                <span key={s} className="extracted-skill-chip">{s}</span>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="extracted-item full-width">
-                            <span className="item-label">Tóm tắt tiểu sử</span>
-                            <p className="extracted-bio">{extractedData.bio}</p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* Applied Scanned Toast */}
-                    {appliedToast && (
-                      <motion.div
-                        className="applied-toast-floating"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                      >
-                        <CheckCircle2 size={18} />
-                        <span>Đã áp dụng thành công thông tin CV vào Hồ sơ của bạn!</span>
-                      </motion.div>
-                    )}
-                  </motion.div>
-                )}
-
-                {/* TAB 3: JD MATCHER */}
-                {activeTab === 'match' && (
-                  <motion.div
-                    key="match-tab"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.25 }}
-                    className="match-tab-content"
-                  >
-                    <form onSubmit={handleMatchJd} className="match-form">
-                      <div className="form-group">
-                        <label className="form-label">
-                          <Target size={15} />
-                          <span>Dán nội dung mô tả công việc (Job Description / JD)</span>
-                        </label>
-                        <textarea
-                          className="custom-form-textarea"
-                          rows={6}
-                          placeholder="Dán toàn bộ nội dung JD tuyển dụng (yêu cầu kỹ thuật, trách nhiệm công việc, quyền lợi...) vào đây để AI so khớp độ tương thích với hồ sơ của bạn..."
-                          value={jdText}
-                          onChange={(e) => setJdText(e.target.value)}
-                          required
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="save-profile-btn"
-                        style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}
-                        disabled={isMatching || !jdText.trim()}
-                      >
-                        {isMatching ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>AI đang phân tích & so khớp tiêu chí...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles size={16} />
-                            <span>Bắt đầu so khớp JD với Hồ sơ của tôi</span>
-                          </>
-                        )}
-                      </button>
-                    </form>
-
-                    {matchResult && (
-                      <motion.div
-                        className="match-result-card"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        style={{
-                          marginTop: '20px',
-                          background: '#F8FAFC',
-                          border: '1px solid #E2E8F0',
-                          borderRadius: '16px',
-                          padding: '20px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                          <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#0F172A', fontWeight: 750 }}>
-                            Kết quả đánh giá độ tương thích
-                          </h4>
-                          <div
-                            style={{
-                              background: '#E0F2FE',
-                              color: '#0284C7',
-                              fontWeight: 800,
-                              fontSize: '1.1rem',
-                              padding: '4px 12px',
-                              borderRadius: '999px',
-                            }}
-                          >
-                            {matchResult.overallScore || matchResult.matchScore || 85}% Phù hợp
-                          </div>
-                        </div>
-
-                        <div style={{ marginBottom: '14px' }}>
-                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#16A34A', display: 'block', marginBottom: '6px' }}>
-                            ✓ Kỹ năng bạn đã đáp ứng tốt:
-                          </span>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {(matchResult.matchingSkills || skills.slice(0, 4)).map((s: string) => (
-                              <span
-                                key={s}
-                                style={{ background: '#DCFCE7', color: '#15803D', padding: '3px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600 }}
-                              >
-                                {s}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div style={{ marginBottom: '14px' }}>
-                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#D97706', display: 'block', marginBottom: '6px' }}>
-                            ⚡ Kỹ năng JD yêu cầu bạn nên bổ sung thêm:
-                          </span>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {(matchResult.missingSkills || ['CI/CD Pipeline', 'Microservices']).map((s: string) => (
-                              <span
-                                key={s}
-                                style={{ background: '#FEF3C7', color: '#B45309', padding: '3px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600 }}
-                              >
-                                {s}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {matchResult.recommendations && (
-                          <div style={{ background: '#FFFFFF', padding: '12px 14px', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '0.84rem', color: '#334155' }}>
-                            <strong>💡 Khuyến nghị cho buổi phỏng vấn:</strong>
-                            <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px' }}>
-                              {matchResult.recommendations.map((rec: string, idx: number) => (
-                                <li key={idx} style={{ marginTop: '2px' }}>{rec}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </motion.div>
-                )}
-
-                {/* TAB 4: EMAIL / COVER LETTER ASSISTANT */}
-                {activeTab === 'email' && (
-                  <motion.div
-                    key="email-tab"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.25 }}
-                    className="email-tab-content"
-                  >
-                    <form onSubmit={handleGenerateEmail} className="email-form">
-                      <div className="form-two-col">
-                        <div className="form-group">
-                          <label className="form-label">
-                            <Mail size={15} />
-                            <span>Loại thư cần tạo</span>
-                          </label>
-                          <select
-                            className="custom-form-select"
-                            value={emailType}
-                            onChange={(e) => setEmailType(e.target.value)}
-                          >
-                            <option value="CoverLetter">Thư ứng tuyển (Cover Letter)</option>
-                            <option value="ThankYou">Thư cảm ơn sau phỏng vấn (Thank-you Email)</option>
-                            <option value="FollowUp">Thư hỏi thăm tiến độ tuyển dụng (Follow-up)</option>
-                          </select>
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label">
-                            <Sparkles size={15} />
-                            <span>Giọng điệu thư</span>
-                          </label>
-                          <select
-                            className="custom-form-select"
-                            value={emailTone}
-                            onChange={(e) => setEmailTone(e.target.value)}
-                          >
-                            <option value="formal">Trang trọng, chuyên nghiệp (Formal)</option>
-                            <option value="confident">Tự tin, quyết đoán (Confident)</option>
-                            <option value="enthusiastic">Nhiệt huyết, cởi mở (Enthusiastic)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="form-two-col">
-                        <div className="form-group">
-                          <label className="form-label">
-                            <Briefcase size={15} />
-                            <span>Vị trí ứng tuyển</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="custom-form-input"
-                            placeholder="VD: Senior Frontend Developer"
-                            value={emailPosition}
-                            onChange={(e) => setEmailPosition(e.target.value)}
-                            required
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label className="form-label">
-                            <User size={15} />
-                            <span>Tên công ty ứng tuyển</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="custom-form-input"
-                            placeholder="VD: FPT Software, VNG, Shopee..."
-                            value={emailCompany}
-                            onChange={(e) => setEmailCompany(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="save-profile-btn"
-                        style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}
-                        disabled={isGeneratingEmail}
-                      >
-                        {isGeneratingEmail ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>AI đang soạn thảo thư chuyên nghiệp...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Send size={16} />
-                            <span>Tạo thư tự động bằng AI</span>
-                          </>
-                        )}
-                      </button>
-                    </form>
-
-                    {generatedEmail && (
-                      <motion.div
-                        className="email-result-card"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        style={{
-                          marginTop: '20px',
-                          background: '#F8FAFC',
-                          border: '1px solid #E2E8F0',
-                          borderRadius: '16px',
-                          padding: '20px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                          <h4 style={{ margin: 0, fontSize: '1rem', color: '#0F172A', fontWeight: 750 }}>
-                            {emailType === 'CoverLetter' ? '📄 Thư ứng tuyển đề xuất' : emailType === 'ThankYou' ? '💌 Thư cảm ơn đề xuất' : '📬 Thư Follow-up đề xuất'}
-                          </h4>
-                          <button
-                            type="button"
-                            onClick={handleCopyEmail}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              background: copiedEmail ? '#DCFCE7' : '#FFFFFF',
-                              color: copiedEmail ? '#16A34A' : '#0284C7',
-                              border: '1px solid',
-                              borderColor: copiedEmail ? '#86EFAC' : '#BAE6FD',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontSize: '0.82rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {copiedEmail ? <Check size={14} /> : <Copy size={14} />}
-                            <span>{copiedEmail ? 'Đã sao chép!' : 'Sao chép thư'}</span>
-                          </button>
-                        </div>
-
-                        {generatedEmail.subject && (
-                          <div style={{ marginBottom: '10px', background: '#FFFFFF', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                            <span style={{ fontSize: '0.78rem', color: '#64748B', display: 'block' }}>Tiêu đề Email:</span>
-                            <strong style={{ fontSize: '0.9rem', color: '#0F172A' }}>{generatedEmail.subject}</strong>
-                          </div>
-                        )}
-
-                        <div style={{ background: '#FFFFFF', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0', whiteSpace: 'pre-wrap', fontSize: '0.88rem', lineHeight: '1.6', color: '#334155' }}>
-                          {generatedEmail.body || generatedEmail.email || generatedEmail.emailText}
-                        </div>
-
-                        {generatedEmail.tips && generatedEmail.tips.length > 0 && (
-                          <div
-                            style={{
-                              marginTop: '12px',
-                              background: 'rgba(3, 191, 255, 0.08)',
-                              padding: '12px 16px',
-                              borderRadius: '10px',
-                              fontSize: '0.84rem',
-                              color: '#0369A1',
-                            }}
-                          >
-                            <strong>💡 Lưu ý quan trọng:</strong>
-                            <ul style={{ margin: '4px 0 0', paddingLeft: '18px' }}>
-                              {generatedEmail.tips.map((t: string, i: number) => (
-                                <li key={i}>{t}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </motion.div>
-                )}
-              </motion.div>
-
-              {/* Right Column: Career Readiness & AI Coach & Metrics */}
-              <div className="right-column-stack">
-                {/* 1. Career Readiness Card */}
-                <motion.div
-                  className="career-readiness-card"
-                  initial={{ opacity: 0, x: 15 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.45, delay: 0.2 }}
-                >
-                  <div className="readiness-label">Career Readiness</div>
-
-                  {/* Donut Progress Gauge */}
-                  <div className="donut-gauge-wrapper">
-                    <svg className="donut-gauge-svg" viewBox="0 0 140 140">
-                      <circle
-                        className="donut-gauge-track"
-                        cx="70"
-                        cy="70"
-                        r={radius}
-                      />
-                      <circle
-                        className="donut-gauge-progress"
-                        cx="70"
-                        cy="70"
-                        r={radius}
-                        strokeDasharray={circumference}
-                        strokeDashoffset={strokeDashoffset}
-                      />
-                    </svg>
-                    <div className="donut-gauge-center">
-                      <span className="donut-score-number">{readinessScore}</span>
-                      <span className="donut-score-max">of 100</span>
-                    </div>
-                  </div>
-
-                  <p className="readiness-summary-text">
-                    Bạn đang nằm trong <strong>Top 15%</strong> ứng viên sẵn sàng phỏng vấn tuần này.
-                  </p>
-
-                  <Link to="/interview-setup" className="improve-score-btn">
-                    Luyện phỏng vấn nâng điểm
-                  </Link>
-                </motion.div>
-
-                {/* 2. HireMate AI Coach Card */}
-                <motion.div
-                  className="ai-coach-card"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.45, delay: 0.26 }}
-                >
-                  <div className="coach-top-row">
-                    <div className="coach-badge">
-                      <Bot size={18} />
-                      <span>HireMate AI Coach</span>
-                    </div>
-                    <div className="coach-lightbulb">
-                      <Lightbulb size={20} />
-                    </div>
-                  </div>
-
-                  <h3 className="coach-heading">Làm chủ phương pháp STAR</h3>
-                  <p className="coach-quote">
-                    "Khi trả lời câu hỏi tình huống, hãy áp dụng Situation, Task, Action, và Result. Cố gắng dành 60% thời lượng cho phần Action cụ thể của bản thân."
-                  </p>
-                </motion.div>
-
-                {/* 3. Metric Tiles Row */}
-                <motion.div
-                  className="metric-tiles-row"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.45, delay: 0.32 }}
-                >
-                  <div className="metric-tile">
-                    <span className="metric-tile-label">Buổi phỏng vấn</span>
-                    <span className="metric-tile-value">{totalInterviews}</span>
-                  </div>
-                  <div className="metric-tile">
-                    <span className="metric-tile-label">Kỹ năng mục tiêu</span>
-                    <span className="metric-tile-value">{skills.length}</span>
-                  </div>
-                </motion.div>
-              </div>
-            </div>
-          </div>
-
-      {/* Modal Kiểm Tra Hồ Sơ & CV (Check CV Modal) */}
-      <AnimatePresence>
-        {checkCvModalOpen && (
-          <div
-            className="check-cv-modal-overlay"
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(15, 23, 42, 0.65)',
-              backdropFilter: 'blur(6px)',
-              zIndex: 9999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px',
-            }}
-            onClick={() => setCheckCvModalOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 15 }}
-              transition={{ duration: 0.25 }}
-              style={{
-                background: '#FFFFFF',
-                borderRadius: '24px',
-                maxWidth: '560px',
-                width: '100%',
-                padding: '32px',
-                boxShadow: '0 25px 60px rgba(0, 0, 0, 0.2)',
-                position: 'relative',
-                border: '1px solid rgba(2, 132, 199, 0.2)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={() => setCheckCvModalOpen(false)}
-                style={{
-                  position: 'absolute',
-                  top: 18,
-                  right: 18,
-                  background: '#F1F5F9',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: 34,
-                  height: 34,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: '#64748B',
-                }}
-              >
-                <X size={18} />
-              </button>
-
-              <div style={{ textAlign: 'center', marginBottom: '22px' }}>
-                <div
-                  style={{
-                    width: 58,
-                    height: 58,
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%)',
-                    color: '#0284C7',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 14px auto',
-                  }}
-                >
-                  <CheckCircle2 size={32} />
-                </div>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>
-                  Hồ Sơ & CV Đã Sẵn Sàng!
-                </h3>
-                <p style={{ margin: '6px 0 0 0', fontSize: '0.88rem', color: '#64748B' }}>
-                  Dữ liệu đã được hệ thống AI bóc tách & đồng bộ để tối ưu bộ câu hỏi phỏng vấn chuẩn xác nhất.
+              <div>
+                <h2>Hồ sơ nghề nghiệp & Kho CV cá nhân</h2>
+                <p className="profile-header-subtitle">
+                  Tùy chỉnh thông tin mục tiêu hoặc quản lý nhiều phiên bản CV theo từng vai trò
                 </p>
               </div>
+            </div>
 
-              {/* CV Overview Card */}
-              <div
-                style={{
-                  background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '14px',
-                  padding: '16px',
-                  marginBottom: '22px',
-                  fontSize: '0.85rem',
-                }}
+            {/* Segmented Control */}
+            <div className="profile-segmented-nav">
+              <button
+                type="button"
+                className={`segmented-tab-btn ${activeTab === 'manual' ? 'active' : ''}`}
+                onClick={() => handleTabChange('manual')}
               >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                  <div>
-                    <span style={{ color: '#64748B', fontSize: '0.76rem', display: 'block' }}>Họ và tên:</span>
-                    <strong style={{ color: '#0F172A' }}>{name || 'Chưa cập nhật'}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: '#64748B', fontSize: '0.76rem', display: 'block' }}>Vị trí mục tiêu:</span>
-                    <strong style={{ color: '#0284C7' }}>{role || 'Chưa cập nhật'}</strong>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <span style={{ color: '#64748B', fontSize: '0.76rem', display: 'block' }}>Ngành nghề:</span>
-                    <strong style={{ color: '#0F172A' }}>{field || 'Chưa chọn'}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: '#64748B', fontSize: '0.76rem', display: 'block' }}>Kinh nghiệm:</span>
-                    <strong style={{ color: '#0F172A' }}>{exp || 'Chưa chọn'}</strong>
-                  </div>
-                </div>
-                {skills.length > 0 && (
-                  <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #E2E8F0' }}>
-                    <span style={{ color: '#64748B', fontSize: '0.76rem', display: 'block', marginBottom: '4px' }}>
-                      Kỹ năng ({skills.length}):
-                    </span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {skills.slice(0, 8).map((s) => (
-                        <span
-                          key={s}
-                          style={{
-                            background: '#EFF6FF',
-                            color: '#1D4ED8',
-                            padding: '2px 8px',
-                            borderRadius: '6px',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                          }}
-                        >
-                          {s}
-                        </span>
-                      ))}
-                      {skills.length > 8 && (
-                        <span style={{ color: '#64748B', fontSize: '0.75rem', padding: '2px 4px' }}>
-                          +{skills.length - 8} kỹ năng khác
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+                <span>Hồ sơ nghề nghiệp</span>
+              </button>
 
-              {/* Action Buttons: Interview vs Pricing vs Home */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                className={`segmented-tab-btn ${activeTab === 'scan' ? 'active' : ''}`}
+                onClick={() => handleTabChange('scan')}
+              >
+                <FolderOpen size={13} />
+                <span>Kho CV ({userCvs.length})</span>
+              </button>
+
+              <button
+                type="button"
+                className={`segmented-tab-btn ${activeTab === 'match' ? 'active' : ''}`}
+                onClick={() => handleTabChange('match')}
+              >
+                <Target size={13} />
+                <span>So khớp JD</span>
+              </button>
+
+              <button
+                type="button"
+                className={`segmented-tab-btn ${activeTab === 'email' ? 'active' : ''}`}
+                onClick={() => handleTabChange('email')}
+              >
+                <Mail size={13} />
+                <span>Thư AI</span>
+              </button>
+
+              {(name.trim() || role.trim()) && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setCheckCvModalOpen(false);
-                    navigate('/interview-setup');
-                  }}
+                  className="segmented-tab-btn"
+                  onClick={() => setCheckCvModalOpen(true)}
+                  title="Xem lại hồ sơ nghề nghiệp"
                   style={{
-                    width: '100%',
-                    padding: '13px',
-                    borderRadius: '12px',
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #0284C7 0%, #03BFFF 100%)',
-                    color: '#FFFFFF',
-                    fontWeight: 750,
-                    fontSize: '0.95rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
+                    background: 'rgba(2, 132, 199, 0.08)',
+                    color: '#0284C7',
+                    fontWeight: 650,
                   }}
                 >
-                  <Video size={18} />
-                  <span>Tiến hành Phỏng vấn AI ngay</span>
-                  <ArrowRight size={16} />
+                  <Eye size={13} />
+                  <span>Xem hồ sơ</span>
                 </button>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCheckCvModalOpen(false);
-                      navigate('/pricing');
-                    }}
-                    style={{
-                      padding: '10px',
-                      borderRadius: '10px',
-                      border: '1px solid #BAE6FD',
-                      background: '#F0F9FF',
-                      color: '#0284C7',
-                      fontWeight: 650,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    💎 Xem gói dịch vụ
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCheckCvModalOpen(false);
-                      navigate('/');
-                    }}
-                    style={{
-                      padding: '10px',
-                      borderRadius: '10px',
-                      border: '1px solid #E2E8F0',
-                      background: '#FFFFFF',
-                      color: '#475569',
-                      fontWeight: 650,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    🏠 Về Trang chủ
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setCheckCvModalOpen(false)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#64748B',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    padding: '6px',
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                  }}
-                >
-                  ✏️ Ở lại trang này để chỉnh sửa thêm
-                </button>
-              </div>
-            </motion.div>
+              )}
+            </div>
           </div>
-        )}
-      </AnimatePresence>
 
-      {/* User Tutorial Walkthrough Modal (Chỉ popup 1 lần cho người mới chưa điền hồ sơ) */}
+          {/* Profile Completeness Mini Bar */}
+          <div className="completion-bar-wrapper">
+            <div className="completion-bar-header">
+              <span className="completion-label">Mức độ hoàn thiện hồ sơ</span>
+              <span className="completion-percent">{completionPercent}%</span>
+            </div>
+            <div className="completion-track">
+              <motion.div
+                className="completion-fill"
+                initial={{ width: 0 }}
+                animate={{ width: `${completionPercent}%` }}
+                transition={{ duration: 0.6, ease: 'easeOut' }}
+              />
+            </div>
+          </div>
+
+          {/* TAB 1: Hồ sơ nghề nghiệp (Career Profile Form) */}
+          {activeTab === 'manual' && (
+            <CareerProfileForm
+              name={name}
+              setName={setName}
+              role={role}
+              setRole={setRole}
+              field={field}
+              setField={setField}
+              exp={exp}
+              setExp={setExp}
+              education={education}
+              setEducation={setEducation}
+              graduationYear={graduationYear}
+              setGraduationYear={setGraduationYear}
+              bio={bio}
+              setBio={setBio}
+              skills={skills}
+              setSkills={setSkills}
+              saving={savingManual}
+              savedSuccess={savedSuccess}
+              onSave={handleSaveManual}
+              onOpenCheckCvModal={() => setCheckCvModalOpen(true)}
+            />
+          )}
+
+          {/* TAB 2: Kho CV ứng viên (Multi-CV Collection Hub) */}
+          {activeTab === 'scan' && (
+            <MultiCvHub
+              userCvs={userCvs}
+              activeCv={activeCv}
+              otherCvs={otherCvs}
+              toastMsg={toastMsg}
+              showAddCvForm={showAddCvForm}
+              setShowAddCvForm={setShowAddCvForm}
+              isScanning={isScanning}
+              scanProgress={scanProgress}
+              scanStatusText={scanStatusText}
+              fileInputRef={fileInputRef}
+              sampleCvs={SAMPLE_CVS}
+              onFileUpload={handleFileUpload}
+              onAddSample={handleAddSampleCvToHub}
+              onSelectActiveCv={handleSelectActiveCv}
+              onDeleteCv={handleDeleteCv}
+              onOpenDetailModal={(cv) => {
+                setSelectedCvForDetail(cv);
+                setCvDetailModalOpen(true);
+              }}
+              onNavigateInterview={() => navigate('/interview-setup')}
+              onSwitchToMatch={(cvId) => {
+                setSelectedMatchCvId(cvId);
+                handleTabChange('match');
+              }}
+            />
+          )}
+
+          {/* TAB 3: JD Matcher */}
+          {activeTab === 'match' && (
+            <JdMatcher
+              userCvs={userCvs}
+              activeCvId={activeCvId}
+              selectedMatchCvId={selectedMatchCvId}
+              setSelectedMatchCvId={setSelectedMatchCvId}
+              jdText={jdText}
+              setJdText={setJdText}
+              isMatching={isMatching}
+              matchResult={matchResult}
+              onMatch={handleMatchJd}
+            />
+          )}
+
+          {/* TAB 4: AI Email Generator */}
+          {activeTab === 'email' && (
+            <AiEmailGenerator
+              emailType={emailType}
+              setEmailType={setEmailType}
+              emailPosition={emailPosition}
+              setEmailPosition={setEmailPosition}
+              emailCompany={emailCompany}
+              setEmailCompany={setEmailCompany}
+              emailTone={emailTone}
+              setEmailTone={setEmailTone}
+              isGeneratingEmail={isGeneratingEmail}
+              generatedEmail={generatedEmail}
+              copiedEmail={copiedEmail}
+              onGenerateEmail={handleGenerateEmail}
+              onCopyEmail={handleCopyEmail}
+            />
+          )}
+        </motion.div>
+
+        {/* Right Column: Career Readiness & AI Coach & Metrics */}
+        <DashboardSidebar
+          readinessScore={readinessScore}
+          totalInterviews={totalInterviews}
+          skillsCount={skills.length}
+        />
+      </div>
+
+      {/* Check Career Profile Modal */}
+      <CheckCvModal
+        isOpen={checkCvModalOpen}
+        name={name}
+        role={role}
+        field={field}
+        exp={exp}
+        skills={skills}
+        onClose={() => setCheckCvModalOpen(false)}
+        onEditProfile={() => {
+          setCheckCvModalOpen(false);
+          handleTabChange('manual');
+        }}
+      />
+
+      {/* CV Detail Modal */}
+      <CvDetailModal
+        isOpen={cvDetailModalOpen}
+        cv={selectedCvForDetail}
+        activeCvId={activeCvId}
+        onClose={() => setCvDetailModalOpen(false)}
+        onSelectActiveCv={handleSelectActiveCv}
+        onNavigateInterview={() => navigate('/interview-setup')}
+      />
+
+      {/* User Tutorial Walkthrough Modal */}
       <DashboardGuideModal
         isOpen={guideModalOpen}
         onClose={() => {

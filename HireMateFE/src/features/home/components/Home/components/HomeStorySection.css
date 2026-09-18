@@ -1,0 +1,259 @@
+/* --- Home Story Section Styles --- */
+.hm-story-layered-section {
+  position: relative;
+  background: #ffffff;
+  padding: 90px 0;
+  border-bottom: 1px solid #e2e8f0;
+  z-index: 10;
+}
+
+.hm-story-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+  margin-bottom: 90px;
+}
+
+.hm-story-row:last-child {
+  margin-bottom: 0;
+}
+
+.hm-story-content h2 {
+  font-size: clamp(1.9rem, 3vw, 2.4rem);
+  font-weight: 800;
+  color: #0c182c;
+  line-height: 1.25;
+  margin: 0 0 16px 0;
+}
+
+.hm-story-content p {
+  font-size: 1.05rem;
+  color: #475569;
+  line-height: 1.65;
+  margin: 0 0 24px 0;
+}
+
+.hm-story-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.story-bullet-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.95rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.bullet-icon-circ {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f0fdf4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Streak Demo Card */
+.streak-demo-card {
+  background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
+  border: 1.5px solid #fed7aa;
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 20px 45px rgba(249, 115, 22, 0.1);
+}
+
+.streak-header-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.streak-flame-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: #fff7ed;
+  border: 1px solid #ffedd5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(234, 88, 12, 0.2);
+}
+
+.streak-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #9a3412;
+}
+
+.streak-subtitle {
+  font-size: 0.86rem;
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.streak-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.day-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 4px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.day-box.active {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.day-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.day-check-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ea580c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.streak-achievement-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.achieve-icon {
+  font-size: 1.6rem;
+}
+
+.achieve-text {
+  font-size: 0.88rem;
+  color: #475569;
+  line-height: 1.5;
+}
+
+/* Comparison Container */
+.comparison-container {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.07);
+}
+
+.comparison-box {
+  padding: 18px;
+  border-radius: 16px;
+}
+
+.comparison-box.before {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+}
+
+.comparison-box.after {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.comp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.comp-label {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #e11d48;
+}
+
+.comp-label--good {
+  color: #16a34a;
+}
+
+.comp-score-bad {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #e11d48;
+}
+
+.comp-score-good {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #16a34a;
+}
+
+.comp-desc {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #334155;
+  margin: 0 0 10px 0;
+}
+
+.comp-tag-bad {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #e11d48;
+}
+
+.comp-tag-good {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.comparison-divider-line {
+  position: relative;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.comp-vs-badge {
+  background: #09182d;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+  .hm-story-row {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+}

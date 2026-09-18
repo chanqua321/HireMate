@@ -217,15 +217,24 @@
 /* Price Box */
 .plan-price-box {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
   gap: 6px;
   margin-bottom: 24px;
-  padding-bottom: 20px;
+  padding-bottom: 18px;
   border-bottom: 1px solid #F1F5F9;
+  min-height: 84px;
+  justify-content: center;
+}
+
+.plan-price-main-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .plan-price-amount {
-  font-size: 2.6rem;
+  font-size: 2.35rem;
   font-weight: 850;
   color: #001B3F;
   line-height: 1;
@@ -240,6 +249,25 @@
   font-size: 0.92rem;
   font-weight: 500;
   color: #94A3B8;
+}
+
+.plan-price-subtext {
+  font-size: 0.813rem;
+  color: #64748B;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.plan-price-subtext .highlight-badge {
+  background: #E0F2FE;
+  color: #0284C7;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 /* Features List */

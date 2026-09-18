@@ -117,7 +117,7 @@ export const Pricing: React.FC = () => {
     if (plan.monthlyPrice === 0 || plan.id === 'free') {
       navigate('/dashboard');
     } else {
-      navigate(`/checkout?plan=${plan.id}`);
+      navigate(`/checkout?plan=${plan.id}&cycle=${billingCycle}`);
     }
   };
 
@@ -218,10 +218,22 @@ export const Pricing: React.FC = () => {
         <div className="container">
           <div className="pricing-grid">
             {plans.map((plan, i) => {
-              const displayPrice =
-                billingCycle === 'annual' && plan.monthlyPrice > 0
-                  ? `${Math.round((plan.monthlyPrice * 0.8)).toLocaleString('vi-VN')}đ`
-                  : plan.priceDisplay;
+              const isAnnual = billingCycle === 'annual';
+              const hasPrice = plan.monthlyPrice > 0;
+              
+              // Full year price when annual billing, or monthly price when monthly billing
+              const annualTotal = Math.round(plan.monthlyPrice * 0.8 * 12);
+              const perMonthDiscounted = Math.round(plan.monthlyPrice * 0.8);
+
+              const displayPrice = isAnnual
+                ? (hasPrice ? `${annualTotal.toLocaleString('vi-VN')}đ` : '0đ')
+                : (hasPrice ? `${plan.monthlyPrice.toLocaleString('vi-VN')}đ` : '0đ');
+
+              const displayPeriod = isAnnual ? '/năm' : '/tháng';
+
+              const displaySubtext = isAnnual
+                ? (hasPrice ? `~${perMonthDiscounted.toLocaleString('vi-VN')}đ / tháng (tiết kiệm 20%)` : 'Miễn phí trọn đời')
+                : (hasPrice ? 'Thanh toán theo từng tháng' : 'Miễn phí trải nghiệm');
 
               return (
                 <motion.div
@@ -248,8 +260,20 @@ export const Pricing: React.FC = () => {
 
                     {/* Price Box */}
                     <div className="plan-price-box">
-                      <span className="plan-price-amount">{displayPrice}</span>
-                      <span className="plan-price-period">{plan.period}</span>
+                      <div className="plan-price-main-row">
+                        <span className="plan-price-amount">{displayPrice}</span>
+                        <span className="plan-price-period">{displayPeriod}</span>
+                      </div>
+                      <div className="plan-price-subtext">
+                        {isAnnual && hasPrice ? (
+                          <>
+                            <span>~{perMonthDiscounted.toLocaleString('vi-VN')}đ/tháng</span>
+                            <span className="highlight-badge">Tiết kiệm 20%</span>
+                          </>
+                        ) : (
+                          <span>{displaySubtext}</span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Features List */}

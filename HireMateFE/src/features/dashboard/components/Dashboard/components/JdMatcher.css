@@ -1,0 +1,97 @@
+.match-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.match-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.match-result-card {
+  margin-top: 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.match-result-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.match-result-title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #0f172a;
+  font-weight: 750;
+}
+
+.match-score-badge {
+  background: #e0f2fe;
+  color: #0284c7;
+  font-weight: 800;
+  font-size: 1.05rem;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1px solid #bae6fd;
+}
+
+.match-skills-block {
+  margin-bottom: 14px;
+}
+
+.match-skills-label-success {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #16a34a;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.match-skills-label-warning {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #d97706;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.match-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.match-chip-green {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.match-chip-amber {
+  background: #fef3c7;
+  color: #b45309;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.match-recommendations-box {
+  background: #ffffff;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.84rem;
+  color: #334155;
+  margin-top: 10px;
+}
