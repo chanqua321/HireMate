@@ -10,7 +10,7 @@ public interface IAuthService
     Task<IServiceResult> GetMeAsync(Guid userId);
     Task<IServiceResult> ForgotPasswordAsync(string email);
     Task<IServiceResult> ResetPasswordAsync(string email, string token, string newPassword);
-    Task<IServiceResult> ConfirmEmailAsync(string userId, string token);
+    Task<IServiceResult> VerifyEmailOtpAsync(string email, string otp);
     Task<IServiceResult> ResendConfirmEmailAsync(string email);
     Task<IServiceResult> RefreshAsync(string refreshToken, string? ip);
     Task<IServiceResult> LogoutAsync(string refreshToken);

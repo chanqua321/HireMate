@@ -8,6 +8,20 @@ public class UserAccount : IdentityUser<Guid>
     [MaxLength(255)]
     public string FullName { get; set; } = string.Empty;
 
+    /// <summary>URL ảnh đại diện (Google picture). Null = hiện chữ cái trên FE.</summary>
+    [MaxLength(1000)]
+    public string? AvatarUrl { get; set; }
+
+    /// <summary>Hash SHA256 của OTP xác nhận email (không lưu plain).</summary>
+    [MaxLength(128)]
+    public string? EmailOtpHash { get; set; }
+
+    public DateTime? EmailOtpExpiresAt { get; set; }
+
+    public int EmailOtpAttempts { get; set; }
+
+    public DateTime? EmailOtpSentAt { get; set; }
+
     public bool OnboardingCompleted { get; set; } = false;
 
     public bool IsPremium { get; set; } = false;
@@ -28,7 +42,6 @@ public class UserAccount : IdentityUser<Guid>
     public bool IsDeleted { get; set; } = false;
 
     public CareerProfile? CareerProfile { get; set; }
-    public ICollection<InterviewSession> InterviewSessions { get; set; } = [];
-    public ICollection<CareerMemoryEvent> CareerMemoryEvents { get; set; } = [];
-}
 
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
+}

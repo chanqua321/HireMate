@@ -56,7 +56,17 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
         foreach (var u in list)
         {
             var r = await users.GetRolesAsync(u);
-            data.Add(new { u.Id, u.Email, u.FullName, u.IsPremium, u.OnboardingCompleted, u.LockoutEnd, roles = r });
+            data.Add(new
+            {
+                u.Id,
+                u.Email,
+                u.FullName,
+                u.IsPremium,
+                u.OnboardingCompleted,
+                u.LockoutEnd,
+                emailConfirmed = u.EmailConfirmed,
+                roles = r
+            });
         }
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, data);
     }

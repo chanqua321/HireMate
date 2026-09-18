@@ -28,7 +28,16 @@ public class DashboardService(
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         if (!user.OnboardingCompleted)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Vui lòng hoàn thiện hồ sơ (cần CV) trước khi vào Dashboard");
+        {
+            // Không trả 400 — FE vẫn render dashboard; stats rỗng cho tới khi có hồ sơ/CV
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Hồ sơ chưa hoàn thiện", new DashboardDto
+            {
+                SessionsCount = 0,
+                SessionsThisMonth = 0,
+                RemainingFreeSessionsThisMonth = FreeMonthlyLimit,
+                IsPremium = false
+            });
+        }
 
         var snap = await _aiQuota.GetSnapshotAsync(user);
         var isPaidActive = PlanTier.Rank(snap.PlanCode) > 0;
