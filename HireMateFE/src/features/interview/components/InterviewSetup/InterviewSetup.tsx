@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
 import { interviewService } from '../../api/interview.service';
-import { INDUSTRY_ROLES, normalizeRole } from '../../../../shared/data/questionBank';
+import { profileService } from '../../../../shared/services/profile.service';
+import { INDUSTRY_ROLES, normalizeRole, normalizeIndustry } from '../../../../shared/data/questionBank';
 import {
   Settings,
   Mic,
@@ -129,15 +130,48 @@ const TUTORIAL_VIDEO_CONFIG = {
 export const InterviewSetup: React.FC = () => {
   const { profile, interviewConfig, updateInterviewConfig } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cvFromState = (location.state as any)?.fromCv;
+
+  // Resolve active CV info
+  const [activeCvInfo, setActiveCvInfo] = useState<any>(() => {
+    if (cvFromState) return cvFromState;
+    try {
+      const saved = localStorage.getItem('hm_active_cv');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
 
   const industries = Object.keys(INDUSTRY_ROLES);
-  const initialField =
-    interviewConfig.field || profile.field || 'Công nghệ thông tin';
 
-  const [field, setField] = useState<string>(initialField);
-  const [role, setRole] = useState<string>(() => {
-    return normalizeRole(interviewConfig.role || profile.role, initialField);
-  });
+  // Priority order for field & role:
+  // 1. cvFromState
+  // 2. activeCvInfo (saved in localStorage when user clicked active CV in dashboard)
+  // 3. (profile as any).desiredIndustry / desiredPosition or profile.field / profile.role
+  // 4. interviewConfig.field / interviewConfig.role (if not blank)
+  // 5. fallback 'Công nghệ thông tin' / 'Lập trình viên Frontend'
+  const resolvedField = normalizeIndustry(
+    cvFromState?.field ||
+      activeCvInfo?.field ||
+      (profile as any).desiredIndustry ||
+      profile.field ||
+      interviewConfig.field ||
+      'Công nghệ thông tin'
+  );
+
+  const rawRole =
+    cvFromState?.role ||
+    activeCvInfo?.role ||
+    (profile as any).desiredPosition ||
+    profile.role ||
+    interviewConfig.role ||
+    '';
+
+  const resolvedRole = normalizeRole(rawRole, resolvedField);
+
+  const [field, setField] = useState<string>(resolvedField);
+  const [role, setRole] = useState<string>(resolvedRole);
 
   const [difficulty, setDifficulty] = useState<'Dễ' | 'Trung bình' | 'Khó'>(
     interviewConfig.difficulty || 'Trung bình'
@@ -147,6 +181,58 @@ export const InterviewSetup: React.FC = () => {
       ? 'Voice'
       : 'Text'
   );
+
+  // On mount: sync active CV from navigation state, localStorage, and real backend API
+  useEffect(() => {
+    // 1. If CV was passed from state
+    if (cvFromState) {
+      const f = normalizeIndustry(cvFromState.field);
+      const r = normalizeRole(cvFromState.role, f);
+      setField(f);
+      setRole(r);
+      setActiveCvInfo(cvFromState);
+      updateInterviewConfig({ field: f, role: r });
+      return;
+    }
+
+    // 2. If active CV is stored in localStorage
+    try {
+      const saved = localStorage.getItem('hm_active_cv');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.role || parsed?.field) {
+          const f = normalizeIndustry(parsed.field);
+          const r = normalizeRole(parsed.role, f);
+          setField(f);
+          setRole(r);
+          setActiveCvInfo(parsed);
+          updateInterviewConfig({ field: f, role: r });
+          return;
+        }
+      }
+    } catch {}
+
+    // 3. Real API call to fetch latest profile from backend database
+    if (localStorage.getItem('hm_access_token')) {
+      profileService
+        .getProfile()
+        .then((res) => {
+          if (res.ok && res.data) {
+            const beData: any = res.data;
+            const pos = beData.desiredPosition || beData.role;
+            const ind = beData.desiredIndustry || beData.field;
+            if (pos || ind) {
+              const f = normalizeIndustry(ind || field);
+              const r = normalizeRole(pos || role, f);
+              setField(f);
+              setRole(r);
+              updateInterviewConfig({ field: f, role: r });
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [cvFromState]);
 
   useEffect(() => {
     const validRoles = INDUSTRY_ROLES[field] || [];
@@ -341,6 +427,11 @@ export const InterviewSetup: React.FC = () => {
                 <Target size={17} color="#0284C7" />
                 <span>
                   Hồ sơ phỏng vấn: <strong style={{ color: '#0F172A' }}>{role}</strong> ({field})
+                  {activeCvInfo?.title && (
+                    <span style={{ color: '#0284C7', opacity: 0.85, marginLeft: '6px', fontSize: '0.8rem', fontWeight: 500 }}>
+                      • từ CV: <em>{activeCvInfo.title}</em>
+                    </span>
+                  )}
                 </span>
               </div>
               <Link

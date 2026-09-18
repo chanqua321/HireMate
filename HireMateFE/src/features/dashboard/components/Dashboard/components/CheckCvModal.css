@@ -13,7 +13,7 @@
 .check-cv-modal-card {
   background: #ffffff;
   border-radius: 24px;
-  maxWidth: 560px;
+  max-width: 560px;
   width: 100%;
   padding: 32px;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);

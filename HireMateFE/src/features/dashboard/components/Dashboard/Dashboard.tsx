@@ -152,7 +152,7 @@ const DEFAULT_USER_CVS: UserCvCard[] = [
 ];
 
 export const Dashboard: React.FC = () => {
-  const { profile, updateProfile, history, lastResult } = useApp();
+  const { profile, updateProfile, updateInterviewConfig, history, lastResult } = useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -259,8 +259,18 @@ export const Dashboard: React.FC = () => {
                     ? 'Backend Developer'
                     : d.fileName.toLowerCase().includes('data')
                     ? 'Data Analyst'
+                    : d.fileName.toLowerCase().includes('pm') ||
+                      d.fileName.toLowerCase().includes('manager') ||
+                      d.fileName.toLowerCase().includes('product')
+                    ? 'Product Manager'
                     : 'Frontend Developer'),
-                field: d.parsedProfile?.desiredIndustry || 'Công nghệ thông tin',
+                field:
+                  d.parsedProfile?.desiredIndustry ||
+                  (d.fileName.toLowerCase().includes('fintech') ||
+                   d.fileName.toLowerCase().includes('bank') ||
+                   d.fileName.toLowerCase().includes('finance')
+                    ? 'Tài chính - Ngân hàng (Fintech)'
+                    : 'Công nghệ thông tin'),
                 exp: d.parsedProfile?.experienceYears || '1 - 3 năm (Mid-level)',
                 education: d.parsedProfile?.education || 'Đại học Bách Khoa TP.HCM',
                 skills: d.parsedProfile?.skills || ['React', 'TypeScript', 'REST API', 'Git'],
@@ -295,17 +305,18 @@ export const Dashboard: React.FC = () => {
 
         const savedActiveId = localStorage.getItem('hm_active_cv_id');
         const foundActive = loadedCvs.find((c) => c.id === savedActiveId);
-        if (foundActive) {
-          setActiveCvId(foundActive.id);
-          setSelectedMatchCvId(foundActive.id);
-        } else if (loadedCvs.length > 0) {
-          setActiveCvId(loadedCvs[0].id);
-          setSelectedMatchCvId(loadedCvs[0].id);
-          localStorage.setItem('hm_active_cv_id', loadedCvs[0].id);
+        const targetActive = foundActive || (loadedCvs.length > 0 ? loadedCvs[0] : null);
+        if (targetActive) {
+          setActiveCvId(targetActive.id);
+          setSelectedMatchCvId(targetActive.id);
+          localStorage.setItem('hm_active_cv_id', targetActive.id);
+          localStorage.setItem('hm_active_cv', JSON.stringify(targetActive));
         }
       } catch (err) {
         setUserCvs(DEFAULT_USER_CVS);
         setActiveCvId(DEFAULT_USER_CVS[0].id);
+        localStorage.setItem('hm_active_cv_id', DEFAULT_USER_CVS[0].id);
+        localStorage.setItem('hm_active_cv', JSON.stringify(DEFAULT_USER_CVS[0]));
       }
     };
 
@@ -328,6 +339,7 @@ export const Dashboard: React.FC = () => {
     setActiveCvId(cv.id);
     setSelectedMatchCvId(cv.id);
     localStorage.setItem('hm_active_cv_id', cv.id);
+    localStorage.setItem('hm_active_cv', JSON.stringify(cv));
 
     setName(cv.title.replace(/^CV_/, '').replace(/\.pdf$/, '').replace(/_/g, ' ') || name);
     setRole(cv.role);
@@ -340,10 +352,17 @@ export const Dashboard: React.FC = () => {
     updateProfile({
       role: cv.role,
       field: cv.field,
+      desiredPosition: cv.role,
+      desiredIndustry: cv.field,
       exp: cv.exp,
       education: cv.education,
       skills: cv.skills,
       bio: cv.bio,
+    });
+
+    updateInterviewConfig({
+      field: cv.field,
+      role: cv.role,
     });
 
     setToastMsg(`🎯 Đã kích hoạt CV "${cv.title}" làm hồ sơ phỏng vấn chính!`);
@@ -888,7 +907,15 @@ export const Dashboard: React.FC = () => {
                 setSelectedCvForDetail(cv);
                 setCvDetailModalOpen(true);
               }}
-              onNavigateInterview={() => navigate('/interview-setup')}
+              onNavigateInterview={() => {
+                const targetCv = activeCv || userCvs[0];
+                if (targetCv) {
+                  handleSelectActiveCv(targetCv);
+                  navigate('/interview-setup', { state: { fromCv: targetCv } });
+                } else {
+                  navigate('/interview-setup');
+                }
+              }}
               onSwitchToMatch={(cvId) => {
                 setSelectedMatchCvId(cvId);
                 handleTabChange('match');
