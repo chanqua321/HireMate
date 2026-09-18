@@ -14,6 +14,7 @@ type User = {
   joinDate: string;
   status: string;
   emailConfirmed: boolean;
+  avatarUrl?: string | null;
 };
 
 const planColor = (plan: string) => plan === 'Premium' ? 'purple' : plan === 'Pro' ? 'info' : 'neutral';
@@ -45,6 +46,7 @@ const AdminUsers: React.FC = () => {
       joinDate: (u.createdAt || '').slice(0, 10),
       status: u.isDeleted || u.lockoutEnd ? 'banned' : 'active',
       emailConfirmed: !!u.emailConfirmed,
+      avatarUrl: u.avatarUrl || null,
     }));
     setUsers(mapped);
     setError(null);
@@ -194,7 +196,17 @@ const AdminUsers: React.FC = () => {
                     <td style={{ color: 'var(--admin-text-muted)', fontSize: '0.8rem' }}>{i + 1}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                        <div className="admin-avatar">{u.name.charAt(0)}</div>
+                        {u.avatarUrl ? (
+                          <img
+                            src={u.avatarUrl}
+                            alt={u.name}
+                            className="admin-avatar"
+                            style={{ objectFit: 'cover' }}
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="admin-avatar">{u.name.charAt(0)}</div>
+                        )}
                         <div>
                           <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--admin-text)' }}>{u.name}</div>
                           <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem' }}>{u.email}</div>

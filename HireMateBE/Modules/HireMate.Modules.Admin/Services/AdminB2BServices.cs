@@ -65,6 +65,7 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
                 u.OnboardingCompleted,
                 u.LockoutEnd,
                 emailConfirmed = u.EmailConfirmed,
+                avatarUrl = u.AvatarUrl,
                 roles = r
             });
         }
