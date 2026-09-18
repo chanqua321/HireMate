@@ -186,7 +186,7 @@ export const Header: React.FC = () => {
                             {profile.name || 'Ứng viên HireMate'}
                           </div>
                           <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                            {profile.role || 'Lập trình viên'}
+                            {profile.role || 'Chưa cập nhật vị trí'}
                           </div>
                         </div>
 

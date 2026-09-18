@@ -81,24 +81,33 @@ const AdminPlans: React.FC = () => {
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
-    const data = { ...form, currency: 'VND', interval: 'month', subscribers: 0 };
+    const slug =
+      form.slug.trim() ||
+      form.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') ||
+      `plan-${Date.now()}`;
+    const data = { ...form, slug, currency: 'VND', interval: 'month', subscribers: 0 };
     if (editing) {
-      setPlans(prev => prev.map(p => p.id === editing.id ? { ...p, ...data } : p));
+      setPlans((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...data } : p)));
     } else {
-      setPlans(prev => [...prev, { id: String(Date.now()), ...data }]);
+      setPlans((prev) => [...prev, { id: String(Date.now()), ...data }]);
     }
     setShowModal(false);
 
     try {
       await adminService.upsertPlan({
         id: editing?.id,
-        code: form.slug.toUpperCase(),
+        code: slug,
         name: form.name,
         priceVnd: form.price,
         durationDays: 30,
         description: form.features.join('\n'),
         isActive: form.active,
       });
+      await fetchPlans();
     } catch (err) {
       console.warn('Failed to upsert plan on BE:', err);
     }

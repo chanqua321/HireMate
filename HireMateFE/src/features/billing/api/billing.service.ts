@@ -22,5 +22,15 @@ export const billingService = {
     const cleanQuery = queryString.startsWith('?') ? queryString.substring(1) : queryString;
     return apiClient.get(`/Billing/vnpay-return?${cleanQuery}`, { skipAuth: true });
   },
+
+  async confirmPayOs(payload: {
+    orderCode?: string;
+    status?: string;
+    code?: string;
+    cancel?: boolean;
+    invoiceId?: string;
+  }): Promise<ApiResponse<any>> {
+    return apiClient.post('/Billing/payos-confirm', payload, { skipAuth: true });
+  },
 };
 

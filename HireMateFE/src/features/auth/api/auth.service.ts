@@ -1,57 +1,69 @@
 import { apiClient, ApiResponse } from '../../../shared/api/apiClient';
+import { SOLE_ADMIN_EMAIL } from '../../../shared/config/constants';
 import { LoginRequest, RegisterRequest, AuthResponseData } from '../types';
+
+const emailFromAuthData = (data: AuthResponseData | any): string => {
+  const direct = data?.email || data?.user?.email;
+  if (direct) return String(direct);
+  const token = data?.token || data?.accessToken;
+  if (!token || typeof token !== 'string') return '';
+  try {
+    const part = token.split('.')[1];
+    if (!part) return '';
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+    return json.email || json['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] || '';
+  } catch {
+    return '';
+  }
+};
+
+const persistSession = (data: AuthResponseData | any) => {
+  const token = data?.token || data?.accessToken;
+  const refreshToken = data?.refreshToken;
+  if (token) localStorage.setItem('hm_access_token', token);
+  if (refreshToken) localStorage.setItem('hm_refresh_token', refreshToken);
+
+  const email = emailFromAuthData(data);
+  if (email) localStorage.setItem('hm_user_email', email);
+
+  const roles = data?.roles || data?.user?.roles || [];
+  if (Array.isArray(roles) && roles.length > 0) {
+    localStorage.setItem('hm_roles', JSON.stringify(roles));
+  }
+};
+
+export const isSoleAdminSession = (data: AuthResponseData | any): boolean => {
+  const email = emailFromAuthData(data);
+  const roles = data?.roles || data?.user?.roles || [];
+  const hasAdmin = Array.isArray(roles)
+    ? roles.some((r: string) => typeof r === 'string' && r.toLowerCase() === 'admin')
+    : String(roles).toLowerCase().includes('admin');
+  return email.trim().toLowerCase() === SOLE_ADMIN_EMAIL && hasAdmin;
+};
 
 export const authService = {
   async login(payload: LoginRequest): Promise<ApiResponse<AuthResponseData>> {
     const res = await apiClient.post<AuthResponseData>('/Auth/login', payload, { skipAuth: true });
-    const token = (res.data as any)?.token || res.data?.accessToken;
-    const refreshToken = (res.data as any)?.refreshToken;
-    if (res.ok && token) {
-      localStorage.setItem('hm_access_token', token);
-      if (refreshToken) {
-        localStorage.setItem('hm_refresh_token', refreshToken);
-      }
-    }
+    if (res.ok && res.data) persistSession(res.data);
     return res;
   },
 
   async register(payload: RegisterRequest): Promise<ApiResponse<AuthResponseData>> {
     const res = await apiClient.post<AuthResponseData>('/Auth/register', payload, { skipAuth: true });
-    const token = (res.data as any)?.token || res.data?.accessToken;
-    const refreshToken = (res.data as any)?.refreshToken;
-    if (res.ok && token) {
-      localStorage.setItem('hm_access_token', token);
-      if (refreshToken) {
-        localStorage.setItem('hm_refresh_token', refreshToken);
-      }
-    }
+    if (res.ok && res.data) persistSession(res.data);
     return res;
   },
 
   async loginWithGoogle(idToken: string): Promise<ApiResponse<AuthResponseData>> {
     const res = await apiClient.post<AuthResponseData>('/Auth/login-google', { idToken }, { skipAuth: true });
-    const token = (res.data as any)?.token || res.data?.accessToken;
-    const refreshToken = (res.data as any)?.refreshToken;
-    if (res.ok && token) {
-      localStorage.setItem('hm_access_token', token);
-      if (refreshToken) {
-        localStorage.setItem('hm_refresh_token', refreshToken);
-      }
-    }
+    if (res.ok && res.data) persistSession(res.data);
     return res;
   },
 
   async refreshToken(): Promise<ApiResponse<AuthResponseData>> {
     const refreshToken = localStorage.getItem('hm_refresh_token') || '';
     const res = await apiClient.post<AuthResponseData>('/Auth/refresh', { refreshToken }, { skipAuth: true });
-    const token = (res.data as any)?.token || res.data?.accessToken;
-    const newRefreshToken = (res.data as any)?.refreshToken;
-    if (res.ok && token) {
-      localStorage.setItem('hm_access_token', token);
-      if (newRefreshToken) {
-        localStorage.setItem('hm_refresh_token', newRefreshToken);
-      }
-    }
+    if (res.ok && res.data) persistSession(res.data);
     return res;
   },
 
@@ -60,6 +72,8 @@ export const authService = {
     const res = await apiClient.post<void>('/Auth/logout', { refreshToken });
     localStorage.removeItem('hm_access_token');
     localStorage.removeItem('hm_refresh_token');
+    localStorage.removeItem('hm_user_email');
+    localStorage.removeItem('hm_roles');
     return res;
   },
 

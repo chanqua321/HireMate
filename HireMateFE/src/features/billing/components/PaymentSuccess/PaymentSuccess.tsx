@@ -44,8 +44,12 @@ export const PaymentSuccess: React.FC = () => {
   const location = useLocation();
 
   const planKey = (searchParams.get('plan') || 'pro').toLowerCase();
-  const invoiceParam = searchParams.get('invoice') || 'HM-20260726-3362';
-  const planInfo = PLAN_SUCCESS_MAP[planKey] || PLAN_SUCCESS_MAP.pro;
+  const invoiceParam = searchParams.get('invoice') || '';
+  const planInfo = PLAN_SUCCESS_MAP[planKey] || {
+    title: `Chào mừng bạn đến với gói ${planKey}!`,
+    packageName: `Gói ${planKey}`,
+    price: '',
+  };
 
   const [isVerifying, setIsVerifying] = useState(false);
 

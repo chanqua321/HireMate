@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldAlert, LogIn, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { authService } from '../../features/auth/api/auth.service';
+import { isSoleAdminEmail } from '../../shared/config/constants';
 
 interface AdminRouteGuardProps {
   children: React.ReactNode;
@@ -53,7 +54,7 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) =>
           ? roleClaim.includes('Admin')
           : typeof roleClaim === 'string' && roleClaim.includes('Admin');
 
-      if (hasAdmin) {
+      if (hasAdmin && isSoleAdminEmail(email)) {
         setIsAdmin(true);
         setChecking(false);
         return;
@@ -64,7 +65,7 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) =>
     authService.getMe().then((res) => {
       if (res.ok && res.data) {
         const roles = res.data.roles || [];
-        const isAdm = Array.isArray(roles) && roles.includes('Admin');
+        const isAdm = Array.isArray(roles) && roles.includes('Admin') && isSoleAdminEmail(res.data.email);
         setIsAdmin(isAdm);
         if (res.data.email) setCurrentEmail(res.data.email);
       } else {
@@ -161,6 +162,7 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) =>
                 localStorage.removeItem('hm_access_token');
                 localStorage.removeItem('hm_refresh_token');
                 localStorage.removeItem('hm_roles');
+                localStorage.removeItem('hm_user_email');
                 navigate('/login');
               }}
               style={{

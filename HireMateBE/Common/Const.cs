@@ -25,4 +25,9 @@ public static class Const
 
     public static int FAIL_QUOTA_CODE = -3;
     public static string FAIL_QUOTA_MSG = "Gói Free giới hạn 3 phiên phỏng vấn mỗi tháng";
+
+    public const string INVALID_CREDENTIALS_MSG = "Email hoặc mật khẩu không đúng";
+    public const string ACCOUNT_LOCKED_MSG = "Tài khoản đã bị khóa. Liên hệ quản trị viên.";
+    public const string EMAIL_NOT_CONFIRMED_MSG = "Email chưa được xác nhận. Vui lòng kiểm tra hộp thư hoặc gửi lại email xác nhận.";
 }
+

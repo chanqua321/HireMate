@@ -202,7 +202,7 @@ export const Dashboard: React.FC = () => {
 
   // AI Email Generator State
   const [emailType, setEmailType] = useState('CoverLetter');
-  const [emailPosition, setEmailPosition] = useState(profile.role || 'Frontend Developer');
+  const [emailPosition, setEmailPosition] = useState(profile.role || '');
   const [emailCompany, setEmailCompany] = useState('');
   const [emailTone, setEmailTone] = useState('formal');
   const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
@@ -579,34 +579,12 @@ export const Dashboard: React.FC = () => {
           aiProvider: res.data.aiProvider,
         });
       } else {
-        const jdLower = jdText.toLowerCase();
-        const matched = targetSkills.filter((s) => jdLower.includes(s.toLowerCase()));
-        const missing = ['Docker', 'CI/CD', 'Jest', 'GraphQL', 'AWS'].filter(
-          (req) => jdLower.includes(req.toLowerCase()) && !targetSkills.some((s) => s.toLowerCase() === req.toLowerCase())
-        );
-        const score = Math.min(95, Math.max(65, Math.round((matched.length / Math.max(targetSkills.length, 1)) * 100)));
-        setMatchResult({
-          matchScore: score,
-          overallScore: score,
-          matchingSkills: matched.length > 0 ? matched : targetSkills.slice(0, 4),
-          missingSkills: missing.length > 0 ? missing : ['CI/CD Pipeline', 'Microservices'],
-          recommendations: [
-            'Bổ sung các dự án thực chiến làm nổi bật khả năng xử lý bài toán hiệu năng.',
-            'Chuẩn bị câu trả lời phương pháp STAR tập trung vào kỹ năng ' + (matched[0] || targetSkills[0] || 'chuyên môn'),
-          ],
-        });
+        setMatchResult(null);
+        alert(res.message || 'So khớp CV–JD thất bại. Kiểm tra gói/hạn mức AI rồi thử lại.');
       }
-    } catch {
-      setMatchResult({
-        matchScore: 88,
-        overallScore: 88,
-        matchingSkills: targetSkills.slice(0, 4),
-        missingSkills: ['CI/CD Pipeline', 'Automated Testing'],
-        recommendations: [
-          'Hồ sơ của bạn phù hợp rất tốt với yêu cầu công việc!',
-          'Hãy nhấn mạnh kinh nghiệm giải quyết vấn đề thực tế trong phỏng vấn.',
-        ],
-      });
+    } catch (err: any) {
+      setMatchResult(null);
+      alert(err?.message || 'So khớp CV–JD thất bại. Vui lòng thử lại hoặc nâng cấp gói.');
     } finally {
       setIsMatching(false);
     }
@@ -654,25 +632,12 @@ export const Dashboard: React.FC = () => {
           ],
         });
       } else {
-        const body =
-          emailType === 'CoverLetter'
-            ? `Kính gửi Bộ phận Tuyển dụng ${comp},\n\nTôi tên là ${candidateName}, tôi viết thư này để bày tỏ nguyện vọng ứng tuyển vào vị trí ${pos} tại ${comp}.\n\nVới các kỹ năng cốt lõi (${skills.slice(0, 4).join(', ')}), tôi tin tưởng mình sẽ đóng góp giá trị thiết thực cho sự phát triển của công ty.\n\nTôi rất mong có cơ hội trao đổi trực tiếp trong buổi phỏng vấn.\n\nTrân trọng,\n${candidateName}`
-            : `Kính gửi ${comp},\n\nTôi là ${candidateName}. Tôi xin chân thành cảm ơn Anh/Chị đã dành thời gian trao đổi cùng tôi về vị trí ${pos}.\n\nTrân trọng,\n${candidateName}`;
-
-        setGeneratedEmail({
-          subject: defaultSubject,
-          body,
-          email: body,
-          tips: ['Kiểm tra lại thông tin người nhận trước khi gửi.'],
-        });
+        setGeneratedEmail(null);
+        alert(res.message || 'Không tạo được email/Cover Letter. Kiểm tra gói AI rồi thử lại.');
       }
-    } catch {
-      setGeneratedEmail({
-        subject: `[Ứng tuyển] ${emailPosition} - ${name}`,
-        body: `Kính gửi Quý Công ty,\n\nTôi là ${name}, xin ứng tuyển vị trí ${emailPosition}...\n\nTrân trọng,\n${name}`,
-        email: `Kính gửi Quý Công ty,\n\nTôi là ${name}, xin ứng tuyển vị trí ${emailPosition}...\n\nTrân trọng,\n${name}`,
-        tips: ['Tùy chỉnh lại thông tin chi tiết trước khi gửi đi.'],
-      });
+    } catch (err: any) {
+      setGeneratedEmail(null);
+      alert(err?.message || 'Không tạo được email/Cover Letter.');
     } finally {
       setIsGeneratingEmail(false);
     }

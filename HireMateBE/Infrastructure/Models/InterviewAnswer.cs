@@ -30,3 +30,4 @@ public class InterviewAnswer
 
     public int DurationSec { get; set; }
 }
+

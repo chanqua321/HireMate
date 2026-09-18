@@ -9,6 +9,7 @@ import {
   STORAGE_KEYS,
   DEFAULT_PROFILE,
   DEFAULT_INTERVIEW_CONFIG,
+  sanitizeAutoFilledProfile,
 } from '../../shared/config/constants';
 import { SAMPLE_HISTORY, SAMPLE_LAST_RESULT } from '../../shared/data/sampleHistory';
 import { profileService } from '../../shared/services';
@@ -50,9 +51,13 @@ const safeStoreJSON = (key: string, value: unknown) => {
 };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [profile, setProfileState] = useState<Profile>(() =>
-    safeReadJSON<Profile>(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE)
-  );
+  const [profile, setProfileState] = useState<Profile>(() => {
+    const cleaned = sanitizeAutoFilledProfile(
+      safeReadJSON<Profile>(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE)
+    );
+    safeStoreJSON(STORAGE_KEYS.PROFILE, cleaned);
+    return cleaned;
+  });
 
   const [interviewConfig, setInterviewConfigState] = useState<InterviewConfig>(() =>
     safeReadJSON<InterviewConfig>(
@@ -84,21 +89,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (next.name && next.name.trim().length > 0) {
         setIsLoggedIn(true);
       }
-      // Non-blocking BE sync if logged in
+      // Chỉ sync field vừa đổi — tránh ghi đè DB bằng role/field mặc định khi login chỉ cập nhật tên
       if (localStorage.getItem('hm_access_token')) {
-        profileService
-          .updateProfile({
-            // Chỉ gửi fullName nếu có giá trị thật — tránh ghi đè tên thật bằng 'Ứng viên'
-            ...(next.name?.trim() ? { fullName: next.name.trim() } : {}),
-            desiredPosition: next.role,
-            desiredIndustry: next.field,
-            experienceLevel: next.exp,
-            university: next.education,
-            bio: next.bio,
-            hobbies: next.skills,
-            ...updates,
-          })
-          .catch(() => {});
+        profileService.updateProfile(updates).catch(() => {});
       }
       return next;
     });
@@ -159,8 +152,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (res.ok && res.data) {
         const beData: any = res.data;
         setProfileState((prev) => {
-          const mappedRole = beData.desiredPosition || beData.role || prev.role;
-          const mappedField = beData.desiredIndustry || beData.field || prev.field;
+          const mappedRole = beData.desiredPosition || beData.role || '';
+          const mappedField = beData.desiredIndustry || beData.field || '';
           const mappedEducation = beData.university || beData.education || prev.education;
           const mappedSkills =
             Array.isArray(beData.hobbies) && beData.hobbies.length > 0
@@ -169,19 +162,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               ? beData.skills
               : prev.skills;
 
-          const next = {
+          const next = sanitizeAutoFilledProfile({
             ...prev,
             ...beData,
             name: beData.fullName || beData.name || prev.name,
             role: mappedRole,
             field: mappedField,
-            exp: beData.experienceLevel || prev.exp,
+            exp: beData.experienceLevel || '',
             bio: beData.bio !== null && beData.bio !== undefined ? beData.bio : prev.bio,
             education: mappedEducation,
             skills: mappedSkills,
             isPremium: Boolean(beData.isPremium),
-            currentPlanCode: beData.currentPlanCode || (beData.isPremium ? 'pro' : 'free'),
-          };
+            currentPlanCode: beData.currentPlanCode || 'free',
+          });
           safeStoreJSON(STORAGE_KEYS.PROFILE, next);
           return next;
         });

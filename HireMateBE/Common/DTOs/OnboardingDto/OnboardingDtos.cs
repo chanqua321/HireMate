@@ -27,10 +27,5 @@ public class OnboardingPersonalDto
 
     [Required, Range(1980, 2100)]
     public int GraduationYear { get; set; }
-
-    // Thêm mới — tùy chọn, không required
-    [MaxLength(1000)]
-    public string? Bio { get; set; }
-
-    public List<string>? Hobbies { get; set; }
 }
+

@@ -24,7 +24,13 @@ export const profileService = {
     const raw = updates as any;
     const payload: UpdateProfileDto = {};
     const fullName = raw.fullName?.trim() || raw.name?.trim();
-    if (fullName) payload.fullName = fullName;
+    const placeholderNames = new Set([
+      'người dùng google',
+      'người dùng',
+      'ứng viên',
+      'ứng viên hiremate',
+    ]);
+    if (fullName && !placeholderNames.has(fullName.toLowerCase())) payload.fullName = fullName;
     const desiredPosition = raw.desiredPosition?.trim() || raw.role?.trim();
     if (desiredPosition) payload.desiredPosition = desiredPosition;
     const desiredIndustry = raw.desiredIndustry?.trim() || raw.field?.trim();
@@ -38,6 +44,9 @@ export const profileService = {
     if (raw.bio?.trim()) payload.bio = raw.bio.trim();
     const hobbies = raw.hobbies || raw.skills;
     if (hobbies?.length) payload.hobbies = hobbies;
+    if (Object.keys(payload).length === 0) {
+      return { ok: true, status: 200, data: undefined, message: '' };
+    }
     return apiClient.put<any>('/Profile', payload);
   },
 };

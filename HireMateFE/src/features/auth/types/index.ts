@@ -17,8 +17,14 @@ export interface AuthUser {
 }
 
 export interface AuthResponseData {
-  accessToken: string;
-  refreshToken: string;
+  token?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  email?: string;
+  fullName?: string;
+  roles?: string[];
+  onboardingCompleted?: boolean;
+  isPremium?: boolean;
   confirmLinkDev?: string;
-  user: AuthUser;
+  user?: AuthUser;
 }

@@ -18,6 +18,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import './admin.css';
+import { isSoleAdminEmail } from '../../shared/config/constants';
 import {
   adminService,
   AdminAnalytics,
@@ -123,10 +124,7 @@ const AdminDashboard: React.FC = () => {
 
   // Toggle Lock User Account (Chặn tự khóa tài khoản Admin hiện tại)
   const handleToggleLock = async (user: AdminUserItem) => {
-    const currentAdminEmail = localStorage.getItem('hm_user_email') || 'admin@gmail.com';
-    const isSelf =
-      (user.email || '').toLowerCase() === currentAdminEmail.toLowerCase() ||
-      Boolean(user.roles && user.roles.some((r) => r.toLowerCase() === 'admin'));
+    const isSelf = isSoleAdminEmail(user.email);
 
     if (isSelf) {
       showToast('Không thể tự khóa tài khoản Quản trị viên hiện tại!');
@@ -458,10 +456,7 @@ const AdminDashboard: React.FC = () => {
                 {users.slice(0, 6).map((u) => {
                   const isLocked = Boolean(u.lockoutEnd);
                   const isBusy = actionLoading[u.id];
-                  const currentAdminEmail = localStorage.getItem('hm_user_email') || 'admin@gmail.com';
-                  const isSelf =
-                    (u.email || '').toLowerCase() === currentAdminEmail.toLowerCase() ||
-                    Boolean(u.roles && u.roles.some((r) => r.toLowerCase() === 'admin'));
+                  const isSelf = isSoleAdminEmail(u.email);
 
                   return (
                     <tr key={u.id}>

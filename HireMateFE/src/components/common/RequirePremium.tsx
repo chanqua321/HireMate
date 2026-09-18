@@ -10,8 +10,8 @@ export function readPremiumFlag(): boolean {
 export const ONBOARDING_REDIRECT_KEY = 'hm_post_onboarding';
 
 /**
- * Chặn Interview nếu chưa mua gói hoặc chưa hoàn thành onboarding.
- * Chưa onboarding → chuyển thẳng sang trang thiết lập hồ sơ.
+ * Gate interview: bắt buộc đăng nhập + onboarding.
+ * Hạn mức gói (3/15/50 phiên, CV 1/20/70) do BE enforce — Free vẫn vào được setup.
  */
 export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: string }> = ({
   children,
@@ -35,16 +35,6 @@ export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: 
       const me = await authService.getMe();
       if (cancelled) return;
 
-      const premium = me.ok
-        ? !!(me.data?.isPremium ?? me.data?.IsPremium)
-        : readPremiumFlag();
-
-      if (!premium) {
-        setAllowed(false);
-        setChecking(false);
-        return;
-      }
-
       const onboarded = me.ok
         ? !!(me.data?.onboardingCompleted ?? me.data?.OnboardingCompleted)
         : sessionStorage.getItem('hm_onboarding_done') === '1';
@@ -52,11 +42,16 @@ export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: 
       if (!onboarded) {
         const backTo =
           window.location.pathname + window.location.search || '/interview-setup';
-        // pathname luôn có '/', nhưng giữ fallback rõ ràng
         const target = backTo.startsWith('/') ? backTo : '/interview-setup';
         sessionStorage.setItem(ONBOARDING_REDIRECT_KEY, target);
         navigate(`/onboarding/profile?redirect=${encodeURIComponent(target)}`);
         return;
+      }
+
+      // Đồng bộ cờ premium (không chặn Free — quota do BE)
+      if (me.ok) {
+        const premium = !!(me.data?.isPremium ?? me.data?.IsPremium);
+        sessionStorage.setItem('hm_is_premium', premium ? '1' : '0');
       }
 
       setAllowed(true);
@@ -65,7 +60,7 @@ export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: 
 
     run().catch(() => {
       if (!cancelled) {
-        setAllowed(readPremiumFlag());
+        setAllowed(Boolean(sessionStorage.getItem('hm_access_token')));
         setChecking(false);
       }
     });
@@ -78,7 +73,7 @@ export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: 
   if (checking) {
     return (
       <div className="section container" style={{ maxWidth: 560, margin: '48px auto', textAlign: 'center' }}>
-        <p className="muted">Đang kiểm tra gói đăng ký…</p>
+        <p className="muted">Đang kiểm tra tài khoản…</p>
       </div>
     );
   }
@@ -100,19 +95,19 @@ export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: 
             <Lock size={28} />
           </div>
           <span className="eyebrow" style={{ justifyContent: 'center', marginBottom: 8 }}>
-            <Sparkles size={14} /> Cần gói Premium
+            <Sparkles size={14} /> Cần đăng nhập
           </span>
-          <h2 style={{ marginBottom: 10 }}>Chưa mua gói — chưa vào được phỏng vấn</h2>
+          <h2 style={{ marginBottom: 10 }}>Chưa thể vào phòng phỏng vấn</h2>
           <p className="muted" style={{ marginBottom: 24 }}>
-            Phòng phỏng vấn AI chỉ mở cho tài khoản đã thanh toán gói Premium / Combo.
-            Hãy nâng cấp để bắt đầu luyện tập.
+            Vui lòng đăng nhập và hoàn tất hồ sơ. Gói Miễn phí vẫn có 3 lượt/tháng; hết hạn mức sẽ
+            được nhắc nâng cấp.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to={redirectTo} className="btn btn-primary">
-              Xem bảng giá <ArrowRight size={16} />
+            <Link to="/login" className="btn btn-primary">
+              Đăng nhập <ArrowRight size={16} />
             </Link>
-            <Link to="/dashboard" className="btn btn-ghost">
-              Về dashboard
+            <Link to={redirectTo} className="btn btn-ghost">
+              Xem bảng giá
             </Link>
           </div>
         </div>
