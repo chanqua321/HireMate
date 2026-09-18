@@ -184,14 +184,14 @@ export const Pricing: React.FC = () => {
             Chọn gói phù hợp để <span className="highlight">bứt phá sự nghiệp</span>
           </motion.h1>
 
-          <motion.p
+          {/* <motion.p
             className="lead"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: 0.2 }}
           >
             Đầu tư thông minh cho sự nghiệp với chi phí chỉ bằng vài ly cà phê. Nâng cấp hoặc hủy bất cứ lúc nào không ràng buộc.
-          </motion.p>
+          </motion.p> */}
 
           {/* Billing Toggle */}
           <div className="billing-toggle-container">
@@ -308,10 +308,10 @@ export const Pricing: React.FC = () => {
       {/* ── TRUST / GUARANTEE BANNER ── */}
       <div className="container" style={{ maxWidth: '1000px', margin: '0 auto 60px', padding: '0 20px' }}>
         <div className="pricing-trust-banner">
-          <div className="trust-item">
+          {/* <div className="trust-item">
             <ShieldCheck size={24} />
             <span>Bảo mật SSL 256-bit chuẩn quốc tế</span>
-          </div>
+          </div> */}
           <div className="trust-item">
             <Zap size={24} />
             <span>Kích hoạt quyền lợi tức thì</span>
@@ -387,7 +387,7 @@ export const Pricing: React.FC = () => {
       </section>
 
       {/* ── FAQ ── */}
-      <section className="pricing-faq-sec">
+      {/* <section className="pricing-faq-sec">
         <div className="container">
           <div className="faq-header">
             <h2>Câu hỏi thường gặp về Bảng giá</h2>
@@ -395,7 +395,7 @@ export const Pricing: React.FC = () => {
           </div>
           <FaqAccordion items={faqs} />
         </div>
-      </section>
+      </section> */}
 
       <AuthRequiredModal
         isOpen={showAuthModal}

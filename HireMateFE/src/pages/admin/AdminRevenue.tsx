@@ -6,8 +6,12 @@ import { InvoiceDto } from '../../features/billing/types';
 import './admin.css';
 
 const fmt = (n: number) => `₫${n.toLocaleString('vi-VN')}`;
-const fmtM = (n: number) => `₫${(n / 1_000_000).toFixed(1)}M`;
-
+const fmtM = (n: number) => {
+  if (n >= 1_000_000_000) return `₫${(n / 1_000_000_000).toFixed(1)} Tỷ`;
+  if (n >= 1_000_000) return `₫${(n / 1_000_000).toFixed(1)} Tr`;
+  if (n >= 1_000) return `₫${(n / 1_000).toFixed(0)}K`;
+  return `₫${n.toLocaleString('vi-VN')}`;
+};
 const statusBadge = (s: string) => {
   const map: Record<string, string> = { paid: 'success', pending: 'warning', failed: 'danger', refunded: 'neutral' };
   const label: Record<string, string> = { paid: 'Đã thanh toán', pending: 'Chờ xử lý', failed: 'Thất bại', refunded: 'Hoàn tiền' };
@@ -102,7 +106,7 @@ const AdminRevenue: React.FC = () => {
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 className="admin-page-title">💰 Doanh thu & Thanh toán</h1>
-          <p className="admin-page-subtitle">Theo dõi doanh thu, invoices và lịch sử giao dịch từ cơ sở dữ liệu thời gian thực.</p>
+          {/* <p className="admin-page-subtitle">Theo dõi doanh thu, invoices và lịch sử giao dịch từ cơ sở dữ liệu thời gian thực.</p> */}
         </div>
         <button 
           className="admin-btn admin-btn-secondary admin-btn-sm" 
