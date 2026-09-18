@@ -17,7 +17,44 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
 }) => {
   const radius = 56;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (readinessScore / 100) * circumference;
+  const validScore = Math.max(0, Math.min(100, Math.round(readinessScore || 0)));
+  const strokeDashoffset = circumference - (validScore / 100) * circumference;
+
+  const renderReadinessSummary = () => {
+    if (validScore >= 85) {
+      return (
+        <>
+          Bạn đang nằm trong <strong>Top 10%</strong> ứng viên sẵn sàng phỏng vấn xuất sắc tuần này.
+        </>
+      );
+    }
+    if (validScore >= 70) {
+      return (
+        <>
+          Bạn đang nằm trong <strong>Top 25%</strong> ứng viên có hồ sơ và kỹ năng tốt.
+        </>
+      );
+    }
+    if (validScore >= 50) {
+      return (
+        <>
+          Bạn đang nằm trong <strong>Top 45%</strong> ứng viên có tiềm năng phát triển.
+        </>
+      );
+    }
+    if (validScore > 0) {
+      return (
+        <>
+          Hồ sơ của bạn đã được ghi nhận. Luyện phỏng vấn cùng AI để nâng cao thứ hạng!
+        </>
+      );
+    }
+    return (
+      <>
+        Chưa có đánh giá điểm. Hãy tải CV và bắt đầu buổi phỏng vấn đầu tiên nhé!
+      </>
+    );
+  };
 
   return (
     <div className="right-column-stack">
@@ -55,13 +92,13 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             />
           </svg>
           <div className="donut-gauge-center">
-            <span className="donut-score-number">{readinessScore}</span>
+            <span className="donut-score-number">{validScore}</span>
             <span className="donut-score-max">of 100</span>
           </div>
         </div>
 
         <p className="readiness-summary-text">
-          Bạn đang nằm trong <strong>Top 15%</strong> ứng viên sẵn sàng phỏng vấn tuần này.
+          {renderReadinessSummary()}
         </p>
 
         <Link to="/interview-setup" className="improve-score-btn">

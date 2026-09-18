@@ -11,6 +11,20 @@ export const INDUSTRY_ROLES: IndustryRoles = {
     'Quản lý sản phẩm (Product Manager)',
     'Kiểm thử phần mềm (QA/QC)',
   ],
+  'Tài chính - Ngân hàng (Fintech)': [
+    'Quản lý sản phẩm (Product Manager)',
+    'Chuyên viên Phân tích Tài chính',
+    'Chuyên viên Dữ liệu Tài chính (Data Analyst)',
+    'Kế toán tổng hợp',
+    'Kiểm toán viên nội bộ',
+    'Chuyên viên Đầu tư',
+  ],
+  'Thương mại điện tử (E-Commerce)': [
+    'Quản lý sản phẩm (Product Manager)',
+    'Chuyên viên Vận hành E-Commerce',
+    'Chuyên viên Digital Marketing',
+    'Lập trình viên Fullstack',
+  ],
   'Thiết kế & Sáng tạo': [
     'Thiết kế UI/UX',
     'Thiết kế Đồ họa (Graphic Designer)',
@@ -51,30 +65,74 @@ export const ROLE_MAPPINGS: Record<string, string> = {
   'AI / ML Engineer': 'Kỹ sư AI / Machine Learning',
   'Data Analyst': 'Chuyên viên dữ liệu (Data Scientist)',
   'Product Manager': 'Quản lý sản phẩm (Product Manager)',
+  'PM': 'Quản lý sản phẩm (Product Manager)',
+  'Quản lý sản phẩm': 'Quản lý sản phẩm (Product Manager)',
   'UI/UX Designer': 'Thiết kế UI/UX',
   'DevOps Engineer': 'Kỹ sư DevOps',
 };
 
+export const normalizeIndustry = (industry?: string): string => {
+  if (!industry || !industry.trim()) return 'Công nghệ thông tin';
+  const ind = industry.trim();
+  if (INDUSTRY_ROLES[ind]) return ind;
+
+  const lower = ind.toLowerCase();
+  if (lower.includes('fintech') || lower.includes('ngân hàng') || lower.includes('tài chính - ngân hàng')) {
+    return 'Tài chính - Ngân hàng (Fintech)';
+  }
+  if (lower.includes('thương mại') || lower.includes('e-commerce') || lower.includes('ecommerce')) {
+    return 'Thương mại điện tử (E-Commerce)';
+  }
+  if (lower.includes('thiết kế') || lower.includes('sáng tạo') || lower.includes('ui-ux')) {
+    return 'Thiết kế & Sáng tạo';
+  }
+  if (lower.includes('marketing') || lower.includes('truyền thông') || lower.includes('kinh doanh')) {
+    return 'Kinh doanh & Marketing';
+  }
+  if (lower.includes('tài chính') || lower.includes('kế toán')) {
+    return 'Tài chính & Kế toán';
+  }
+  if (lower.includes('nhân sự') || lower.includes('tuyển dụng')) {
+    return 'Nhân sự & Hành chính';
+  }
+  if (lower.includes('công nghệ') || lower.includes('it') || lower.includes('phần mềm')) {
+    return 'Công nghệ thông tin';
+  }
+
+  // Fallback match by key name
+  for (const key of Object.keys(INDUSTRY_ROLES)) {
+    if (key.toLowerCase().includes(lower) || lower.includes(key.toLowerCase())) {
+      return key;
+    }
+  }
+
+  return 'Công nghệ thông tin';
+};
+
 export const normalizeRole = (role?: string, industry?: string): string => {
   if (!role || !role.trim()) {
-    const list = INDUSTRY_ROLES[industry || 'Công nghệ thông tin'] || [];
+    const normInd = normalizeIndustry(industry);
+    const list = INDUSTRY_ROLES[normInd] || INDUSTRY_ROLES['Công nghệ thông tin'] || [];
     return list[0] || 'Lập trình viên Backend';
   }
   const r = role.trim();
   if (ROLE_MAPPINGS[r]) return ROLE_MAPPINGS[r];
 
   const lower = r.toLowerCase();
+  if (lower.includes('product') || lower.includes('quản lý sản phẩm') || lower === 'pm' || lower.includes('product manager')) {
+    return 'Quản lý sản phẩm (Product Manager)';
+  }
   if (lower.includes('backend') || lower.includes('back-end')) return 'Lập trình viên Backend';
   if (lower.includes('frontend') || lower.includes('front-end')) return 'Lập trình viên Frontend';
   if (lower.includes('fullstack') || lower.includes('full-stack')) return 'Lập trình viên Fullstack';
   if (lower.includes('ai') || lower.includes('machine learning') || lower.includes('ml')) return 'Kỹ sư AI / Machine Learning';
   if (lower.includes('data') || lower.includes('dữ liệu')) return 'Chuyên viên dữ liệu (Data Scientist)';
-  if (lower.includes('product') || lower.includes('quản lý sản phẩm') || lower.includes('pm')) return 'Quản lý sản phẩm (Product Manager)';
   if (lower.includes('ui/ux') || lower.includes('thiết kế') || lower.includes('design')) return 'Thiết kế UI/UX';
   if (lower.includes('devops')) return 'Kỹ sư DevOps';
 
   // Check in current industry
-  const currentList = INDUSTRY_ROLES[industry || 'Công nghệ thông tin'] || [];
+  const normInd = normalizeIndustry(industry);
+  const currentList = INDUSTRY_ROLES[normInd] || [];
   const foundInCurrent = currentList.find((item) => item.toLowerCase() === lower);
   if (foundInCurrent) return foundInCurrent;
 

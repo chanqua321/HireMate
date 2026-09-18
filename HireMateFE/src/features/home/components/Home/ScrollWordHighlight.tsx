@@ -23,7 +23,7 @@ const Word: React.FC<{
         className="hm-scrub-word"
       >
         {word}
-      </motion.span>
+      </motion.span>{' '}
     </span>
   );
 };

@@ -15,6 +15,11 @@ import {
   Eye,
   Save,
   Loader2,
+  Edit3,
+  Video,
+  ArrowRight,
+  FileCheck,
+  FolderOpen,
 } from 'lucide-react';
 import './CareerProfileForm.css';
 
@@ -39,6 +44,10 @@ interface CareerProfileFormProps {
   savedSuccess: boolean;
   onSave: (e: React.FormEvent) => void;
   onOpenCheckCvModal: () => void;
+  activeCv?: any;
+  onOpenCvDetail?: (cv: any) => void;
+  onSwitchToCvTab?: () => void;
+  onNavigateInterview?: () => void;
 }
 
 const FIELD_OPTIONS = [
@@ -87,7 +96,12 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
   savedSuccess,
   onSave,
   onOpenCheckCvModal,
+  activeCv,
+  onOpenCvDetail,
+  onSwitchToCvTab,
+  onNavigateInterview,
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
   const [newSkillInput, setNewSkillInput] = useState('');
   const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false);
   const [expDropdownOpen, setExpDropdownOpen] = useState(false);
@@ -95,6 +109,13 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
   const fieldWrapperRef = useRef<HTMLDivElement>(null);
   const expWrapperRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (savedSuccess) {
+      const timer = setTimeout(() => setIsEditing(false), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [savedSuccess]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -121,10 +142,244 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
     setSkills(skills.filter((s) => s !== skillToRemove));
   };
 
+  // 1. VIEW MODE (Default: Hiển thị thông tin tổng quan Career Profile & CV đã kết nối)
+  if (!isEditing) {
+    const avatarLetter = (name || 'U').trim().charAt(0).toUpperCase() || 'U';
+
+    return (
+      <motion.div
+        key="career-overview"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.25 }}
+        className="career-profile-overview-wrap"
+      >
+        {/* Profile Hero Header Card */}
+        <div className="profile-hero-card">
+          <div className="profile-hero-left">
+            <div className="profile-avatar-circle">
+              <span>{avatarLetter}</span>
+            </div>
+            <div className="profile-hero-titles">
+              <div className="profile-hero-name-row">
+                <h3 className="profile-hero-name">{name || 'Ứng viên'}</h3>
+                <span className="profile-role-badge">{role || 'Chưa cập nhật vị trí'}</span>
+              </div>
+              <p className="profile-hero-meta">
+                <span>{field || 'Chưa chọn ngành nghề'}</span>
+                <span className="meta-separator">•</span>
+                <span>{exp || 'Chưa chọn kinh nghiệm'}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="profile-hero-actions">
+            <button
+              type="button"
+              className="edit-profile-btn"
+              onClick={() => setIsEditing(true)}
+              title="Chỉnh sửa thông tin hồ sơ nghề nghiệp"
+            >
+              <Edit3 size={15} />
+              <span>Chỉnh sửa hồ sơ</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 2x2 Details Grid */}
+        <div className="profile-details-grid">
+          <div className="profile-info-tile">
+            <div className="tile-icon-wrap" style={{ background: '#E0F2FE', color: '#0284C7' }}>
+              <Briefcase size={18} />
+            </div>
+            <div className="tile-content">
+              <span className="tile-label">Vị trí mục tiêu</span>
+              <strong className="tile-value">{role || 'Chưa cập nhật'}</strong>
+            </div>
+          </div>
+
+          <div className="profile-info-tile">
+            <div className="tile-icon-wrap" style={{ background: '#F0FDF4', color: '#16A34A' }}>
+              <Layers size={18} />
+            </div>
+            <div className="tile-content">
+              <span className="tile-label">Ngành nghề / Lĩnh vực</span>
+              <strong className="tile-value">{field || 'Chưa cập nhật'}</strong>
+            </div>
+          </div>
+
+          <div className="profile-info-tile">
+            <div className="tile-icon-wrap" style={{ background: '#FEF3C7', color: '#D97706' }}>
+              <Award size={18} />
+            </div>
+            <div className="tile-content">
+              <span className="tile-label">Cấp độ kinh nghiệm</span>
+              <strong className="tile-value">{exp || 'Chưa cập nhật'}</strong>
+            </div>
+          </div>
+
+          <div className="profile-info-tile">
+            <div className="tile-icon-wrap" style={{ background: '#F3E8FF', color: '#9333EA' }}>
+              <GraduationCap size={18} />
+            </div>
+            <div className="tile-content">
+              <span className="tile-label">Học vấn & Trường ĐH</span>
+              <strong className="tile-value">
+                {education || 'Chưa cập nhật'}
+                {graduationYear ? ` (Tốt nghiệp: ${graduationYear})` : ''}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Skills Section */}
+        <div className="profile-section-card">
+          <div className="section-card-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Cpu size={18} color="#0284C7" />
+              <h4>Kỹ năng chuyên môn ({skills.length})</h4>
+            </div>
+            {skills.length > 0 && (
+              <span className="skills-sync-tag">Đồng bộ chuẩn ATS</span>
+            )}
+          </div>
+
+          <div className="profile-skills-pills">
+            {skills.length > 0 ? (
+              skills.map((s, idx) => (
+                <span key={idx} className="overview-skill-badge">
+                  {s}
+                </span>
+              ))
+            ) : (
+              <p className="empty-hint-text">
+                Chưa có kỹ năng chuyên môn nào. Bấm <strong>"Chỉnh sửa hồ sơ"</strong> để thêm hoặc kích hoạt CV để tự động trích xuất.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Bio Section */}
+        <div className="profile-section-card">
+          <div className="section-card-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileText size={18} color="#0284C7" />
+              <h4>Mục tiêu nghề nghiệp & Giới thiệu bản thân</h4>
+            </div>
+          </div>
+          <div className="profile-bio-quote">
+            {bio ? (
+              <p className="bio-text">"{bio}"</p>
+            ) : (
+              <p className="empty-hint-text">
+                Chưa có phần giới thiệu. Thêm tóm tắt điểm mạnh để AI thiết kế câu hỏi phỏng vấn chuẩn xác nhất.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Linked / Confirmed Active CV Section */}
+        <div className="profile-section-card linked-cv-card">
+          <div className="section-card-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileCheck size={18} color="#0284C7" />
+              <h4>CV đang kích hoạt phỏng vấn & so khớp</h4>
+            </div>
+            {activeCv && (
+              <span className="linked-cv-status-pill">
+                <span className="pulsing-green-dot" />
+                Đang kích hoạt
+              </span>
+            )}
+          </div>
+
+          {activeCv ? (
+            <div className="linked-cv-body">
+              <div className="linked-cv-info-row">
+                <div className="linked-cv-name-group">
+                  <span className="linked-cv-file-title">{activeCv.title}</span>
+                  <span className="linked-cv-subtext">
+                    Ngày tải: {activeCv.uploadedAt} • Vị trí: {activeCv.role} • Ngành: {activeCv.field}
+                  </span>
+                </div>
+                <div className="linked-cv-ats-badge">
+                  <span>Điểm ATS:</span>
+                  <strong>{activeCv.atsScore}/100</strong>
+                </div>
+              </div>
+
+              <div className="linked-cv-actions-row">
+                {onOpenCvDetail && (
+                  <button
+                    type="button"
+                    className="view-cv-details-btn"
+                    onClick={() => onOpenCvDetail(activeCv)}
+                  >
+                    <Eye size={14} />
+                    <span>Xem chi tiết CV</span>
+                  </button>
+                )}
+                {onSwitchToCvTab && (
+                  <button
+                    type="button"
+                    className="switch-cv-btn"
+                    onClick={onSwitchToCvTab}
+                  >
+                    <FolderOpen size={14} />
+                    <span>Quản lý Kho CV</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="empty-linked-cv-box">
+              <p>Chưa có CV nào được kích hoạt. Hãy tải lên CV để hồ sơ đạt độ sẵn sàng cao nhất.</p>
+              {onSwitchToCvTab && (
+                <button
+                  type="button"
+                  className="switch-cv-btn primary"
+                  onClick={onSwitchToCvTab}
+                >
+                  <span>Mở Kho CV để tải lên</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom CTA Bar */}
+        <div className="profile-overview-footer">
+          <button
+            type="button"
+            className="footer-edit-btn"
+            onClick={() => setIsEditing(true)}
+          >
+            <Edit3 size={15} />
+            <span>Chỉnh sửa hồ sơ</span>
+          </button>
+
+          {onNavigateInterview && (
+            <button
+              type="button"
+              className="footer-interview-btn"
+              onClick={onNavigateInterview}
+            >
+              <Video size={16} />
+              <span>Vào phỏng vấn AI ngay</span>
+              <ArrowRight size={15} />
+            </button>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
+
+  // 2. EDIT MODE (Khi user bấm "Chỉnh sửa hồ sơ")
   return (
     <motion.form
       id="manual-profile-form"
-      key="manual-tab"
+      key="manual-tab-edit"
       onSubmit={onSave}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -132,6 +387,22 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
       transition={{ duration: 0.25 }}
       className="career-profile-form"
     >
+      {/* Edit Mode Top Indicator */}
+      <div className="edit-mode-header-bar">
+        <div className="edit-mode-title">
+          <Edit3 size={17} color="#0284C7" />
+          <span>Chỉnh sửa thông tin Hồ sơ nghề nghiệp</span>
+        </div>
+        <button
+          type="button"
+          className="cancel-edit-btn"
+          onClick={() => setIsEditing(false)}
+        >
+          <X size={14} />
+          <span>Quay lại xem hồ sơ</span>
+        </button>
+      </div>
+
       {/* Row 1: Full Name & Target Role */}
       <div className="form-two-col">
         <div className="form-group">
@@ -462,17 +733,16 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {(name.trim() || role.trim() || field.trim()) && (
-            <button
-              type="button"
-              onClick={onOpenCheckCvModal}
-              className="preview-cv-btn"
-              title="Xem lại thông tin hồ sơ đã tạo"
-            >
-              <Eye size={16} />
-              <span>Xem lại hồ sơ</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setIsEditing(false)}
+            className="preview-cv-btn"
+            style={{ color: '#64748B', borderColor: '#CBD5E1', background: '#FFFFFF' }}
+            title="Hủy bỏ và quay lại xem hồ sơ"
+          >
+            <X size={15} />
+            <span>Hủy bỏ</span>
+          </button>
 
           <button
             type="submit"

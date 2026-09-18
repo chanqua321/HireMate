@@ -19,6 +19,23 @@
   letter-spacing: -0.02em;
 }
 
+.hm-scrub-paragraph {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.hm-scrub-word-wrapper {
+  display: inline-block;
+  overflow: hidden;
+  margin-right: 0.18em;
+}
+
+.hm-scrub-word {
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
 .hm-statement-right {
   display: flex;
   justify-content: center;

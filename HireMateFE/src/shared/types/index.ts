@@ -13,6 +13,8 @@ export interface Profile {
   onboardingCompleted?: boolean;
   email?: string;
   phone?: string;
+  desiredPosition?: string;
+  desiredIndustry?: string;
   isPremium?: boolean;
   currentPlanCode?: string;
 }
