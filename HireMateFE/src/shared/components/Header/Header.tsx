@@ -86,6 +86,8 @@ export const Header: React.FC = () => {
           .toUpperCase()
       : 'HM';
 
+  const avatarUrl = profile.avatarUrl || localStorage.getItem('hm_avatar_url') || '';
+
   return (
     <>
       <header className={`site-header ${scrolled ? 'scrolled' : ''}`}>
@@ -156,8 +158,17 @@ export const Header: React.FC = () => {
                     onClick={() => setDropdownOpen((v) => !v)}
                     aria-label="Tài khoản cá nhân"
                   >
-                    <div className="user-avatar-circle">
-                      {initials}
+                    <div className="user-avatar-circle" style={{ overflow: 'hidden', padding: 0 }}>
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={profile.name || 'Avatar'}
+                          referrerPolicy="no-referrer"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        />
+                      ) : (
+                        initials
+                      )}
                     </div>
                   </button>
 

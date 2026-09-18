@@ -53,7 +53,28 @@ public class AuthService(
 
         var existing = await _userManager.FindByEmailAsync(dto.Email);
         if (existing != null)
+        {
+            if (!existing.IsDeleted && !existing.EmailConfirmed && RequireEmailConfirmation
+                && !AppRoles.IsSystemAdminEmail(existing.Email))
+            {
+                var otpPlainExisting = await IssueAndSendEmailOtpAsync(existing);
+                var retryData = new Dictionary<string, object?>
+                {
+                    ["email"] = existing.Email,
+                    ["emailConfirmed"] = false,
+                    ["requireEmailConfirmation"] = true,
+                    ["verifyOtp"] = true,
+                    ["message"] = "Email đã đăng ký nhưng chưa xác nhận. Đã gửi lại mã OTP."
+                };
+                if (ExposeDevTokens)
+                    retryData["otpDev"] = otpPlainExisting;
+
+                return new ServiceResult(Const.SUCCESS_CREATE_CODE,
+                    "Email chưa xác nhận. Vui lòng nhập mã OTP đã gửi lại.", retryData);
+            }
+
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Email đã được đăng ký");
+        }
 
         var skipConfirm = !RequireEmailConfirmation;
         var user = new UserAccount
@@ -128,7 +149,7 @@ public class AuthService(
             else
             {
                 return new ServiceResult(Const.FAIL_READ_CODE,
-                    "Email chưa được xác nhận. Vui lòng nhập mã OTP đã gửi tới email.",
+                    "Email chưa được xác nhận. Vui lòng nhập mã OTP đã gửi khi đăng ký.",
                     new Dictionary<string, object?>
                     {
                         ["requireOtp"] = true,
@@ -213,8 +234,7 @@ public class AuthService(
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null)
         {
-            // Không tin EmailVerified của Google để bypass OTP HireMate — chỉ admin / tắt RequireEmailConfirmation mới bỏ OTP
-            var skipOtp = !RequireEmailConfirmation || AppRoles.IsSystemAdminEmail(email);
+            // OTP chỉ áp dụng đăng ký email/mật khẩu — Google coi email đã xác thực
             user = new UserAccount
             {
                 Id = Guid.NewGuid(),
@@ -222,7 +242,7 @@ public class AuthService(
                 UserName = email,
                 FullName = googleName,
                 AvatarUrl = googleAvatar,
-                EmailConfirmed = skipOtp,
+                EmailConfirmed = true,
                 OnboardingCompleted = false,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -238,7 +258,8 @@ public class AuthService(
             return new ServiceResult(Const.FAIL_READ_CODE, "Tài khoản đã bị vô hiệu hóa");
         }
 
-        if (AppRoles.IsSystemAdminEmail(user.Email) && !user.EmailConfirmed)
+        // Google login không chạy OTP; nếu user chưa confirm (đăng ký form dở) thì xác nhận luôn qua Google
+        if (!user.EmailConfirmed)
         {
             user.EmailConfirmed = true;
             user.EmailOtpHash = null;
@@ -246,23 +267,6 @@ public class AuthService(
             user.EmailOtpAttempts = 0;
             user.UpdatedAt = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
-        }
-
-        if (RequireEmailConfirmation && !user.EmailConfirmed && !AppRoles.IsSystemAdminEmail(user.Email))
-        {
-            var otpPlain = await IssueAndSendEmailOtpAsync(user);
-            var otpData = new Dictionary<string, object?>
-            {
-                ["requireOtp"] = true,
-                ["email"] = user.Email,
-                ["verifyOtp"] = true
-            };
-            if (ExposeDevTokens)
-                otpData["otpDev"] = otpPlain;
-
-            return new ServiceResult(Const.FAIL_READ_CODE,
-                "Email chưa được xác nhận. Vui lòng nhập mã OTP đã gửi tới email.",
-                otpData);
         }
 
         await EnsureIdentityRolesAsync(user);

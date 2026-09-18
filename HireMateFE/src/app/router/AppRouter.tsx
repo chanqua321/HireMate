@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from '../../shared/layouts/MainLayout/MainLayout';
 
 import { Home } from '../../features/home';
-import { AuthContainer, EmailConfirmed } from '../../features/auth';
+import { AuthContainer, VerifyOtp } from '../../features/auth';
 import { OnboardingProfile, OnboardingGoal, OnboardingSummary } from '../../features/onboarding';
 import { Pricing, Checkout, PaymentSuccess, Invoice } from '../../features/billing';
 import { Dashboard } from '../../features/dashboard';
@@ -47,8 +47,9 @@ export const AppRouter: React.FC = () => {
         <Route path="login.html" element={<AuthContainer initialMode="login" />} />
         <Route path="register" element={<AuthContainer initialMode="register" />} />
         <Route path="register.html" element={<AuthContainer initialMode="register" />} />
-        <Route path="email-confirmed" element={<EmailConfirmed />} />
-        <Route path="email-confirmation" element={<EmailConfirmed />} />
+        <Route path="verify-otp" element={<VerifyOtp />} />
+        <Route path="email-confirmed" element={<VerifyOtp />} />
+        <Route path="email-confirmation" element={<VerifyOtp />} />
 
         {/* Onboarding (Unified In-Page Dashboard View) */}
         <Route path="onboarding" element={<Navigate to="/dashboard?view=onboarding" replace />} />

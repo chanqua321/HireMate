@@ -38,6 +38,7 @@ export interface AdminUserItem {
   isPremium: boolean;
   onboardingCompleted: boolean;
   lockoutEnd: string | null;
+  emailConfirmed: boolean;
   roles: string[];
 }
 
