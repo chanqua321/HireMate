@@ -149,7 +149,7 @@ export const Invoice: React.FC = () => {
             <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.9rem' }}>
               Ngành ứng tuyển: {profile.field || 'Công nghệ thông tin'}
               <br />
-              Vị trí: {profile.role || 'Lập trình viên Frontend'}
+              Vị trí: {profile.role || 'Chưa cập nhật'}
             </p>
           </div>
         </div>

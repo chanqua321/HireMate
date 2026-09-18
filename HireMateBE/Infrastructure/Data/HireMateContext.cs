@@ -22,6 +22,7 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
     public DbSet<JdMatchResult> JdMatchResults => Set<JdMatchResult>();
     public DbSet<ResourceItem> ResourceItems => Set<ResourceItem>();
     public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<ReferralCode> ReferralCodes => Set<ReferralCode>();
@@ -41,7 +42,9 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
         builder.Entity<UserAccount>(entity =>
         {
             entity.Property(u => u.FullName).HasMaxLength(255).IsRequired();
+            entity.Property(u => u.CurrentPlanCode).HasMaxLength(20);
             entity.HasIndex(u => u.Email).IsUnique();
+            entity.HasIndex(u => u.CurrentPlanCode);
             entity.HasOne(u => u.CareerProfile)
                 .WithOne(p => p.User!)
                 .HasForeignKey<CareerProfile>(p => p.UserId)
@@ -49,7 +52,14 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
         });
 
         builder.Entity<Role>(e => e.Property(r => r.Status).HasMaxLength(50));
-        builder.Entity<CareerProfile>(e => e.HasIndex(p => p.UserId).IsUnique());
+        builder.Entity<CareerProfile>(e =>
+        {
+            e.HasIndex(p => p.UserId).IsUnique();
+            e.HasOne(p => p.ConfirmedCv)
+                .WithMany()
+                .HasForeignKey(p => p.ConfirmedCvDocumentId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
         builder.Entity<InterviewSession>(e =>
         {
             e.HasIndex(s => new { s.UserId, s.Status, s.CompletedAt });
@@ -61,9 +71,24 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
         builder.Entity<WaitlistEntry>(e => e.HasIndex(x => x.Email));
         builder.Entity<ContentPage>(e => e.HasIndex(x => x.Slug).IsUnique());
         builder.Entity<BlogPost>(e => e.HasIndex(x => x.Slug).IsUnique());
-        builder.Entity<CvDocument>(e => e.HasIndex(x => x.UserId));
+        builder.Entity<CvDocument>(e =>
+        {
+            e.Property(x => x.Source).HasMaxLength(20).HasDefaultValue("Upload");
+            e.Property(x => x.ParseSucceeded).HasDefaultValue(false);
+            e.Property(x => x.IsConfirmed).HasDefaultValue(false);
+            e.HasIndex(x => new { x.UserId, x.UploadedAt });
+            e.HasIndex(x => x.UserId)
+                .IsUnique()
+                .HasFilter("[IsConfirmed] = 1")
+                .HasDatabaseName("IX_CvDocuments_UserId_OneConfirmed");
+        });
         builder.Entity<JdMatchResult>(e => e.HasIndex(x => x.UserId));
-        builder.Entity<SubscriptionPlan>(e => e.HasIndex(x => x.Code).IsUnique());
+        builder.Entity<SubscriptionPlan>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(p => p.PriceVnd).HasPrecision(18, 2);
+        });
+        builder.Entity<SystemSetting>(e => e.HasKey(x => x.Key));
         builder.Entity<ReferralCode>(e => e.HasIndex(x => x.Code).IsUnique());
         builder.Entity<Badge>(e => e.HasIndex(x => x.Code).IsUnique());
         builder.Entity<PromoCode>(e => e.HasIndex(x => x.Code).IsUnique());
@@ -75,9 +100,9 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
             e.HasIndex(x => new { x.UserId, x.RevokedAt });
         });
 
-        builder.Entity<SubscriptionPlan>(e => e.Property(p => p.PriceVnd).HasPrecision(18, 2));
         builder.Entity<Invoice>(e => e.Property(p => p.AmountVnd).HasPrecision(18, 2));
         builder.Entity<Payment>(e => e.Property(p => p.AmountVnd).HasPrecision(18, 2));
         builder.Entity<PromoCode>(e => e.Property(p => p.DiscountPercent).HasPrecision(5, 2));
     }
 }
+

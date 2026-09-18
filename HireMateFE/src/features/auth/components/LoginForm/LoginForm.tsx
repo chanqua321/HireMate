@@ -4,7 +4,8 @@ import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
-import { authService } from '../../api/auth.service';
+import { authService, isSoleAdminSession } from '../../api/auth.service';
+import { resolveAuthDisplayName } from '../../utils/displayName';
 import { useConfetti } from '../../../../shared/hooks';
 import '../../styles/auth-forms.css';
 
@@ -13,7 +14,7 @@ interface LoginFormProps {
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
-  const { login } = useApp();
+  const { login, refreshProfile } = useApp();
   const navigate = useNavigate();
   const { triggerConfetti } = useConfetti();
   
@@ -65,25 +66,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         password: form.password.trim(),
       });
       if (res.ok && res.data) {
-        const fullNameFromDb = (res.data as any)?.fullName || res.data.user?.fullName;
-        const fallbackName = fullNameFromDb || form.email.split('@')[0] || 'Người dùng';
+        const fallbackName = resolveAuthDisplayName(res.data) || form.email.split('@')[0] || 'Người dùng';
         login(fallbackName);
-
-        // Check if user is Admin
-        const roles = (res.data as any)?.roles || (res.data as any)?.user?.roles || [];
-        if (Array.isArray(roles) && roles.length > 0) {
-          localStorage.setItem('hm_roles', JSON.stringify(roles));
-        }
-
-        const isAdmin = Array.isArray(roles)
-          ? roles.some((r: string) => typeof r === 'string' && r.toLowerCase() === 'admin')
-          : String(roles).toLowerCase().includes('admin');
-
-        if (isAdmin) {
-          navigate('/admin');
-        } else {
-          navigate('/dashboard');
-        }
+        await refreshProfile();
+        navigate(isSoleAdminSession(res.data) ? '/admin' : '/dashboard');
         return;
       } else if (res.status !== 0 && res.message) {
         setError(res.message);
@@ -116,25 +102,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
     try {
       const res = await authService.loginWithGoogle(idToken);
       if (res.ok && res.data) {
-        const fullNameFromDb = res.data.user?.fullName;
-        const fallbackName = fullNameFromDb || 'Người dùng Google';
+        const fallbackName = resolveAuthDisplayName(res.data, idToken);
         login(fallbackName);
+        await refreshProfile();
         triggerConfetti();
-
-        const roles = (res.data as any)?.roles || (res.data as any)?.user?.roles || [];
-        if (Array.isArray(roles) && roles.length > 0) {
-          localStorage.setItem('hm_roles', JSON.stringify(roles));
-        }
-
-        const isAdmin = Array.isArray(roles)
-          ? roles.some((r: string) => typeof r === 'string' && r.toLowerCase() === 'admin')
-          : String(roles).toLowerCase().includes('admin');
-
-        if (isAdmin) {
-          navigate('/admin');
-        } else {
-          navigate('/dashboard');
-        }
+        navigate(isSoleAdminSession(res.data) ? '/admin' : '/dashboard');
         return;
       } else {
         setError(res.message || 'Đăng nhập Google thất bại.');
@@ -147,7 +119,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
   };
 
   const handleGoogleError = () => {
-    setError('Đăng nhập Google bị hủy hoặc thất bại.');
+    const origin = window.location.origin;
+    setError(
+      `Google từ chối origin ${origin} (lỗi origin_mismatch). Thêm đúng origin này vào Authorized JavaScript origins của Client ID Google, rồi mở lại http://localhost:3000.`
+    );
   };
 
   return (

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Common.DTOs.OnboardingDto;
 
 namespace Common.DTOs.ProfileDto;
 
@@ -19,6 +20,11 @@ public class ProfileDto
     public int? GraduationYear { get; set; }
     public string? Bio { get; set; }
     public List<string> Hobbies { get; set; } = [];
+    public List<string> Skills { get; set; } = [];
+    public List<CvExperienceDto> Experiences { get; set; } = [];
+    public DateTime? ConfirmedAt { get; set; }
+    public Guid? ConfirmedCvDocumentId { get; set; }
+    public bool HasSelectedPlan { get; set; }
 }
 
 public class UpdateProfileDto
@@ -48,4 +54,7 @@ public class UpdateProfileDto
     public string? Bio { get; set; }
 
     public List<string>? Hobbies { get; set; }
+    public List<string>? Skills { get; set; }
+    public List<CvExperienceDto>? Experiences { get; set; }
 }
+

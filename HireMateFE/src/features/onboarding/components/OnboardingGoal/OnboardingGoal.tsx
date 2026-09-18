@@ -12,26 +12,15 @@ export const OnboardingGoal: React.FC = () => {
   const navigate = useNavigate();
 
   const industries = Object.keys(INDUSTRY_ROLES);
-  const initialField =
-    profile.field && INDUSTRY_ROLES[profile.field]
-      ? profile.field
-      : 'Công nghệ thông tin';
-
-  const [field, setField] = useState<string>(initialField);
-  const [role, setRole] = useState<string>(() => {
-    const validRoles = INDUSTRY_ROLES[initialField] || [];
-    if (profile.role && validRoles.includes(profile.role)) {
-      return profile.role;
-    }
-    return validRoles[0] || 'Frontend Developer';
-  });
-  const [exp, setExp] = useState<string>(profile.exp || '1 - 3 năm (Mid-level)');
+  const [field, setField] = useState<string>(profile.field || '');
+  const [role, setRole] = useState<string>(profile.role || '');
+  const [exp, setExp] = useState<string>(profile.exp || '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const roles = INDUSTRY_ROLES[field] || [];
-    if (!roles.includes(role)) {
-      setRole(roles[0] || '');
+    if (field && role && !roles.includes(role)) {
+      setRole('');
     }
   }, [field, role]);
 

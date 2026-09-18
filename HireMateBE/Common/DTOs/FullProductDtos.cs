@@ -47,8 +47,17 @@ public class CheckoutDto
 {
     [Required] public string PlanCode { get; set; } = "premium";
     public string? PromoCode { get; set; }
-    /// <summary>Mock (default) | VNPay | PayOS</summary>
-    public string PaymentMethod { get; set; } = "Mock";
+    /// <summary>VNPay | PayOS. Mock chỉ khi payments.allow_mock = true.</summary>
+    public string PaymentMethod { get; set; } = "PayOS";
+}
+
+public class ConfirmPayOsDto
+{
+    public string? OrderCode { get; set; }
+    public string? Status { get; set; }
+    public string? Code { get; set; }
+    public bool Cancel { get; set; }
+    public Guid? InvoiceId { get; set; }
 }
 
 public class ApplyReferralDto
@@ -69,6 +78,16 @@ public class CreateTicketDto
     [Required] public string Body { get; set; } = string.Empty;
 }
 
+/// <summary>Admin tạo ticket thay user hoặc ticket nội bộ.</summary>
+public class AdminCreateTicketDto
+{
+    [Required, EmailAddress] public string Email { get; set; } = string.Empty;
+    [Required, MaxLength(200)] public string Subject { get; set; } = string.Empty;
+    [Required] public string Body { get; set; } = string.Empty;
+    public Guid? UserId { get; set; }
+    [MaxLength(30)] public string Status { get; set; } = "Open";
+}
+
 public class PatchUserDto
 {
     public bool? Lock { get; set; }
@@ -80,3 +99,4 @@ public class PatchTicketDto
 {
     [Required] public string Status { get; set; } = "Open";
 }
+

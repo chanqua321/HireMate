@@ -198,7 +198,7 @@ export const Dashboard: React.FC = () => {
 
   // AI Email Generator State
   const [emailType, setEmailType] = useState('CoverLetter');
-  const [emailPosition, setEmailPosition] = useState(profile.role || 'Frontend Developer');
+  const [emailPosition, setEmailPosition] = useState(profile.role || '');
   const [emailCompany, setEmailCompany] = useState('');
   const [emailTone, setEmailTone] = useState('formal');
   const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
@@ -279,35 +279,12 @@ export const Dashboard: React.FC = () => {
           aiProvider: res.data.aiProvider,
         });
       } else {
-        // High-quality fallback match calculation
-        const jdLower = jdText.toLowerCase();
-        const matched = skills.filter((s) => jdLower.includes(s.toLowerCase()));
-        const missing = ['Docker', 'CI/CD', 'Jest', 'GraphQL', 'AWS'].filter(
-          (req) => jdLower.includes(req.toLowerCase()) && !skills.some((s) => s.toLowerCase() === req.toLowerCase())
-        );
-        const score = Math.min(95, Math.max(65, Math.round((matched.length / Math.max(skills.length, 1)) * 100)));
-        setMatchResult({
-          matchScore: score,
-          overallScore: score,
-          matchingSkills: matched.length > 0 ? matched : skills.slice(0, 4),
-          missingSkills: missing.length > 0 ? missing : ['CI/CD Pipeline', 'Microservices'],
-          recommendations: [
-            'Bổ sung các dự án thực chiến làm nổi bật khả năng xử lý bài toán hiệu năng.',
-            'Chuẩn bị câu trả lời phương pháp STAR tập trung vào kỹ năng ' + (matched[0] || 'React'),
-          ],
-        });
+        setMatchResult(null);
+        alert(res.message || 'So khớp CV–JD thất bại. Kiểm tra gói/hạn mức AI rồi thử lại.');
       }
-    } catch {
-      setMatchResult({
-        matchScore: 88,
-        overallScore: 88,
-        matchingSkills: skills.slice(0, 4),
-        missingSkills: ['CI/CD Pipeline', 'Automated Testing'],
-        recommendations: [
-          'Hồ sơ của bạn phù hợp rất tốt với yêu cầu công việc!',
-          'Hãy nhấn mạnh kinh nghiệm giải quyết vấn đề thực tế trong phỏng vấn.',
-        ],
-      });
+    } catch (err: any) {
+      setMatchResult(null);
+      alert(err?.message || 'So khớp CV–JD thất bại. Vui lòng thử lại hoặc nâng cấp gói.');
     } finally {
       setIsMatching(false);
     }
@@ -354,28 +331,12 @@ export const Dashboard: React.FC = () => {
           ],
         });
       } else {
-        const body =
-          emailType === 'CoverLetter'
-            ? `Kính gửi Bộ phận Tuyển dụng ${comp},\n\nTôi tên là ${candidateName}, tôi viết thư này để bày bày nguyện vọng ứng tuyển vào vị trí ${pos} tại ${comp}.\n\nVới hơn 2 năm kinh nghiệm thực chiến trong lĩnh vực phát triển phần mềm cùng các kỹ năng cốt lõi (${skills.slice(0, 4).join(', ')}), tôi tin tưởng mình sẽ đóng góp giá trị thiết thực cho sự phát triển của công ty.\n\nTôi rất mong có cơ hội trao đổi trực tiếp trong buổi phỏng vấn.\n\nTrân trọng,\n${candidateName}\nSố điện thoại: 0918 306 884`
-            : `Kính gửi ${comp},\n\nTôi là ${candidateName}. Tôi xin chân thành cảm ơn Anh/Chị và Ban Tuyển dụng đã dành thời gian trao đổi cùng tôi về vị trí ${pos}.\n\nBuổi trao đổi giúp tôi hiểu sâu hơn về tầm nhìn và định hướng của công ty, đồng thời càng củng cố mong muốn được cống hiến tại ${comp}.\n\nTrân trọng,\n${candidateName}`;
-
-        setGeneratedEmail({
-          subject: defaultSubject,
-          body,
-          email: body,
-          tips: [
-            'Kiểm tra lại tên người nhận và chức danh chính xác trước khi gửi.',
-            'Đính kèm file CV định dạng PDF có tên chuẩn hóa: CV_HoTen_ViTri.pdf',
-          ],
-        });
+        setGeneratedEmail(null);
+        alert(res.message || 'Không tạo được email/Cover Letter. Kiểm tra gói AI rồi thử lại.');
       }
-    } catch {
-      setGeneratedEmail({
-        subject: `[Ứng tuyển] ${emailPosition} - ${name}`,
-        body: `Kính gửi Quý Công ty,\n\nTôi là ${name}, xin ứng tuyển vị trí ${emailPosition}...\n\nTrân trọng,\n${name}`,
-        email: `Kính gửi Quý Công ty,\n\nTôi là ${name}, xin ứng tuyển vị trí ${emailPosition}...\n\nTrân trọng,\n${name}`,
-        tips: ['Tùy chỉnh lại thông tin chi tiết trước khi gửi đi.'],
-      });
+    } catch (err: any) {
+      setGeneratedEmail(null);
+      alert(err?.message || 'Không tạo được email/Cover Letter.');
     } finally {
       setIsGeneratingEmail(false);
     }
@@ -486,12 +447,15 @@ export const Dashboard: React.FC = () => {
   const handleSaveManual = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingManual(true);
-    const parsedGradYear = typeof graduationYear === 'number' ? graduationYear : (parseInt(String(graduationYear), 10) || 2026);
+    const parsedGradYear =
+      typeof graduationYear === 'number'
+        ? graduationYear
+        : parseInt(String(graduationYear), 10);
     const updated = {
       name: name.trim(),
       fullName: name.trim(),
-      role: role.trim() || 'Lập trình viên Backend',
-      desiredPosition: role.trim() || 'Lập trình viên Backend',
+      role: role.trim(),
+      desiredPosition: role.trim(),
       field: field.trim(),
       desiredIndustry: field.trim(),
       exp: exp.trim(),
@@ -499,8 +463,7 @@ export const Dashboard: React.FC = () => {
       experienceYears: exp.trim(),
       education: education.trim(),
       university: education.trim(),
-      major: 'Công nghệ thông tin',
-      graduationYear: parsedGradYear,
+      graduationYear: Number.isFinite(parsedGradYear) && parsedGradYear > 0 ? parsedGradYear : undefined,
       skills: skills,
       hobbies: skills,
       bio: bio.trim(),
@@ -567,13 +530,13 @@ export const Dashboard: React.FC = () => {
               const extracted: SampleCV = {
                 id: ai.id || uploadRes.data.id,
                 label: `📄 ${file.name}`,
-                name: ai.parsedName || name || 'Ứng viên',
-                role: ai.parsedRole || role || 'Lập trình viên',
+                name: ai.parsedName || name || '',
+                role: ai.parsedRole || role || '',
                 field: field,
-                exp: ai.parsedExp || exp || '1 - 3 năm (Mid-level)',
-                education: ai.parsedEducation || education || 'Đại học Bách Khoa',
+                exp: ai.parsedExp || exp || '',
+                education: ai.parsedEducation || education || '',
                 skills: Array.isArray(ai.parsedSkills) && ai.parsedSkills.length > 0 ? ai.parsedSkills : skills,
-                bio: ai.parsedBio || bio || 'Hồ sơ được phân tích bởi HireMate AI',
+                bio: ai.parsedBio || bio || '',
                 filename: file.name,
               };
               setScanProgress(100);
@@ -584,17 +547,16 @@ export const Dashboard: React.FC = () => {
             }
           }
         } catch (err) {
-          // Fallback to local scanning simulation
+          setIsScanning(false);
+          setScanStatusText('');
+          alert('Phân tích CV thất bại. Kiểm tra kết nối API / gói dịch vụ rồi thử lại.');
+          return;
         }
       }
 
-      // Fallback
-      const matchedSample = SAMPLE_CVS[0];
-      const customExtraction: SampleCV = {
-        ...matchedSample,
-        filename: file.name,
-      };
-      runAIScanningProcess(customExtraction);
+      setIsScanning(false);
+      setScanStatusText('');
+      alert('Không phân tích được CV. Vui lòng thử lại.');
     }
   };
 

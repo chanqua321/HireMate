@@ -78,3 +78,16 @@ src/features/[feature_name]/
 - `AppRouter` sẽ import các Pages/Container Components trực tiếp từ `features` (thông qua public index).
 
 Chúc nhóm phát triển dự án hiệu quả và đúng chuẩn!
+
+---
+
+## Phụ lục — AI (Backend HireMate)
+
+Chi tiết phương án AI production nằm ở tài liệu kỹ thuật BE. Tóm tắt cấu hình hiện tại:
+
+- **Provider:** OpenAI API (`Ai:Provider = OpenAI`)
+- **Model production khuyến nghị:** `gpt-5.6-luna` (cost-sensitive / high-volume)
+- **Không còn khuyến nghị mặc định:** `gpt-4o-mini` cho workload mới
+- **Fallback offline:** Heuristic (không dùng production)
+- Key chỉ đặt server-side (`Ai:ApiKey`), không đưa lên FE
+

@@ -1,8 +1,6 @@
-using BusinessLogic.Ai;
-using BusinessLogic.Background;
-using BusinessLogic.IServices;
-using BusinessLogic.Payments;
-using BusinessLogic.Services;
+using APIs.Authorization;
+using APIs.Extensions;
+using Common;
 using Infrastructure.Data;
 using Infrastructure.IUnitOfWork;
 using Infrastructure.Models;
@@ -13,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -31,64 +30,8 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<HireMateContext>(options =>
     options.UseSqlServer(connectionString));
 
-builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
-builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection(VnPayOptions.SectionName));
-builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
-builder.Services.AddSingleton<HeuristicAiClient>();
-builder.Services.AddHttpClient<OpenAiCompatibleAiClient>((sp, client) =>
-{
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
-    var baseUrl = string.IsNullOrWhiteSpace(opts.BaseUrl) ? "http://localhost:11434/v1" : opts.BaseUrl;
-    // Gemini native API is handled by GeminiAiClient; OpenAI-compatible uses chat/completions base.
-    if (opts.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
-        baseUrl = "https://api.openai.com/v1"; // unused when Gemini selected
-    client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-    client.Timeout = TimeSpan.FromSeconds(Math.Max(5, opts.TimeoutSeconds));
-});
-builder.Services.AddHttpClient<GeminiAiClient>((sp, client) =>
-{
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
-    var baseUrl = string.IsNullOrWhiteSpace(opts.BaseUrl)
-        ? "https://generativelanguage.googleapis.com/v1beta"
-        : opts.BaseUrl;
-    client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-    client.Timeout = TimeSpan.FromSeconds(Math.Max(5, opts.TimeoutSeconds));
-});
-builder.Services.AddHttpClient<PayOsClient>((sp, client) =>
-{
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayOsOptions>>().Value;
-    var baseUrl = string.IsNullOrWhiteSpace(opts.ApiBaseUrl) ? "https://api-merchant.payos.vn" : opts.ApiBaseUrl;
-    client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-builder.Services.AddScoped<IAiClient>(sp =>
-{
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
-    var provider = (opts.Provider ?? "Ollama").Trim();
-    if (!opts.Enabled || provider.Equals("Heuristic", StringComparison.OrdinalIgnoreCase))
-        return sp.GetRequiredService<HeuristicAiClient>();
-    if (provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
-        return sp.GetRequiredService<GeminiAiClient>();
-    return sp.GetRequiredService<OpenAiCompatibleAiClient>();
-});
-
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IOnboardingService, OnboardingService>();
-builder.Services.AddScoped<IProfileService, ProfileService>();
-builder.Services.AddScoped<IInterviewService, InterviewService>();
-builder.Services.AddScoped<IDashboardService, DashboardService>();
-builder.Services.AddScoped<IPublicContentService, PublicContentService>();
-builder.Services.AddScoped<ICvService, CvService>();
-builder.Services.AddScoped<IMatchService, MatchService>();
-builder.Services.AddScoped<IEmailGenService, EmailGenService>();
-builder.Services.AddScoped<ICareerOsService, CareerOsService>();
-builder.Services.AddScoped<IBillingService, BillingService>();
-builder.Services.AddScoped<IGrowthService, GrowthService>();
-builder.Services.AddScoped<IAdminService, AdminService>();
-builder.Services.AddScoped<IB2BService, B2BService>();
-builder.Services.AddHostedService<RefreshTokenCleanupService>();
+builder.Services.AddHireMateModules(builder.Configuration);
 
 builder.Services.AddIdentity<UserAccount, Role>(options =>
 {
@@ -124,7 +67,60 @@ builder.Services.AddAuthentication(options =>
         RoleClaimType = "role",
         NameClaimType = "email"
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var userId = context.Principal?.FindFirst("userId")?.Value
+                ?? context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                context.Fail("Token không hợp lệ.");
+                return;
+            }
+
+            var userManager = context.HttpContext.RequestServices
+                .GetRequiredService<UserManager<UserAccount>>();
+            var user = await userManager.FindByIdAsync(userId);
+            if (user == null || user.IsDeleted)
+            {
+                context.Fail("Tài khoản không tồn tại.");
+                return;
+            }
+
+            if (userManager.SupportsUserLockout && await userManager.IsLockedOutAsync(user))
+            {
+                context.Fail("Tài khoản đã bị khóa.");
+                return;
+            }
+
+            var dbRoles = (await userManager.GetRolesAsync(user))
+                .Where(AppRoles.IsKnown)
+                .ToList();
+            if (dbRoles.Count == 0)
+            {
+                context.Fail("Tài khoản chưa được gán vai trò.");
+                return;
+            }
+
+            // Luôn lấy role từ DB (không tin token cũ) — hạ quyền có hiệu lực ngay
+            if (context.Principal?.Identity is ClaimsIdentity identity)
+            {
+                foreach (var c in identity.FindAll("role").ToList())
+                    identity.RemoveClaim(c);
+                foreach (var c in identity.FindAll(ClaimTypes.Role).ToList())
+                    identity.RemoveClaim(c);
+                foreach (var role in dbRoles)
+                {
+                    identity.AddClaim(new Claim("role", role));
+                    identity.AddClaim(new Claim(ClaimTypes.Role, role));
+                }
+            }
+        }
+    };
 });
+
+builder.Services.AddHireMateAuthorization();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -161,7 +157,8 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+    options.Filters.Add<APIs.Filters.UnauthorizedAccessExceptionFilter>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(option =>
 {
@@ -169,7 +166,7 @@ builder.Services.AddSwaggerGen(option =>
     {
         Title = "HireMate API",
         Version = "v1",
-        Description = "HireMate Backend — Auth, Career, CV/JD, Billing (Mock/VNPay), Admin, B2B + AI (Ollama/OpenAI)"
+        Description = "HireMate Backend - modular monolith (Identity, Onboarding, Interview, Billing, Career, .)"
     });
     option.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -223,3 +220,4 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.Run();
+

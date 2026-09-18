@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Sparkles, Check } from 'lucide-react';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { motion } from 'framer-motion';
-import { authService } from '../../api/auth.service';
+import { useNavigate } from 'react-router-dom';
+import { authService, isSoleAdminSession } from '../../api/auth.service';
+import { useApp } from '../../../../app/context/AppContext';
 import { useConfetti } from '../../../../shared/hooks';
+import { resolveAuthDisplayName } from '../../utils/displayName';
 import '../../styles/auth-forms.css';
 
 interface RegisterFormProps {
@@ -13,6 +16,8 @@ interface RegisterFormProps {
 
 export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSuccessSwitchToLogin }) => {
   const { triggerConfetti } = useConfetti();
+  const { login, refreshProfile } = useApp();
+  const navigate = useNavigate();
   
   const [form, setForm] = useState({
     name: '',
@@ -92,8 +97,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
     try {
       const res = await authService.loginWithGoogle(idToken);
       if (res.ok && res.data) {
-        // Handle Google register success mapping to login (backend logic usually handles signup + login directly for Google)
-        onSuccessSwitchToLogin(res.data.user?.email || form.email);
+        const googleName = resolveAuthDisplayName(res.data, idToken);
+        login(googleName);
+        triggerConfetti();
+        await refreshProfile();
+        navigate(isSoleAdminSession(res.data) ? '/admin' : '/dashboard');
         return;
       } else {
         setError(res.message || 'Đăng nhập Google thất bại.');
@@ -106,7 +114,10 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
   };
 
   const handleGoogleError = () => {
-    setError('Đăng nhập Google bị hủy hoặc thất bại.');
+    const origin = window.location.origin;
+    setError(
+      `Google từ chối origin ${origin} (lỗi origin_mismatch). Thêm đúng origin này vào Authorized JavaScript origins của Client ID Google, rồi mở lại http://localhost:3000.`
+    );
   };
 
   if (successData.show) {

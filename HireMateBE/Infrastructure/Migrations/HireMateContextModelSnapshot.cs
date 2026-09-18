@@ -134,6 +134,12 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ConfirmedCvDocumentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -149,6 +155,9 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("ExperiencesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("GraduationYear")
                         .HasColumnType("int");
 
@@ -159,6 +168,10 @@ namespace Infrastructure.Migrations
                     b.Property<string>("Major")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("SkillsJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("University")
                         .HasMaxLength(200)
@@ -171,6 +184,8 @@ namespace Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedCvDocumentId");
 
                     b.HasIndex("UserId")
                         .IsUnique();
@@ -264,6 +279,9 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime?>("AnalyzedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -280,17 +298,40 @@ namespace Infrastructure.Migrations
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 
+                    b.Property<int?>("FitT1Score")
+                        .HasColumnType("int");
+
                     b.Property<int?>("FormatScore")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsConfirmed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<int?>("KeywordsScore")
                         .HasColumnType("int");
+
+                    b.Property<bool>("ParseSucceeded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<int?>("ProfessionalismScore")
                         .HasColumnType("int");
 
                     b.Property<int?>("ReadabilityScore")
                         .HasColumnType("int");
+
+                    b.Property<int?>("ReadinessScore")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Upload");
 
                     b.Property<string>("StoragePath")
                         .IsRequired()
@@ -303,9 +344,17 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("WizardAnswersJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_CvDocuments_UserId_OneConfirmed")
+                        .HasFilter("[IsConfirmed] = 1");
+
+                    b.HasIndex("UserId", "UploadedAt");
 
                     b.ToTable("CvDocuments");
                 });
@@ -897,6 +946,15 @@ namespace Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsPopular")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxAiOutputChars")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MonthlyAiCharBudget")
+                        .HasColumnType("int");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -905,6 +963,13 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("PriceVnd")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Tagline")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.HasKey("Id");
 
@@ -953,6 +1018,29 @@ namespace Infrastructure.Migrations
                     b.ToTable("SupportTickets");
                 });
 
+            modelBuilder.Entity("Infrastructure.Models.SystemSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("SystemSettings");
+                });
+
             modelBuilder.Entity("Infrastructure.Models.UserAccount", b =>
                 {
                     b.Property<Guid>("Id")
@@ -968,6 +1056,10 @@ namespace Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("CurrentPlanCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -1016,6 +1108,9 @@ namespace Infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("PlanSelectedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -1030,6 +1125,8 @@ namespace Infrastructure.Migrations
                         .HasColumnType("nvarchar(256)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CurrentPlanCode");
 
                     b.HasIndex("Email")
                         .IsUnique()
@@ -1216,11 +1313,18 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Models.CareerProfile", b =>
                 {
+                    b.HasOne("Infrastructure.Models.CvDocument", "ConfirmedCv")
+                        .WithMany()
+                        .HasForeignKey("ConfirmedCvDocumentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Infrastructure.Models.UserAccount", "User")
                         .WithOne("CareerProfile")
                         .HasForeignKey("Infrastructure.Models.CareerProfile", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ConfirmedCv");
 
                     b.Navigation("User");
                 });

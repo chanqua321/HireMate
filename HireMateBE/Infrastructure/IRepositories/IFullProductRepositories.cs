@@ -23,3 +23,5 @@ public interface ISupportTicketRepository : IGenericRepository<SupportTicket> { 
 public interface IOrganizationRepository : IGenericRepository<Organization> { }
 public interface IOrganizationMemberRepository : IGenericRepository<OrganizationMember> { }
 public interface IRefreshTokenRepository : IGenericRepository<RefreshToken> { }
+public interface ISystemSettingRepository : IGenericRepository<SystemSetting> { }
+

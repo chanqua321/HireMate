@@ -10,6 +10,9 @@ public class DashboardDto
     public CompetencySummaryDto? CompetencySummary { get; set; }
     public int RemainingFreeSessionsThisMonth { get; set; }
     public bool IsPremium { get; set; }
+    public int? CvReadinessScore { get; set; }
+    public int? CvFitT1Score { get; set; }
+    public Guid? ConfirmedCvId { get; set; }
 }
 
 public class InterviewRecentDto
@@ -35,3 +38,4 @@ public class CompetencySummaryDto
     public double AvgR { get; set; }
     public double AvgClarity { get; set; }
 }
+

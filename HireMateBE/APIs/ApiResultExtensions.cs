@@ -1,19 +1,15 @@
+using HireMate.BuildingBlocks;
 using Common;
+using Common.Helper;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using BusinessLogic.Base;
 
 namespace APIs;
 
 public static class ApiResultExtensions
 {
     public static bool TryGetUserId(this ControllerBase controller, out Guid userId)
-    {
-        userId = Guid.Empty;
-        var claim = controller.User.FindFirstValue("userId")
-            ?? controller.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return !string.IsNullOrEmpty(claim) && Guid.TryParse(claim, out userId);
-    }
+        => controller.User.TryGetUserId(out userId);
 
     public static IActionResult FromService(this ControllerBase controller, IServiceResult result, int successStatus = 200)
     {
@@ -28,3 +24,4 @@ public static class ApiResultExtensions
         return controller.Ok(new { data = result.Data, message = result.Message });
     }
 }
+

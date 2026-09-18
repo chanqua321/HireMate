@@ -20,7 +20,7 @@ const PRICING_FAQS = [
   },
   {
     q: 'Sự khác nhau giữa các gói là gì?',
-    a: 'Gói Miễn phí cho phép bạn trải nghiệm 3 buổi phỏng vấn thử mỗi tháng. Gói Cơ Bản mở khóa 15 buổi phỏng vấn cùng feedback STAR chi tiết. Gói Nâng Cao cung cấp 50 buổi phỏng vấn, tối ưu CV chuẩn ATS chuyên sâu và ưu tiên trải nghiệm tính năng AI mới.',
+    a: 'Gói Miễn phí: 3 buổi phỏng vấn và 1 lần phân tích CV mỗi tháng. Gói Cơ Bản (79k): 15 buổi phỏng vấn và 20 lần phân tích CV. Gói Nâng Cao (149k): 50 buổi phỏng vấn và 70 lần phân tích CV, kèm Cover Letter AI và so khớp CV–JD.',
   },
   {
     q: 'Tôi có nhận được hóa đơn VAT không?',
@@ -39,7 +39,7 @@ const DEFAULT_PLANS = [
     features: [
       '3 lượt phỏng vấn ảo mỗi tháng',
       'Đánh giá phản xạ giọng nói cơ bản',
-      'Phân tích CV chuẩn ATS sơ bộ',
+      'Phân tích CV chuẩn ATS 1 lần/tháng',
       'Feedback cấu trúc STAR tóm tắt',
     ],
     cta: 'Bắt đầu miễn phí',
@@ -58,7 +58,7 @@ const DEFAULT_PLANS = [
       '15 lượt phỏng vấn ảo mỗi tháng',
       'Feedback chuẩn STAR chi tiết theo ngành',
       'Phân tích ngữ điệu & từ đệm chuyên sâu',
-      'Tối ưu CV chuẩn ATS chuẩn quốc tế',
+      'Phân tích CV chuẩn ATS 20 lần/tháng',
       'Ngân hàng 1,000+ câu hỏi JD thực tế',
     ],
     cta: 'Nâng cấp ngay',
@@ -75,6 +75,7 @@ const DEFAULT_PLANS = [
     description: 'Dành cho ứng viên muốn bứt phá nhanh nhất vào các tập đoàn đa quốc gia và Tech Unicorn.',
     features: [
       '50 lượt phỏng vấn ảo mỗi tháng',
+      'Phân tích CV chuẩn ATS 70 lần/tháng',
       'Mô phỏng phỏng vấn hội đồng tuyển dụng',
       'Trợ lý viết Cover Letter & Email AI',
       'So khớp trực tiếp CV với Job Description',
@@ -92,7 +93,7 @@ const COMPARISON_ROWS = [
   { feature: 'Số lượt phỏng vấn AI / tháng', free: '3 lượt', basic: '15 lượt', pro: '50 lượt' },
   { feature: 'Chấm điểm cấu trúc chuẩn STAR', free: 'Rút gọn', basic: 'Chi tiết từng câu', pro: 'Chuyên sâu + Gợi ý sửa' },
   { feature: 'Phân tích ngữ điệu & giọng nói', free: 'Cơ bản', basic: 'Đầy đủ', pro: 'Nâng cao thời gian thực' },
-  { feature: 'Phân tích & Tối ưu CV chuẩn ATS', free: '1 lần', basic: 'Không giới hạn', pro: 'Không giới hạn' },
+  { feature: 'Phân tích & Tối ưu CV chuẩn ATS', free: '1 lần/tháng', basic: '20 lần/tháng', pro: '70 lần/tháng' },
   { feature: 'So khớp CV với Job Description', free: false, basic: true, pro: true },
   { feature: 'Trợ lý soạn thảo Email & Cover Letter', free: false, basic: false, pro: true },
   { feature: 'Hỗ trợ ưu tiên 24/7', free: false, basic: 'Email', pro: 'Email + Hotline 1-1' },
@@ -126,24 +127,25 @@ export const Pricing: React.FC = () => {
         // Map backend plans or merge with rich visual attributes
         const mapped = res.data.map((p) => {
           const code = p.code.toLowerCase();
-          const isFeatured = code.includes('pro') || code.includes('premium');
-          const isFree = p.priceVnd === 0 || code.includes('free');
+          const isFree = p.priceVnd === 0 || code === 'free';
+          const isCombo = code.includes('combo') || code.includes('pro') || (!isFree && p.priceVnd >= 100000);
+          const isPremium = !isFree && !isCombo;
           return {
             id: code,
-            label: p.name || (isFree ? 'Gói Miễn phí' : isFeatured ? 'Gói Chuyên Nghiệp (Pro)' : 'Gói Toàn Diện'),
+            label: p.name || (isFree ? 'Gói Miễn phí' : isCombo ? 'Gói Cao cấp' : 'Gói Tiêu chuẩn'),
             monthlyPrice: p.priceVnd,
             priceDisplay: p.priceVnd > 0 ? `${p.priceVnd.toLocaleString('vi-VN')}đ` : '0đ',
             period: '/tháng',
-            description: p.description || (isFree ? 'Bắt đầu làm quen với phỏng vấn ảo.' : 'Mở khóa toàn bộ tính năng cao cấp cùng HireMate AI.'),
+            description: p.description || (isFree ? 'Bắt đầu làm quen với phỏng vấn ảo.' : 'Mở khóa tính năng HireMate AI.'),
             features: isFree
-              ? ['3 lượt phỏng vấn mỗi tháng', 'Phân tích CV cơ bản', 'Đánh giá STAR tóm tắt']
-              : isFeatured
-              ? ['15 lượt phỏng vấn mỗi tháng', 'Feedback chuẩn STAR chi tiết', 'Tối ưu CV chuẩn ATS', 'Luyện tập câu hỏi nâng cao']
-              : ['50 lượt phỏng vấn mỗi tháng', 'Tối ưu CV chuyên sâu', 'Trợ lý Cover Letter AI', 'So khớp CV & JD'],
+              ? ['3 lượt phỏng vấn mỗi tháng', 'Phân tích CV 1 lần/tháng', 'Đánh giá STAR tóm tắt']
+              : isCombo
+              ? ['50 lượt phỏng vấn mỗi tháng', 'Phân tích CV 70 lần/tháng', 'Trợ lý Cover Letter AI', 'So khớp CV & JD']
+              : ['15 lượt phỏng vấn mỗi tháng', 'Feedback chuẩn STAR chi tiết', 'Phân tích CV 20 lần/tháng', 'Luyện tập câu hỏi nâng cao'],
             cta: isFree ? 'Bắt đầu miễn phí' : 'Nâng cấp ngay',
             ctaTo: isFree ? '/register' : `/checkout?plan=${code}`,
-            featured: isFeatured,
-            badge: isFeatured ? 'Phổ biến nhất 🔥' : null,
+            featured: isPremium && p.priceVnd === 79000,
+            badge: isPremium && p.priceVnd === 79000 ? 'Phổ biến nhất 🔥' : null,
           };
         });
         mapped.sort((a, b) => a.monthlyPrice - b.monthlyPrice);

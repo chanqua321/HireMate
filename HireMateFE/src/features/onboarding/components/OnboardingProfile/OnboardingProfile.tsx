@@ -11,15 +11,10 @@ export const OnboardingProfile: React.FC = () => {
   const navigate = useNavigate();
 
   const [name, setName] = useState(profile.name || '');
-  const [education, setEducation] = useState(profile.education || 'Đại học Bách Khoa TP.HCM');
-  const [bio, setBio] = useState(
-    profile.bio ||
-      'Kỹ sư phần mềm đam mê công nghệ, luôn chủ động học hỏi và hướng tới môi trường chuyên nghiệp.'
-  );
+  const [education, setEducation] = useState(profile.education || '');
+  const [bio, setBio] = useState(profile.bio || '');
   const [skills, setSkills] = useState<string[]>(
-    profile.skills && profile.skills.length > 0
-      ? profile.skills
-      : ['React', 'TypeScript', 'JavaScript', 'Git', 'REST API']
+    profile.skills && profile.skills.length > 0 ? profile.skills : []
   );
   const [skillInput, setSkillInput] = useState('');
   const [saving, setSaving] = useState(false);

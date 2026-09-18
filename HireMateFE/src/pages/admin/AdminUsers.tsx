@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, UserCheck, UserX, Shield, Edit2, X, Check } from 'lucide-react';
 import './admin.css';
 import { adminService } from '../../shared/services';
+import { isSoleAdminEmail, SOLE_ADMIN_EMAIL } from '../../shared/config/constants';
 
 type User = {
   id: string;
@@ -61,12 +62,10 @@ const AdminUsers: React.FC = () => {
     return matchSearch && matchStatus && matchPlan;
   });
 
-  const currentAdminEmail = localStorage.getItem('hm_user_email') || 'admin@gmail.com';
-
   const toggleBan = async (id: string) => {
     const target = users.find((u) => u.id === id);
     if (!target) return;
-    const isSelf = (target.email || '').toLowerCase() === currentAdminEmail.toLowerCase() || (target.role || '').toLowerCase() === 'admin';
+    const isSelf = isSoleAdminEmail(target.email);
     if (isSelf) {
       setError('Không thể khóa tài khoản Quản trị viên hiện tại!');
       return;
@@ -90,14 +89,13 @@ const AdminUsers: React.FC = () => {
 
   const saveEdit = async () => {
     if (!editUser) return;
-    const isSelf = (editUser.email || '').toLowerCase() === currentAdminEmail.toLowerCase() || (editUser.role || '').toLowerCase() === 'admin';
+    const isSelf = isSoleAdminEmail(editUser.email);
     if (isSelf && editStatus === 'banned') {
       setError('Không thể tự khóa tài khoản Quản trị viên!');
       return;
     }
     const shouldLock = editStatus !== 'active';
     const res = await adminService.patchUser(editUser.id, {
-      role: editRole,
       lock: shouldLock,
     });
     if (!res.ok) {
@@ -224,7 +222,7 @@ const AdminUsers: React.FC = () => {
                           <Edit2 size={13} />
                         </button>
                         {(() => {
-                          const isSelf = (u.email || '').toLowerCase() === currentAdminEmail.toLowerCase() || (u.role || '').toLowerCase() === 'admin';
+                          const isSelf = isSoleAdminEmail(u.email);
                           if (isSelf) {
                             return (
                               <span className="admin-badge neutral" style={{ fontSize: '0.72rem', opacity: 0.8 }} title="Tài khoản Quản trị viên hiện tại">
@@ -271,10 +269,16 @@ const AdminUsers: React.FC = () => {
 
               <div className="admin-form-group">
                 <label className="admin-label">Role</label>
-                <select className="admin-select" style={{ width: '100%' }} value={editRole} onChange={e => setEditRole(e.target.value)}>
-                  <option value="User">User</option>
-                  <option value="Admin">Admin</option>
-                </select>
+                {isSoleAdminEmail(editUser.email) ? (
+                  <input className="admin-select" style={{ width: '100%' }} value="Admin" disabled />
+                ) : (
+                  <select className="admin-select" style={{ width: '100%' }} value="User" disabled>
+                    <option value="User">User</option>
+                  </select>
+                )}
+                <p style={{ margin: '8px 0 0', fontSize: '0.78rem', color: 'var(--admin-text-muted)' }}>
+                  Hệ thống chỉ có một Admin ({SOLE_ADMIN_EMAIL}). Tài khoản mới luôn là User.
+                </p>
               </div>
 
               <div className="admin-form-group">
