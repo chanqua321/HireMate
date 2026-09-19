@@ -143,9 +143,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const meRes = await authService.getMe();
       if (meRes.ok && meRes.data) {
         setIsLoggedIn(true);
-        if (meRes.data.fullName) {
-          setProfileState((prev) => ({ ...prev, name: meRes.data!.fullName }));
-        }
+        const me = meRes.data;
+        setProfileState((prev) => {
+          const next = {
+            ...prev,
+            name: me.fullName || prev.name,
+            currentPlanCode: me.currentPlanCode || prev.currentPlanCode || 'free',
+            isPremium: Boolean(me.isPremium ?? prev.isPremium),
+          };
+          safeStoreJSON(STORAGE_KEYS.PROFILE, next);
+          return next;
+        });
       }
 
       const res = await profileService.getProfile();

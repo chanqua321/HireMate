@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder,
@@ -17,6 +17,9 @@ import {
   Eye,
   FileText,
   Check,
+  LayoutGrid,
+  List,
+  Search,
 } from 'lucide-react';
 import { UserCvCard } from '../Dashboard';
 import './MultiCvHub.css';
@@ -38,6 +41,8 @@ interface MultiCvHubProps {
   onOpenDetailModal: (cv: UserCvCard) => void;
   onNavigateInterview: () => void;
   onSwitchToMatch: (cvId: string) => void;
+  onOpenWizardModal?: () => void;
+  isFreeTier?: boolean;
 }
 
 export const MultiCvHub: React.FC<MultiCvHubProps> = ({
@@ -57,7 +62,22 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
   onOpenDetailModal,
   onNavigateInterview,
   onSwitchToMatch,
+  onOpenWizardModal,
+  isFreeTier,
 }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [cvViewMode, setCvViewMode] = useState<'grid' | 'list'>('grid');
+
+  const filteredOtherCvs = otherCvs.filter((c) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      c.title.toLowerCase().includes(term) ||
+      c.role.toLowerCase().includes(term) ||
+      c.field.toLowerCase().includes(term)
+    );
+  });
+
   return (
     <motion.div
       key="scan-tab"
@@ -81,6 +101,16 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
         )}
       </AnimatePresence>
 
+      {/* Free Tier Quota Reminder Bar */}
+      {isFreeTier && (
+        <div className="free-tier-cv-quota-bar">
+          <Sparkles size={15} color="#0284c7" />
+          <span>
+            Gói Miễn phí: Bạn được phân tích CV & đánh giá ATS <strong>1 lần trong tháng</strong>. Nâng cấp lên gói Tiêu chuẩn hoặc Cao cấp để phân tích không giới hạn và phỏng vấn AI.
+          </span>
+        </div>
+      )}
+
       {/* Section Header */}
       <div className="multi-cv-header-row">
         <div>
@@ -93,15 +123,18 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          className="add-cv-toggle-btn"
-          onClick={() => setShowAddCvForm((prev) => !prev)}
-        >
-          {showAddCvForm ? <X size={15} /> : <Plus size={15} />}
-          <span>{showAddCvForm ? 'Đóng form tải lên' : '+ Tải lên CV mới'}</span>
-        </button>
+        <div>
+          <button
+            type="button"
+            className="add-cv-toggle-btn"
+            onClick={() => setShowAddCvForm((prev) => !prev)}
+          >
+            {showAddCvForm ? <X size={15} /> : <Plus size={15} />}
+            <span>{showAddCvForm ? 'Đóng form tải lên' : '+ Tải lên CV mới'}</span>
+          </button>
+        </div>
       </div>
+
 
       {/* Collapsible Upload & New CV Area */}
       <AnimatePresence>
@@ -197,7 +230,7 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
           <div className="active-cv-top-bar">
             <div className="active-badge-pill">
               <span className="pulsing-green-dot" />
-              <span>🎯 CV ĐANG KÍCH HOẠT PHỎNG VẤN & SO KHỚP JD</span>
+              <span>CV ĐANG KÍCH HOẠT</span>
             </div>
             <div className="active-cv-ats-score">
               <span>Điểm ATS:</span>
@@ -208,37 +241,36 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
           <div className="active-cv-body">
             <div className="active-cv-info-left">
               <div className="active-cv-file-title">
-                <FileCheck size={22} color="#0284C7" />
+                <FileCheck size={20} color="#0284C7" />
                 <h4>{activeCv.title}</h4>
               </div>
 
               <div className="active-cv-meta-chips">
-                <span className="meta-chip role-chip">
-                  <Briefcase size={13} />
-                  {activeCv.role}
+                <span className="meta-chip">
+                  <strong>Vị trí:</strong> {activeCv.role}
                 </span>
-                <span className="meta-chip field-chip">
-                  <Layers size={13} />
-                  {activeCv.field}
+                <span className="meta-chip">
+                  <strong>Ngành:</strong> {activeCv.field}
                 </span>
-                <span className="meta-chip exp-chip">
-                  <Award size={13} />
-                  {activeCv.exp}
+                <span className="meta-chip">
+                  <strong>Kinh nghiệm:</strong> {activeCv.exp}
                 </span>
                 <span className="meta-chip date-chip">
                   Ngày tải: {activeCv.uploadedAt}
                 </span>
               </div>
 
-              {/* Skills */}
-              <div className="active-cv-skills-row">
-                <span className="skills-row-label">Kỹ năng chính:</span>
-                <div className="skills-tags-mini">
-                  {activeCv.skills.map((s) => (
-                    <span key={s} className="mini-skill-tag">{s}</span>
-                  ))}
+              {/* Skills - Only show when array is not empty */}
+              {activeCv.skills && activeCv.skills.length > 0 && (
+                <div className="active-cv-skills-row">
+                  <span className="skills-row-label">Kỹ năng chính:</span>
+                  <div className="skills-tags-mini">
+                    {activeCv.skills.map((s) => (
+                      <span key={s} className="mini-skill-tag">{s}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="active-cv-actions-right">
@@ -249,28 +281,30 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                 title="Bắt đầu buổi phỏng vấn AI với CV này"
               >
                 <Video size={16} />
-                <span>Luyện phỏng vấn</span>
+                <span>Luyện phỏng vấn AI</span>
               </button>
 
-              <button
-                type="button"
-                className="action-btn-match"
-                onClick={() => onSwitchToMatch(activeCv.id)}
-                title="So khớp JD với CV này"
-              >
-                <Target size={16} />
-                <span>So khớp JD</span>
-              </button>
+              <div className="active-cv-sub-actions-row">
+                <button
+                  type="button"
+                  className="action-btn-match"
+                  onClick={() => onSwitchToMatch(activeCv.id)}
+                  title="So khớp JD với CV này"
+                >
+                  <Target size={15} />
+                  <span>So khớp JD</span>
+                </button>
 
-              <button
-                type="button"
-                className="action-btn-detail"
-                onClick={() => onOpenDetailModal(activeCv)}
-                title="Xem chi tiết phân tích điểm ATS và nội dung"
-              >
-                <Eye size={16} />
-                <span>Xem chi tiết</span>
-              </button>
+                <button
+                  type="button"
+                  className="action-btn-detail"
+                  onClick={() => onOpenDetailModal(activeCv)}
+                  title="Xem chi tiết phân tích điểm ATS và nội dung"
+                >
+                  <Eye size={15} />
+                  <span>Xem chi tiết</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -279,10 +313,57 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
       {/* Section 2: Other CVs Collection */}
       <div className="other-cvs-section">
         <div className="other-cvs-header">
-          <h4>Các CV khác trong kho ({otherCvs.length})</h4>
-          <span className="other-cvs-subhint">
-            Nhấn "Chọn làm CV phỏng vấn" để kích hoạt sang vị trí ứng tuyển mong muốn.
-          </span>
+          <div className="other-cvs-header-left">
+            <h4>Các CV khác trong kho ({otherCvs.length})</h4>
+            <span className="other-cvs-subhint">
+              Nhấn "Chọn làm CV phỏng vấn" để kích hoạt vị trí ứng tuyển mong muốn.
+            </span>
+          </div>
+
+          {otherCvs.length > 0 && (
+            <div className="other-cvs-controls">
+              {/* Search filter */}
+              <div className="cv-search-input-wrap">
+                <Search size={14} color="#94A3B8" />
+                <input
+                  type="text"
+                  className="cv-search-input"
+                  placeholder="Tìm theo tên CV, vị trí..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    className="clear-search-btn"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Grid vs List View Toggle */}
+              <div className="view-mode-toggle-group">
+                <button
+                  type="button"
+                  className={`view-mode-btn ${cvViewMode === 'grid' ? 'active' : ''}`}
+                  onClick={() => setCvViewMode('grid')}
+                  title="Chế độ lưới thẻ (Grid view)"
+                >
+                  <LayoutGrid size={14} />
+                </button>
+                <button
+                  type="button"
+                  className={`view-mode-btn ${cvViewMode === 'list' ? 'active' : ''}`}
+                  onClick={() => setCvViewMode('list')}
+                  title="Chế độ danh sách gọn (Compact list view - không nở trang)"
+                >
+                  <List size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {otherCvs.length === 0 ? (
@@ -297,9 +378,21 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
               + Tải lên thêm CV khác
             </button>
           </div>
-        ) : (
-          <div className="multi-cv-cards-grid">
-            {otherCvs.map((cv) => (
+        ) : filteredOtherCvs.length === 0 ? (
+          <div className="empty-search-box">
+            <p>Không tìm thấy CV nào phù hợp với từ khóa "{searchTerm}".</p>
+            <button
+              type="button"
+              className="reset-search-btn"
+              onClick={() => setSearchTerm('')}
+            >
+              Xóa bộ lọc tìm kiếm
+            </button>
+          </div>
+        ) : cvViewMode === 'grid' ? (
+          /* Grid View có container giới hạn chiều cao và scrollbar */
+          <div className="multi-cv-cards-grid scrollable-cv-grid">
+            {filteredOtherCvs.map((cv) => (
               <div key={cv.id} className="cv-item-card">
                 <div className="cv-item-header">
                   <div className="cv-item-title-row">
@@ -319,11 +412,11 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                 </div>
 
                 <div className="cv-item-skills-preview">
-                  {cv.skills.slice(0, 4).map((s) => (
+                  {cv.skills.slice(0, 3).map((s) => (
                     <span key={s} className="cv-mini-chip">{s}</span>
                   ))}
-                  {cv.skills.length > 4 && (
-                    <span className="cv-mini-chip-more">+{cv.skills.length - 4}</span>
+                  {cv.skills.length > 3 && (
+                    <span className="cv-mini-chip-more">+{cv.skills.length - 3}</span>
                   )}
                 </div>
 
@@ -351,6 +444,53 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        ) : (
+          /* Compact List View: Chiếm cực ít diện tích, không làm nở trang */
+          <div className="multi-cv-compact-table-wrap">
+            <div className="compact-table-header">
+              <span className="col-name">Tên CV</span>
+              <span className="col-role">Vị trí</span>
+              <span className="col-date">Ngày tải</span>
+              <span className="col-score">Điểm ATS</span>
+              <span className="col-actions">Hành động</span>
+            </div>
+            <div className="compact-table-body">
+              {filteredOtherCvs.map((cv) => (
+                <div key={cv.id} className="compact-table-row">
+                  <div className="col-name" title={cv.title}>
+                    <FileText size={15} color="#0284C7" />
+                    <span className="cv-title-ellipsis">{cv.title}</span>
+                  </div>
+                  <div className="col-role">
+                    <span className="table-role-chip">{cv.role}</span>
+                  </div>
+                  <div className="col-date">{cv.uploadedAt}</div>
+                  <div className="col-score">
+                    <span className="table-ats-badge">{cv.atsScore}đ</span>
+                  </div>
+                  <div className="col-actions">
+                    <button
+                      type="button"
+                      className="table-select-btn"
+                      onClick={() => onSelectActiveCv(cv)}
+                      title="Kích hoạt CV này"
+                    >
+                      <Check size={13} />
+                      <span>Kích hoạt</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="table-detail-btn"
+                      onClick={() => onOpenDetailModal(cv)}
+                      title="Xem chi tiết"
+                    >
+                      <Eye size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -15,7 +15,9 @@ export interface CvItemDto {
   professionalismScore?: number;
   analysis?: string;
   targetRole?: string;
-  targetField?: string;
+  isConfirmed?: boolean;
+  IsConfirmed?: boolean;
+  readinessScore?: number;
   parsedProfile?: {
     fullName?: string;
     desiredPosition?: string;
@@ -25,6 +27,7 @@ export interface CvItemDto {
     bio?: string;
   };
 }
+
 
 export interface CvAnalysisResultDto {
   id: string;
@@ -46,11 +49,35 @@ export interface CvAnalysisResultDto {
   parsedBio?: string;
 }
 
+export interface CvExperienceDto {
+  title?: string;
+  org?: string;
+  period?: string;
+  description?: string;
+}
+
+export interface CvWizardDto {
+  fullName: string;
+  university: string;
+  major: string;
+  graduationYear: number;
+  desiredIndustry: string;
+  desiredPosition: string;
+  experienceLevel: string;
+  bio?: string;
+  skills: string[];
+  experiences: CvExperienceDto[];
+}
+
 export const cvService = {
   async uploadCv(file: File): Promise<ApiResponse<CvItemDto>> {
     const formData = new FormData();
     formData.append('file', file, file.name);
     return apiClient.upload<CvItemDto>('/Cv/upload', formData);
+  },
+
+  async createCvFromWizard(dto: CvWizardDto): Promise<ApiResponse<CvItemDto>> {
+    return apiClient.post<CvItemDto>('/Cv/wizard', dto);
   },
 
   async listCvs(): Promise<ApiResponse<CvItemDto[]>> {
@@ -65,3 +92,4 @@ export const cvService = {
     return apiClient.post<CvAnalysisResultDto>(`/Cv/${id}/analyze`);
   },
 };
+

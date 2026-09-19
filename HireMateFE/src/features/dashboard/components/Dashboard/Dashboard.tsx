@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
 import {
@@ -16,6 +16,7 @@ import {
   Target,
   Mail,
   Eye,
+  Sparkles,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { DashboardGuideModal } from '../DashboardGuideModal/DashboardGuideModal';
@@ -27,7 +28,9 @@ import { AiEmailGenerator } from './components/AiEmailGenerator';
 import { DashboardSidebar } from './components/DashboardSidebar';
 import { CvDetailModal } from './components/CvDetailModal';
 import { CheckCvModal } from './components/CheckCvModal';
+import { CvWizardModal } from '../../../../shared/components/CvWizard/CvWizardModal';
 import './css/Dashboard.css';
+
 
 
 // Multi-CV Data Model
@@ -132,6 +135,8 @@ export const Dashboard: React.FC = () => {
   // Active Tab: 'manual' (Hồ sơ nghề nghiệp) | 'scan' (Kho CV cá nhân) | 'match' | 'email'
   const [activeTab, setActiveTab] = useState<'manual' | 'scan' | 'match' | 'email'>(initialTab);
   const [checkCvModalOpen, setCheckCvModalOpen] = useState(false);
+  const [wizardModalOpen, setWizardModalOpen] = useState(false);
+
 
   // Multi-CV Hub State
   const [userCvs, setUserCvs] = useState<UserCvCard[]>([]);
@@ -179,94 +184,58 @@ export const Dashboard: React.FC = () => {
   // Stats & Guide
   const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [careerHubData, setCareerHubData] = useState<any>(null);
+  const [isLoadingProfileHub, setIsLoadingProfileHub] = useState(false);
 
-  useEffect(() => {
-    if (tabQuery && ['manual', 'scan', 'match', 'email'].includes(tabQuery)) {
-      setActiveTab(tabQuery as 'manual' | 'scan' | 'match' | 'email');
-    }
-  }, [tabQuery]);
+  // Load CV Collection from real API (GET /api/cv/list)
+  const loadCvs = useCallback(async () => {
+    try {
+      let loadedCvs: UserCvCard[] = [];
 
-  const handleTabChange = (tab: 'manual' | 'scan' | 'match' | 'email') => {
-    setActiveTab(tab);
-    setSearchParams({ tab });
-  };
-
-  // Sync profile when AppContext updates
-  useEffect(() => {
-    if (profile.name) setName(profile.name);
-    if (profile.role) {
-      setRole(profile.role);
-      setEmailPosition(profile.role);
-    }
-    if (profile.field) setField(profile.field);
-    if (profile.exp) setExp(profile.exp);
-    if (profile.education) setEducation(profile.education);
-    if (profile.graduationYear) setGraduationYear(profile.graduationYear);
-    if (profile.bio) setBio(profile.bio);
-    if (profile.skills && profile.skills.length > 0) setSkills(profile.skills);
-  }, [profile]);
-
-  // Load CV Collection from real API
-  useEffect(() => {
-    const loadCvs = async () => {
-      try {
-        let loadedCvs: UserCvCard[] = [];
-
-        if (localStorage.getItem('hm_access_token')) {
-          try {
-            const res = await cvService.listCvs();
-            if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
-              loadedCvs = res.data.map(parseCvDocumentFromBackend);
-            }
-          } catch (e) {}
-        }
-
-        setUserCvs(loadedCvs);
-
-        if (loadedCvs.length > 0) {
-          const savedActiveId = localStorage.getItem('hm_active_cv_id');
-          const foundActive = loadedCvs.find((c) => c.id === savedActiveId);
-          const targetActive = foundActive || loadedCvs[0];
-          setActiveCvId(targetActive.id);
-          setSelectedMatchCvId(targetActive.id);
-          localStorage.setItem('hm_active_cv_id', targetActive.id);
-          localStorage.setItem('hm_active_cv', JSON.stringify(targetActive));
-
-          if (targetActive.role && targetActive.role !== 'Chưa phân tích') {
-            setRole((prev) => prev || targetActive.role);
+      if (localStorage.getItem('hm_access_token')) {
+        try {
+          const res = await cvService.listCvs();
+          if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+            loadedCvs = res.data.map(parseCvDocumentFromBackend);
           }
-          if (targetActive.field && targetActive.field !== 'Chưa xác định') {
-            setField((prev) => prev || targetActive.field);
-          }
-          if (targetActive.skills && targetActive.skills.length > 0) {
-            setSkills((prev) => (prev && prev.length > 0 ? prev : targetActive.skills));
-          }
-        }
-      } catch (err) {
-        setUserCvs([]);
+        } catch (e) {}
       }
-    };
 
-    loadCvs();
-  }, []);
+      setUserCvs(loadedCvs);
 
-  // Fetch Dashboard Stats
-  useEffect(() => {
-    if (localStorage.getItem('hm_access_token')) {
-      dashboardService.getDashboardStats().then((res) => {
-        if (res.ok && res.data) {
-          setDashboardStats(res.data);
+      if (loadedCvs.length > 0) {
+        const savedActiveId = localStorage.getItem('hm_active_cv_id');
+        const foundActive = loadedCvs.find((c) => c.id === savedActiveId);
+        const targetActive = foundActive || loadedCvs[0];
+        setActiveCvId(targetActive.id);
+        setSelectedMatchCvId(targetActive.id);
+        localStorage.setItem('hm_active_cv_id', targetActive.id);
+        localStorage.setItem('hm_active_cv', JSON.stringify(targetActive));
+
+        if (targetActive.role && targetActive.role !== 'Chưa phân tích') {
+          setRole((prev) => prev || targetActive.role);
         }
-      }).catch(() => {});
+        if (targetActive.field && targetActive.field !== 'Chưa xác định') {
+          setField((prev) => prev || targetActive.field);
+        }
+        if (targetActive.skills && targetActive.skills.length > 0) {
+          setSkills((prev) => (prev && prev.length > 0 ? prev : targetActive.skills));
+        }
+      }
+    } catch (err) {
+      setUserCvs([]);
     }
   }, []);
 
   // Load Career Profile from real API (GET /api/Career/profile)
-  useEffect(() => {
+  const fetchCareerProfile = useCallback(async () => {
     if (!localStorage.getItem('hm_access_token')) return;
-    careerService.getProfileHub().then((res) => {
+    setIsLoadingProfileHub(true);
+    try {
+      const res = await careerService.getProfileHub();
       if (res.ok && res.data) {
         const hub: any = res.data;
+        setCareerHubData(hub);
         const cp = hub.profile;
         if (cp) {
           if (cp.desiredPosition) setRole(cp.desiredPosition);
@@ -293,7 +262,59 @@ export const Dashboard: React.FC = () => {
         }
         if (hub.fullName) setName(hub.fullName);
       }
-    }).catch(() => {});
+    } catch (err) {
+      console.error('Failed to fetch career profile hub:', err);
+    } finally {
+      setIsLoadingProfileHub(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tabQuery && ['manual', 'scan', 'match', 'email'].includes(tabQuery)) {
+      setActiveTab(tabQuery as 'manual' | 'scan' | 'match' | 'email');
+    }
+  }, [tabQuery]);
+
+  const handleTabChange = (tab: 'manual' | 'scan' | 'match' | 'email') => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+    if (tab === 'manual') {
+      fetchCareerProfile();
+    } else if (tab === 'scan') {
+      loadCvs();
+    }
+  };
+
+  // Sync profile when AppContext updates
+  useEffect(() => {
+    if (profile.name) setName(profile.name);
+    if (profile.role) {
+      setRole(profile.role);
+      setEmailPosition(profile.role);
+    }
+    if (profile.field) setField(profile.field);
+    if (profile.exp) setExp(profile.exp);
+    if (profile.education) setEducation(profile.education);
+    if (profile.graduationYear) setGraduationYear(profile.graduationYear);
+    if (profile.bio) setBio(profile.bio);
+    if (profile.skills && profile.skills.length > 0) setSkills(profile.skills);
+  }, [profile]);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    loadCvs();
+    fetchCareerProfile();
+  }, [loadCvs, fetchCareerProfile]);
+
+  // Fetch Dashboard Stats
+  useEffect(() => {
+    if (localStorage.getItem('hm_access_token')) {
+      dashboardService.getDashboardStats().then((res) => {
+        if (res.ok && res.data) {
+          setDashboardStats(res.data);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   // Set Active CV: Updates Career Profile context and storage
@@ -327,7 +348,7 @@ export const Dashboard: React.FC = () => {
       role: cv.role,
     });
 
-    setToastMsg(`🎯 Đã kích hoạt CV "${cv.title}" làm hồ sơ phỏng vấn chính!`);
+    setToastMsg(`Đã kích hoạt CV "${cv.title}" làm hồ sơ phỏng vấn chính!`);
     setTimeout(() => setToastMsg(null), 3500);
   };
 
@@ -427,6 +448,7 @@ export const Dashboard: React.FC = () => {
 
     try {
       await profileService.updateProfile(updated);
+      await fetchCareerProfile();
     } catch (err) {}
 
     setSavingManual(false);
@@ -682,7 +704,8 @@ export const Dashboard: React.FC = () => {
                 className={`segmented-tab-btn ${activeTab === 'manual' ? 'active' : ''}`}
                 onClick={() => handleTabChange('manual')}
               >
-                <span>Hồ sơ nghề nghiệp</span>
+                <Sparkles size={13} />
+                <span>Tạo CV bằng AI Wizard</span>
               </button>
 
               <button
@@ -730,36 +753,10 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* TAB 1: Hồ sơ nghề nghiệp (Career Profile View & Edit) */}
+          {/* TAB 1: Studio Tạo CV bằng AI Wizard */}
           {activeTab === 'manual' && (
             <CareerProfileForm
-              name={name}
-              setName={setName}
-              role={role}
-              setRole={setRole}
-              field={field}
-              setField={setField}
-              exp={exp}
-              setExp={setExp}
-              education={education}
-              setEducation={setEducation}
-              graduationYear={graduationYear}
-              setGraduationYear={setGraduationYear}
-              bio={bio}
-              setBio={setBio}
-              skills={skills}
-              setSkills={setSkills}
-              saving={savingManual}
-              savedSuccess={savedSuccess}
-              onSave={handleSaveManual}
-              onOpenCheckCvModal={() => setCheckCvModalOpen(true)}
-              activeCv={activeCv}
-              onOpenCvDetail={(cv) => {
-                setSelectedCvForDetail(cv);
-                setCvDetailModalOpen(true);
-              }}
-              onSwitchToCvTab={() => handleTabChange('scan')}
-              onNavigateInterview={() => navigate('/interview-setup')}
+              onOpenWizardModal={() => setWizardModalOpen(true)}
             />
           )}
 
@@ -796,8 +793,11 @@ export const Dashboard: React.FC = () => {
                 setSelectedMatchCvId(cvId);
                 handleTabChange('match');
               }}
+              onOpenWizardModal={() => setWizardModalOpen(true)}
+              isFreeTier={!isProUser}
             />
           )}
+
 
           {/* TAB 3: JD Matcher */}
           {activeTab === 'match' && (
@@ -876,6 +876,19 @@ export const Dashboard: React.FC = () => {
         }}
         accountKey={accountKey}
       />
+
+      {/* CV Wizard Modal (10 câu hỏi chuẩn BR09) */}
+      <CvWizardModal
+        isOpen={wizardModalOpen}
+        onClose={() => setWizardModalOpen(false)}
+        defaultIndustry={field}
+        defaultRole={role}
+        onSuccess={(newCv) => {
+          loadCvs();
+          handleSelectActiveCv(newCv);
+        }}
+      />
     </div>
   );
 };
+
