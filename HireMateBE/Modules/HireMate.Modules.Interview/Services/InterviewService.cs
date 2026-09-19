@@ -448,9 +448,9 @@ public class InterviewService(
 
     private static string MapRoleHint(string position)
     {
-        if (position.Contains("Frontend", StringComparison.OrdinalIgnoreCase) || position.Contains("Front End", StringComparison.OrdinalIgnoreCase)) return "Frontend";
-        if (position.Contains("Backend", StringComparison.OrdinalIgnoreCase) || position.Contains("Back End", StringComparison.OrdinalIgnoreCase)) return "Backend";
-        if (position.Contains("Fullstack", StringComparison.OrdinalIgnoreCase) || position.Contains("Full Stack", StringComparison.OrdinalIgnoreCase)) return "Fullstack";
+        if (position.Contains("Frontend", StringComparison.OrdinalIgnoreCase)) return "Frontend";
+        if (position.Contains("Backend", StringComparison.OrdinalIgnoreCase)) return "Backend";
+        if (position.Contains("Fullstack", StringComparison.OrdinalIgnoreCase)) return "Fullstack";
         if (position.Contains("DevOps", StringComparison.OrdinalIgnoreCase)) return "DevOps";
         if (position.Contains("QA", StringComparison.OrdinalIgnoreCase) || position.Contains("Kiá»ƒm thá»­", StringComparison.OrdinalIgnoreCase)) return "QA";
         if (position.Contains("Dá»¯ liá»‡u", StringComparison.OrdinalIgnoreCase) || position.Contains("Data", StringComparison.OrdinalIgnoreCase)) return "Data";
