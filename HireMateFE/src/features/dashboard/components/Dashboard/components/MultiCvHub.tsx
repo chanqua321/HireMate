@@ -41,6 +41,7 @@ interface MultiCvHubProps {
   onOpenDetailModal: (cv: UserCvCard) => void;
   onNavigateInterview: () => void;
   onSwitchToMatch: (cvId: string) => void;
+  onSwitchToAnalyze?: (cvId: string) => void;
   onOpenWizardModal?: () => void;
   isFreeTier?: boolean;
 }
@@ -62,6 +63,7 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
   onOpenDetailModal,
   onNavigateInterview,
   onSwitchToMatch,
+  onSwitchToAnalyze,
   onOpenWizardModal,
   isFreeTier,
 }) => {
@@ -100,16 +102,6 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Free Tier Quota Reminder Bar */}
-      {isFreeTier && (
-        <div className="free-tier-cv-quota-bar">
-          <Sparkles size={15} color="#0284c7" />
-          <span>
-            Gói Miễn phí: Bạn được phân tích CV & đánh giá ATS <strong>1 lần trong tháng</strong>. Nâng cấp lên gói Tiêu chuẩn hoặc Cao cấp để phân tích không giới hạn và phỏng vấn AI.
-          </span>
-        </div>
-      )}
 
       {/* Section Header */}
       <div className="multi-cv-header-row">
@@ -285,6 +277,18 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
               </button>
 
               <div className="active-cv-sub-actions-row">
+                {onSwitchToAnalyze && (
+                  <button
+                    type="button"
+                    className="action-btn-match"
+                    onClick={() => onSwitchToAnalyze(activeCv.id)}
+                    title="Chuyển sang AI Analyze để đánh giá chi tiết chuẩn ATS"
+                  >
+                    <Sparkles size={14} color="#0284c7" />
+                    <span>AI Đánh giá ATS</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   className="action-btn-match"
@@ -432,6 +436,16 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                   </button>
 
                   <div className="cv-item-secondary-btns">
+                    {onSwitchToAnalyze && (
+                      <button
+                        type="button"
+                        className="icon-detail-btn"
+                        onClick={() => onSwitchToAnalyze(cv.id)}
+                        title="AI Đánh giá ATS"
+                      >
+                        <Sparkles size={14} color="#0284c7" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="icon-detail-btn"
@@ -479,6 +493,16 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                       <Check size={13} />
                       <span>Kích hoạt</span>
                     </button>
+                    {onSwitchToAnalyze && (
+                      <button
+                        type="button"
+                        className="table-detail-btn"
+                        onClick={() => onSwitchToAnalyze(cv.id)}
+                        title="AI Đánh giá ATS"
+                      >
+                        <Sparkles size={13} color="#0284c7" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="table-detail-btn"

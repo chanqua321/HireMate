@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -45,6 +45,12 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
   defaultIndustry = 'Công nghệ thông tin',
   defaultRole = '',
 }) => {
+  // Fallback đảm bảo không bao giờ nhận chuỗi rỗng
+  const fallbackIndustry =
+    defaultIndustry && defaultIndustry.trim() && INDUSTRY_ROLES[defaultIndustry.trim()]
+      ? defaultIndustry.trim()
+      : 'Công nghệ thông tin';
+
   // Step 1: Thông tin học vấn & cá nhân
   // Step 2: Ngành nghề & Kinh nghiệm
   // Step 3: Kỹ năng & Dự án thực tế
@@ -55,12 +61,28 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
   const [university, setUniversity] = useState('');
   const [major, setMajor] = useState('');
   const [graduationYear, setGraduationYear] = useState<number>(new Date().getFullYear());
-  const [desiredIndustry, setDesiredIndustry] = useState(defaultIndustry);
-  const [desiredPosition, setDesiredPosition] = useState(defaultRole);
-  const [experienceLevel, setExperienceLevel] = useState(EXP_LEVEL_OPTIONS[0]);
+  const [desiredIndustry, setDesiredIndustry] = useState<string>(fallbackIndustry);
+  const [desiredPosition, setDesiredPosition] = useState<string>(defaultRole?.trim() || '');
+  const [experienceLevel, setExperienceLevel] = useState<string>(EXP_LEVEL_OPTIONS[0]);
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState('');
+
+  // Đồng bộ khi mở modal hoặc thay đổi defaultIndustry / defaultRole từ trang ngoài
+  useEffect(() => {
+    if (isOpen) {
+      const validIndustry =
+        defaultIndustry && defaultIndustry.trim() && INDUSTRY_ROLES[defaultIndustry.trim()]
+          ? defaultIndustry.trim()
+          : 'Công nghệ thông tin';
+      setDesiredIndustry(validIndustry);
+
+      if (defaultRole?.trim()) {
+        setDesiredPosition(defaultRole.trim());
+      }
+      setErrorMsg('');
+    }
+  }, [isOpen, defaultIndustry, defaultRole]);
 
   const [experiences, setExperiences] = useState<CvExperienceDto[]>([
     { title: '', org: '', period: '', description: '' },
@@ -111,9 +133,13 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
       }
       setCurrentStep(2);
     } else if (currentStep === 2) {
-      if (!desiredIndustry || !desiredPosition.trim() || !experienceLevel) {
+      const activeIndustry = desiredIndustry?.trim() || fallbackIndustry;
+      if (!activeIndustry || !desiredPosition.trim() || !experienceLevel) {
         setErrorMsg('Vui lòng chọn Ngành nghề, Vị trí mong muốn và Mức kinh nghiệm.');
         return;
+      }
+      if (!desiredIndustry) {
+        setDesiredIndustry(activeIndustry);
       }
       setCurrentStep(3);
     }
@@ -209,10 +235,9 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="cv-wizard-backdrop" onClick={onClose}>
+      <div className="cv-wizard-backdrop">
         <motion.div
           className="cv-wizard-modal"
-          onClick={(e) => e.stopPropagation()}
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -347,11 +372,14 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
                     <Layers size={15} /> Ngành nghề mong muốn <span className="req">*</span>
                   </label>
                   <select
-                    value={desiredIndustry}
+                    value={desiredIndustry || fallbackIndustry}
                     onChange={(e) => {
-                      setDesiredIndustry(e.target.value);
-                      const roles = INDUSTRY_ROLES[e.target.value] || [];
-                      if (roles[0]) setDesiredPosition(roles[0]);
+                      const val = e.target.value;
+                      setDesiredIndustry(val);
+                      const roles = INDUSTRY_ROLES[val] || [];
+                      if (roles[0] && (!desiredPosition || suggestedRoles.includes(desiredPosition))) {
+                        setDesiredPosition(roles[0]);
+                      }
                     }}
                   >
                     {industries.map((ind) => (

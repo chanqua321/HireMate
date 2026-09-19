@@ -27,6 +27,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
     confirm: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -214,13 +215,22 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
             <Lock size={18} />
           </span>
           <input
-            type="password"
+            type={showConfirmPassword ? 'text' : 'password'}
             required
             placeholder="Xác nhận mật khẩu"
             value={form.confirm}
             onChange={(e) => setForm({ ...form, confirm: e.target.value })}
             className="auth-input"
           />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="auth-icon-right"
+            tabIndex={-1}
+            title={showConfirmPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+          >
+            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
         </div>
 
         <button type="submit" className="auth-submit-btn">
@@ -252,7 +262,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
             theme="outline"
             size="large"
             text="signup_with"
-            shape="pill"
+            shape="rectangular"
             width="360"
           />
         </div>

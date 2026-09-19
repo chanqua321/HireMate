@@ -898,7 +898,7 @@ export const InterviewSetup: React.FC = () => {
       <CvWizardModal
         isOpen={wizardModalOpen}
         onClose={() => setWizardModalOpen(false)}
-        defaultIndustry={field}
+        defaultIndustry={field || 'Công nghệ thông tin'}
         defaultRole={role}
         onSuccess={(newCv) => {
           setUserCvs((prev) => [newCv, ...prev]);

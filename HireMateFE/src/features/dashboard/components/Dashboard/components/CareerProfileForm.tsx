@@ -74,7 +74,7 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
       {/* 1. Main Clean Hero Banner */}
       <div className="wizard-hero-clean-card">
         <div className="wizard-hero-tag">
-          <Sparkles size={14} /> TÍNH NĂNG TẠO CV BẰNG AI 
+          TÍNH NĂNG TẠO CV  
         </div>
 
         <h3 className="wizard-hero-heading">
@@ -93,11 +93,11 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
             onClick={() => onOpenWizardModal?.()}
           >
             <Sparkles size={18} />
-            <span>Bắt đầu tạo CV bằng AI Wizard (10 bước)</span>
+            <span>Bắt đầu tạo CV(10 bước)</span>
             <ArrowRight size={17} />
           </button>
           <span className="wizard-hero-time-tag">
-            ⏱️ Hoàn thành trong khoảng 3 - 5 phút • Tự động lưu vào hệ thống
+             Hoàn thành trong khoảng 3 - 5 phút • Tự động lưu vào hệ thống
           </span>
         </div>
       </div>
