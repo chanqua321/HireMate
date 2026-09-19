@@ -73,7 +73,7 @@ const AdminInterviews: React.FC = () => {
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 className="admin-page-title">🎙️ Thống kê phỏng vấn AI</h1>
-          <p className="admin-page-subtitle">Theo dõi hiệu suất hệ thống phỏng vấn AI và kết quả ứng viên theo phương pháp STAR.</p>
+          {/* <p className="admin-page-subtitle">Theo dõi hiệu suất hệ thống phỏng vấn AI và kết quả ứng viên theo phương pháp STAR.</p> */}
         </div>
         <button 
           className="admin-btn admin-btn-secondary admin-btn-sm" 

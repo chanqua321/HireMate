@@ -43,7 +43,12 @@ public class AuthController(IAuthService authService) : ControllerBase
         var result = await _authService.LoginAsync(dto);
 
         if (result.Status == Const.FAIL_READ_CODE)
-            return Unauthorized(new { message = result.Message });
+        {
+            // Cần OTP → 200 (không 401) để FE nhảy /verify-otp, tránh đỏ console
+            if (IsRequireOtpPayload(result.Data))
+                return Ok(new { data = result.Data, message = result.Message });
+            return Unauthorized(new { message = result.Message, data = result.Data });
+        }
 
         return Ok(new { data = result.Data, message = result.Message });
     }
@@ -57,7 +62,11 @@ public class AuthController(IAuthService authService) : ControllerBase
 
         var result = await _authService.LoginWithGoogleAsync(dto.IdToken, HttpContext.Connection.RemoteIpAddress?.ToString());
         if (result.Status == Const.FAIL_READ_CODE || result.Status == Const.FAIL_CREATE_CODE)
-            return Unauthorized(new { message = result.Message, errors = result.Errors });
+        {
+            if (IsRequireOtpPayload(result.Data))
+                return Ok(new { data = result.Data, message = result.Message });
+            return Unauthorized(new { message = result.Message, data = result.Data, errors = result.Errors });
+        }
 
         return Ok(new { data = result.Data, message = result.Message });
     }
@@ -84,34 +93,17 @@ public class AuthController(IAuthService authService) : ControllerBase
         return Ok(new { message = result.Message });
     }
 
-    /// <summary>Click from email — returns simple HTML so browser works without FE.</summary>
-    [HttpGet("confirm-email")]
+    [HttpPost("verify-otp")]
     [AllowAnonymous]
-    public async Task<IActionResult> ConfirmEmailGet([FromQuery] string userId, [FromQuery] string token)
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyEmailOtpDto dto)
     {
-        var result = await _authService.ConfirmEmailAsync(userId, token);
-        var ok = result.Status > 0;
-        var html = $"""
-            <!DOCTYPE html><html><head><meta charset="utf-8"><title>HireMate</title></head>
-            <body style="font-family:sans-serif;max-width:520px;margin:40px auto;">
-              <h1>{(ok ? "Email đã được xác nhận" : "Xác nhận thất bại")}</h1>
-              <p>{System.Net.WebUtility.HtmlEncode(result.Message)}</p>
-              <p><a href="/swagger">Back to Swagger</a></p>
-            </body></html>
-            """;
-        return Content(html, "text/html");
-    }
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
 
-    [HttpPost("confirm-email")]
-    [AllowAnonymous]
-    public async Task<IActionResult> ConfirmEmailPost([FromQuery] string userId, [FromQuery] string token)
-    {
-        var result = await _authService.ConfirmEmailAsync(userId, token);
+        var result = await _authService.VerifyEmailOtpAsync(dto.Email, dto.Otp);
         if (result.Status < 0)
             return BadRequest(new { message = result.Message, errors = result.Errors });
-        if (result.Status == Const.WARNING_NO_DATA_CODE)
-            return NotFound(new { message = result.Message });
-        return Ok(new { message = result.Message });
+        return Ok(new { message = result.Message, data = result.Data });
     }
 
     [HttpPost("resend-confirm-email")]
@@ -146,6 +138,26 @@ public class AuthController(IAuthService authService) : ControllerBase
     [Authorize(Policy = AppPolicies.Authenticated)]
     public async Task<IActionResult> Me()
         => this.FromService(await _authService.GetMeAsync(User.GetUserId()));
+
+    private static bool IsRequireOtpPayload(object? data)
+    {
+        if (data is IDictionary<string, object?> typed)
+        {
+            return typed.TryGetValue("requireOtp", out var v) && v is true;
+        }
+
+        if (data is System.Collections.IDictionary dict)
+        {
+            foreach (System.Collections.DictionaryEntry entry in dict)
+            {
+                if (string.Equals(entry.Key?.ToString(), "requireOtp", StringComparison.OrdinalIgnoreCase)
+                    && entry.Value is true)
+                    return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 

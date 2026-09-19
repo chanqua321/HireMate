@@ -148,9 +148,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const next = {
             ...prev,
             name: me.fullName || prev.name,
+            avatarUrl: me.avatarUrl || prev.avatarUrl || '',
+            email: me.email || prev.email,
             currentPlanCode: me.currentPlanCode || prev.currentPlanCode || 'free',
             isPremium: Boolean(me.isPremium ?? prev.isPremium),
           };
+          if (me.avatarUrl) {
+            localStorage.setItem('hm_avatar_url', String(me.avatarUrl));
+          }
           safeStoreJSON(STORAGE_KEYS.PROFILE, next);
           return next;
         });

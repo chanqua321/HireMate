@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Sparkles, Check } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { authService, isSoleAdminSession } from '../../api/auth.service';
+import { isSoleAdminEmail } from '../../../../shared/config/constants';
 import { useApp } from '../../../../app/context/AppContext';
 import { useConfetti } from '../../../../shared/hooks';
 import { resolveAuthDisplayName } from '../../utils/displayName';
@@ -28,12 +29,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
-  
-  const [successData, setSuccessData] = useState<{
-    show: boolean;
-    email: string;
-    confirmLinkDev?: string;
-  }>({ show: false, email: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +40,10 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
       setError('Mật khẩu xác nhận không trùng khớp.');
       return;
     }
+    if (isSoleAdminEmail(form.email)) {
+      setError('Không thể đăng ký bằng email quản trị. Vui lòng đăng nhập Admin.');
+      return;
+    }
     setError('');
 
     try {
@@ -53,19 +52,24 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
         password: form.password.trim(),
         fullName: form.name.trim(),
       });
-      if (res.ok || (res as any).status > 0) {
-        const rawDevLink = res.data?.confirmLinkDev || (res as any).data?.confirmLinkDev || (res as any).confirmLinkDev;
-        const devLink = rawDevLink
-          ? rawDevLink.replace('http://localhost:5080', 'https://localhost:7080')
-          : undefined;
-        setSuccessData({
-          show: true,
-          email: form.email.trim(),
-          confirmLinkDev: devLink,
-        });
-        triggerConfetti();
+      if (res.ok) {
+        const data: any = res.data ?? {};
+        const needsOtp =
+          data?.verifyOtp === true ||
+          data?.requireEmailConfirmation === true ||
+          data?.emailConfirmed === false ||
+          /otp|xác nhận email/i.test(res.message || '');
+        if (needsOtp) {
+          navigate(
+            `/verify-otp?email=${encodeURIComponent(form.email.trim())}`,
+            { replace: true }
+          );
+          return;
+        }
+        onSuccessSwitchToLogin(form.email.trim());
         return;
-      } else if (res.status !== 0 && res.message) {
+      }
+      if (res.message) {
         setError(res.message);
         return;
       }
@@ -76,12 +80,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
       }
     }
 
-    // Fallback khi offline
-    setSuccessData({
-      show: true,
-      email: form.email.trim(),
-    });
-    triggerConfetti();
+    setError('Đăng ký thất bại. Vui lòng thử lại.');
   };
 
   const handleGoogleSuccess = async (credRes: CredentialResponse) => {
@@ -103,9 +102,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
         await refreshProfile();
         navigate(isSoleAdminSession(res.data) ? '/admin' : '/dashboard');
         return;
-      } else {
-        setError(res.message || 'Đăng nhập Google thất bại.');
       }
+      setError(res.message || 'Đăng nhập Google thất bại.');
     } catch (err: any) {
       setError(err?.message || 'Lỗi kết nối khi đăng nhập với Google.');
     } finally {
@@ -114,139 +112,12 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
   };
 
   const handleGoogleError = () => {
+    setGoogleLoading(false);
     const origin = window.location.origin;
     setError(
       `Google từ chối origin ${origin} (lỗi origin_mismatch). Thêm đúng origin này vào Authorized JavaScript origins của Client ID Google, rồi mở lại http://localhost:3000.`
     );
   };
-
-  if (successData.show) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4, type: 'spring', stiffness: 280, damping: 20 }}
-        style={{ textAlign: 'center', padding: '10px 0' }}
-      >
-        <motion.div
-          style={{
-            width: '82px',
-            height: '82px',
-            margin: '0 auto 20px',
-            borderRadius: '50%',
-            background:
-              'linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(34, 197, 94, 0.08))',
-            color: '#22C55E',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '2px solid rgba(34, 197, 94, 0.35)',
-            boxShadow: '0 12px 28px rgba(34, 197, 94, 0.22)',
-          }}
-          initial={{ scale: 0.4, rotate: -30 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 18 }}
-        >
-          <Mail size={42} strokeWidth={2.2} />
-        </motion.div>
-
-        <span
-          className="badge badge--success"
-          style={{
-            marginBottom: '12px',
-            padding: '6px 14px',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            display: 'inline-flex',
-            alignItems: 'center',
-            background: 'rgba(34, 197, 94, 0.15)',
-            color: '#16A34A',
-            borderRadius: '20px',
-          }}
-        >
-          <Sparkles size={14} style={{ marginRight: '6px' }} /> ĐĂNG KÝ THÀNH CÔNG
-        </span>
-
-        <h2
-          style={{
-            fontSize: '1.65rem',
-            fontWeight: 800,
-            color: 'var(--navy, #001B3F)',
-            marginBottom: '12px',
-          }}
-        >
-          Kiểm Tra Email Của Bạn!
-        </h2>
-
-        <p
-          style={{
-            color: '#6B7280',
-            fontSize: '0.94rem',
-            lineHeight: 1.6,
-            marginBottom: '22px',
-          }}
-        >
-          Chúng tôi đã gửi một email xác thực tài khoản tới{' '}
-          <strong style={{ color: 'var(--navy, #001B3F)' }}>
-            {successData.email}
-          </strong>
-          . Vui lòng kiểm tra hộp thư (hoặc thư rác/Spam) để xác thực tài khoản và tiếp tục sử dụng.
-        </p>
-
-        {successData.confirmLinkDev && (
-          <div
-            style={{
-              background: 'rgba(3, 191, 255, 0.08)',
-              border: '1px dashed rgba(3, 191, 255, 0.5)',
-              borderRadius: '12px',
-              padding: '16px',
-              marginBottom: '20px',
-              textAlign: 'left',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '0.82rem',
-                fontWeight: 700,
-                color: '#03BFFF',
-                marginBottom: '8px',
-              }}
-            >
-              ⚡ Chế độ kiểm thử (Dev Mode) - Không cần mở Gmail:
-            </div>
-            <a
-              href={successData.confirmLinkDev}
-              className="btn btn-primary"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                padding: '12px',
-                fontWeight: 700,
-                textDecoration: 'none',
-                width: '100%',
-              }}
-            >
-              <Check size={18} />
-              <span>Xác thực tài khoản ngay (Test Confirm)</span>
-            </a>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <button
-            type="button"
-            onClick={() => onSuccessSwitchToLogin(successData.email)}
-            className="btn btn-secondary"
-            style={{ fontWeight: 600, padding: '12px', width: '100%' }}
-          >
-            Đã xác thực? Đăng nhập ngay
-          </button>
-        </div>
-      </motion.div>
-    );
-  }
 
   return (
     <div style={{ maxWidth: '360px', width: '100%', margin: '0 auto' }}>

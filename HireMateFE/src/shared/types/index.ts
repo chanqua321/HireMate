@@ -17,6 +17,7 @@ export interface Profile {
   desiredIndustry?: string;
   isPremium?: boolean;
   currentPlanCode?: string;
+  avatarUrl?: string;
 }
 
 export interface Question {

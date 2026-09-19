@@ -47,9 +47,34 @@ public class AuthService(
 
     public async Task<IServiceResult> RegisterAsync(RegisterDto dto)
     {
+        if (AppRoles.IsSystemAdminEmail(dto.Email))
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "Không thể đăng ký bằng email quản trị. Vui lòng đăng nhập tài khoản Admin.");
+
         var existing = await _userManager.FindByEmailAsync(dto.Email);
         if (existing != null)
+        {
+            if (!existing.IsDeleted && !existing.EmailConfirmed && RequireEmailConfirmation
+                && !AppRoles.IsSystemAdminEmail(existing.Email))
+            {
+                var otpPlainExisting = await IssueAndSendEmailOtpAsync(existing);
+                var retryData = new Dictionary<string, object?>
+                {
+                    ["email"] = existing.Email,
+                    ["emailConfirmed"] = false,
+                    ["requireEmailConfirmation"] = true,
+                    ["verifyOtp"] = true,
+                    ["message"] = "Email đã đăng ký nhưng chưa xác nhận. Đã gửi lại mã OTP."
+                };
+                if (ExposeDevTokens)
+                    retryData["otpDev"] = otpPlainExisting;
+
+                return new ServiceResult(Const.SUCCESS_CREATE_CODE,
+                    "Email chưa xác nhận. Vui lòng nhập mã OTP đã gửi lại.", retryData);
+            }
+
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Email đã được đăng ký");
+        }
 
         var skipConfirm = !RequireEmailConfirmation;
         var user = new UserAccount
@@ -83,20 +108,21 @@ public class AuthService(
             });
         }
 
-        var confirmLink = await SendConfirmEmailAsync(user);
+        var otpPlain = await IssueAndSendEmailOtpAsync(user);
 
         var data = new Dictionary<string, object?>
         {
             ["email"] = user.Email,
             ["emailConfirmed"] = false,
             ["requireEmailConfirmation"] = true,
-            ["message"] = "Vui lòng kiểm tra hộp thư để xác nhận email trước khi đăng nhập."
+            ["verifyOtp"] = true,
+            ["message"] = "Vui lòng nhập mã OTP đã gửi tới email để xác nhận tài khoản."
         };
         if (ExposeDevTokens)
-            data["confirmLinkDev"] = confirmLink;
+            data["otpDev"] = otpPlain;
 
         return new ServiceResult(Const.SUCCESS_CREATE_CODE,
-            "Đăng ký thành công. Vui lòng xác nhận email trước khi đăng nhập.", data);
+            "Đăng ký thành công. Vui lòng nhập mã OTP gửi tới email.", data);
     }
 
     public async Task<IServiceResult> LoginAsync(LoginDto dto)
@@ -110,15 +136,25 @@ public class AuthService(
 
         if (!user.EmailConfirmed)
         {
-            if (!RequireEmailConfirmation)
+            // Admin hệ thống không dùng OTP — luôn coi email đã xác nhận
+            if (AppRoles.IsSystemAdminEmail(user.Email) || !RequireEmailConfirmation)
             {
                 user.EmailConfirmed = true;
+                user.EmailOtpHash = null;
+                user.EmailOtpExpiresAt = null;
+                user.EmailOtpAttempts = 0;
                 user.UpdatedAt = DateTime.UtcNow;
                 await _userManager.UpdateAsync(user);
             }
             else
             {
-                return new ServiceResult(Const.FAIL_READ_CODE, Const.EMAIL_NOT_CONFIRMED_MSG);
+                return new ServiceResult(Const.FAIL_READ_CODE,
+                    "Email chưa được xác nhận. Vui lòng nhập mã OTP đã gửi khi đăng ký.",
+                    new Dictionary<string, object?>
+                    {
+                        ["requireOtp"] = true,
+                        ["email"] = user.Email
+                    });
             }
         }
 
@@ -194,16 +230,19 @@ public class AuthService(
             return new ServiceResult(Const.FAIL_READ_CODE, "Tài khoản Google không có email");
 
         var googleName = ResolveGoogleDisplayName(payload, email);
+        var googleAvatar = string.IsNullOrWhiteSpace(payload.Picture) ? null : payload.Picture.Trim();
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null)
         {
+            // OTP chỉ áp dụng đăng ký email/mật khẩu — Google coi email đã xác thực
             user = new UserAccount
             {
                 Id = Guid.NewGuid(),
                 Email = email,
                 UserName = email,
                 FullName = googleName,
-                EmailConfirmed = payload.EmailVerified,
+                AvatarUrl = googleAvatar,
+                EmailConfirmed = true,
                 OnboardingCompleted = false,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -218,19 +257,25 @@ public class AuthService(
         {
             return new ServiceResult(Const.FAIL_READ_CODE, "Tài khoản đã bị vô hiệu hóa");
         }
-        else if (!user.EmailConfirmed && payload.EmailVerified)
+
+        // Google login không chạy OTP; nếu user chưa confirm (đăng ký form dở) thì xác nhận luôn qua Google
+        if (!user.EmailConfirmed)
         {
             user.EmailConfirmed = true;
+            user.EmailOtpHash = null;
+            user.EmailOtpExpiresAt = null;
+            user.EmailOtpAttempts = 0;
+            user.UpdatedAt = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
         }
-
-        if (!user.EmailConfirmed)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Email chưa được xác nhận");
 
         await EnsureIdentityRolesAsync(user);
 
         if (IsPlaceholderFullName(user.FullName, email))
             user.FullName = googleName;
+
+        if (!string.IsNullOrWhiteSpace(googleAvatar))
+            user.AvatarUrl = googleAvatar;
 
         var career = await _unitOfWork.CareerProfileRepository.GetQueryable()
             .FirstOrDefaultAsync(p => p.UserId == user.Id);
@@ -304,43 +349,75 @@ public class AuthService(
             UsedAiChars = snap.UsedChars,
             RemainingAiChars = snap.MonthlyBudget <= 0 ? -1 : snap.RemainingChars,
             PlanExpiresAt = snap.PlanExpiresAt,
-            PlanExpired = snap.IsExpired
+            PlanExpired = snap.IsExpired,
+            AvatarUrl = user.AvatarUrl
         });
     }
 
-    public async Task<IServiceResult> ConfirmEmailAsync(string userId, string token)
+    public async Task<IServiceResult> VerifyEmailOtpAsync(string email, string otp)
     {
-        var user = await _userManager.FindByIdAsync(userId);
+        if (AppRoles.IsSystemAdminEmail(email))
+            return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                "Tài khoản Admin không cần xác thực OTP. Vui lòng đăng nhập trực tiếp.");
+
+        var user = await _userManager.FindByEmailAsync(email.Trim());
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mã OTP không hợp lệ hoặc đã hết hạn.");
 
         if (user.EmailConfirmed)
-            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Email đã được xác nhận");
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Email đã được xác nhận. Bạn có thể đăng nhập.");
 
-        var result = await _userManager.ConfirmEmailAsync(user, token);
-        if (!result.Succeeded)
-            result = await _userManager.ConfirmEmailAsync(user, Uri.UnescapeDataString(token));
+        if (user.EmailOtpAttempts >= 5)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Bạn đã nhập sai quá nhiều lần. Hãy yêu cầu gửi lại mã OTP.");
 
-        if (!result.Succeeded)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mã xác nhận không hợp lệ hoặc đã hết hạn",
-                result.Errors.Select(e => e.Description).ToList());
+        if (string.IsNullOrWhiteSpace(user.EmailOtpHash) || user.EmailOtpExpiresAt == null || user.EmailOtpExpiresAt < DateTime.UtcNow)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mã OTP đã hết hạn. Hãy yêu cầu gửi lại mã mới.");
+
+        var incoming = (otp ?? string.Empty).Trim();
+        if (incoming.Length != 6 || !incoming.All(char.IsDigit))
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mã OTP phải gồm 6 chữ số.");
+
+        if (!string.Equals(user.EmailOtpHash, HashOtp(user.Id, incoming), StringComparison.OrdinalIgnoreCase))
+        {
+            user.EmailOtpAttempts += 1;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
+            var left = Math.Max(0, 5 - user.EmailOtpAttempts);
+            return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                left > 0 ? $"Mã OTP không đúng. Còn {left} lần thử." : "Bạn đã nhập sai quá nhiều lần. Hãy gửi lại OTP.");
+        }
+
+        user.EmailConfirmed = true;
+        user.EmailOtpHash = null;
+        user.EmailOtpExpiresAt = null;
+        user.EmailOtpAttempts = 0;
+        user.EmailOtpSentAt = null;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
 
         return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Xác nhận email thành công. Bạn có thể đăng nhập ngay.");
     }
 
     public async Task<IServiceResult> ResendConfirmEmailAsync(string email)
     {
+        if (AppRoles.IsSystemAdminEmail(email))
+            return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                "Tài khoản Admin không cần xác thực OTP. Vui lòng đăng nhập trực tiếp.");
+
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null || user.IsDeleted)
-            return new ServiceResult(Const.SUCCESS_READ_CODE, "Nếu email tồn tại, liên kết xác nhận đã được gửi.");
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Nếu email tồn tại, mã OTP xác nhận đã được gửi.");
 
         if (user.EmailConfirmed)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Email đã được xác nhận");
 
-        var link = await SendConfirmEmailAsync(user);
+        if (user.EmailOtpSentAt != null && user.EmailOtpSentAt > DateTime.UtcNow.AddSeconds(-60))
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Vui lòng đợi khoảng 60 giây trước khi gửi lại OTP.");
+
+        var otpPlain = await IssueAndSendEmailOtpAsync(user);
         if (ExposeDevTokens)
-            return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi email xác nhận.", new { confirmLinkDev = link });
-        return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi email xác nhận.");
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi mã OTP xác nhận.", new { otpDev = otpPlain });
+        return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi mã OTP xác nhận tới email.");
     }
 
     public async Task<IServiceResult> ForgotPasswordAsync(string email)
@@ -399,22 +476,33 @@ public class AuthService(
         return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đặt lại mật khẩu thành công");
     }
 
-    private async Task<string> SendConfirmEmailAsync(UserAccount user)
+    private async Task<string> IssueAndSendEmailOtpAsync(UserAccount user)
     {
-        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-        var encoded = Uri.EscapeDataString(token);
-        var apiUrl = (_configuration["EmailSettings:ApiPublicUrl"] ?? "https://localhost:7080").TrimEnd('/');
-        var link = $"{apiUrl}/api/Auth/confirm-email?userId={user.Id}&token={encoded}";
+        var otp = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        user.EmailOtpHash = HashOtp(user.Id, otp);
+        user.EmailOtpExpiresAt = DateTime.UtcNow.AddMinutes(10);
+        user.EmailOtpAttempts = 0;
+        user.EmailOtpSentAt = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
 
         var html = $"""
             <p>Xin chào {WebUtility.HtmlEncode(user.FullName)},</p>
-            <p>Cảm ơn bạn đã đăng ký <b>HireMate</b>.</p>
-            <p><a href="{link}">Nhấn vào đây để xác nhận email</a></p>
+            <p>Mã OTP xác nhận email HireMate của bạn là:</p>
+            <p style="font-size:28px;font-weight:700;letter-spacing:6px;">{otp}</p>
+            <p>Mã có hiệu lực trong <b>10 phút</b>. Không chia sẻ mã này cho任何人.</p>
             <p>— HireMate</p>
             """;
 
-        await _emailService.SendAsync(user.Email!, "HireMate — Xác nhận email", html);
-        return link;
+        await _emailService.SendAsync(user.Email!, "HireMate — Mã OTP xác nhận email", html);
+        return otp;
+    }
+
+    private static string HashOtp(Guid userId, string otp)
+    {
+        var raw = $"{userId:N}:{otp.Trim()}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+        return Convert.ToHexString(bytes);
     }
 
     private async Task<AuthResponseDto> IssueTokensAsync(UserAccount user, string? ip)
@@ -469,7 +557,8 @@ public class AuthService(
             FullName = user.FullName,
             Roles = roles,
             OnboardingCompleted = user.OnboardingCompleted,
-            IsPremium = user.IsPremium
+            IsPremium = user.IsPremium,
+            AvatarUrl = user.AvatarUrl
         };
     }
 

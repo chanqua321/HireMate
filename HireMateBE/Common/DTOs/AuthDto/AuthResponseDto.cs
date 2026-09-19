@@ -11,6 +11,7 @@ public class AuthResponseDto
     public IList<string> Roles { get; set; } = [];
     public bool OnboardingCompleted { get; set; }
     public bool IsPremium { get; set; }
+    public string? AvatarUrl { get; set; }
 }
 
 public class RefreshRequestDto
@@ -26,5 +27,14 @@ public class LogoutRequestDto
 public class GoogleLoginDto
 {
     public string IdToken { get; set; } = string.Empty;
+}
+
+public class VerifyEmailOtpDto
+{
+    [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MinLength(6), System.ComponentModel.DataAnnotations.MaxLength(6)]
+    public string Otp { get; set; } = string.Empty;
 }
 

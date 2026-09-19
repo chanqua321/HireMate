@@ -18,5 +18,6 @@ public class MeDto
     public int RemainingAiChars { get; set; }
     public DateTime? PlanExpiresAt { get; set; }
     public bool PlanExpired { get; set; }
+    public string? AvatarUrl { get; set; }
 }
 

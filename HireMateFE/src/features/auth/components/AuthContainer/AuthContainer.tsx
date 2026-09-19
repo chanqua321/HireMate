@@ -102,7 +102,8 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
           }}
           transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
         >
-          <LoginForm onSwitchMode={() => handleModeChange('register')} />
+          {/* Chỉ mount form đang active để tránh GSI initialize() 2 lần */}
+          {isLogin && <LoginForm onSwitchMode={() => handleModeChange('register')} />}
         </motion.div>
 
         {/* ==================== REGISTER FORM PANEL ==================== */}
@@ -119,10 +120,12 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
           }}
           transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
         >
-          <RegisterForm 
-            onSwitchMode={() => handleModeChange('login')} 
-            onSuccessSwitchToLogin={handleSuccessSwitchToLogin}
-          />
+          {!isLogin && (
+            <RegisterForm
+              onSwitchMode={() => handleModeChange('login')}
+              onSuccessSwitchToLogin={handleSuccessSwitchToLogin}
+            />
+          )}
         </motion.div>
 
         {/* ==================== SLIDING OVERLAY PANEL (AI-Study-Hub Style) ==================== */}
@@ -198,26 +201,11 @@ export const AuthContainer: React.FC<AuthContainerProps> = ({ initialMode }) => 
 
             {/* Right Side: Visible when Login is active -> Suggests Register */}
             <div className="auth-overlay-side">
-              <div
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '16px',
-                  background: 'rgba(255,255,255,0.1)',
-                  backdropFilter: 'blur(10px)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: '24px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                }}
-              >
-                <img
-                  src="/logo.png"
-                  alt="HireMate Logo"
-                  style={{ height: '32px', filter: 'brightness(0) invert(1)' }}
-                />
-              </div>
+              <img
+                src="/logo.png"
+                alt="HireMate Logo"
+                style={{ height: '48px', marginBottom: '24px', filter: 'brightness(0) invert(1) drop-shadow(0 4px 6px rgba(0,0,0,0.1))' }}
+              />
               <h2>Chào bạn mới!</h2>
               <p>
                 Tạo tài khoản miễn phí để mở khóa lộ trình luyện tập phỏng vấn AI được cá nhân hóa dành riêng cho bạn.
