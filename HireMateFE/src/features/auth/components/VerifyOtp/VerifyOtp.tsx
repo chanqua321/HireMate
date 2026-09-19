@@ -1,26 +1,43 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, ArrowRight, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
-import { motion } from 'framer-motion';
+import {
+  Mail,
+  ArrowRight,
+  ArrowLeft,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Edit3,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../../api/auth.service';
 import { isSoleAdminEmail } from '../../../../shared/config/constants';
-import '../../styles/auth-forms.css';
+import './VerifyOtp.css';
 
 export const VerifyOtp: React.FC = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const emailFromQuery = (params.get('email') || '').trim();
+
   const [email, setEmail] = useState(emailFromQuery);
+  const [isEditingEmail, setIsEditingEmail] = useState(!emailFromQuery);
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    if (emailFromQuery) setEmail(emailFromQuery);
+    if (emailFromQuery) {
+      setEmail(emailFromQuery);
+      setIsEditingEmail(false);
+    }
   }, [emailFromQuery]);
 
   useEffect(() => {
@@ -29,6 +46,15 @@ export const VerifyOtp: React.FC = () => {
     }
   }, [emailFromQuery, email, navigate]);
 
+  // Focus the first digit slot on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputsRef.current[0]?.focus();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Cooldown countdown timer
   useEffect(() => {
     if (!cooldown) return;
     const t = window.setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
@@ -43,12 +69,32 @@ export const VerifyOtp: React.FC = () => {
     next[index] = v;
     setDigits(next);
     setError('');
-    if (v && index < 5) inputsRef.current[index + 1]?.focus();
+
+    // Advance to next slot
+    if (v && index < 5) {
+      inputsRef.current[index + 1]?.focus();
+    }
+
+    // Auto submit if all 6 slots are populated
+    if (v && index === 5 && next.every((d) => d !== '')) {
+      const fullCode = next.join('');
+      triggerVerification(fullCode);
+    }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+    if (e.key === 'Backspace') {
+      if (!digits[index] && index > 0) {
+        inputsRef.current[index - 1]?.focus();
+      } else {
+        const next = [...digits];
+        next[index] = '';
+        setDigits(next);
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
       inputsRef.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      inputsRef.current[index + 1]?.focus();
     }
   };
 
@@ -58,170 +104,266 @@ export const VerifyOtp: React.FC = () => {
     if (!text) return;
     const next = text.padEnd(6, ' ').split('').map((c) => (c === ' ' ? '' : c));
     setDigits(next);
-    inputsRef.current[Math.min(text.length, 5)]?.focus();
+
+    const focusIdx = Math.min(text.length, 5);
+    inputsRef.current[focusIdx]?.focus();
+
+    if (text.length === 6) {
+      triggerVerification(text);
+    }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const triggerVerification = async (code: string) => {
     if (!email.trim()) {
-      setError('Vui lòng nhập email đã đăng ký.');
+      setError('Vui lòng nhập địa chỉ email đã đăng ký.');
       return;
     }
-    if (otpValue.length !== 6) {
-      setError('Vui lòng nhập đủ 6 số OTP.');
+    if (code.length !== 6) {
+      setError('Vui lòng nhập đủ 6 chữ số mã OTP.');
       return;
     }
 
     setLoading(true);
     setError('');
     setSuccess('');
+
     try {
-      const res = await authService.verifyEmailOtp(email.trim(), otpValue);
+      const res = await authService.verifyEmailOtp(email.trim(), code);
       if (res.ok) {
-        setSuccess(res.message || 'Xác nhận email thành công!');
-        window.setTimeout(() => navigate('/login', { replace: true, state: { email: email.trim() } }), 900);
+        setSuccess(res.message || 'Xác thực tài khoản thành công! Đang chuyển hướng...');
+        window.setTimeout(() => {
+          navigate('/login', { replace: true, state: { email: email.trim(), verified: true } });
+        }, 1200);
       } else {
-        setError(res.message || 'Mã OTP không hợp lệ.');
+        setError(res.message || 'Mã OTP không hợp lệ hoặc đã hết hạn.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Không xác nhận được OTP.');
+      setError(err?.message || 'Không thể xác thực mã OTP. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    triggerVerification(otpValue);
+  };
+
   const handleResend = async () => {
     if (!email.trim()) {
-      setError('Vui lòng nhập email để gửi lại OTP.');
+      setError('Vui lòng cung cấp email để nhận lại mã OTP.');
       return;
     }
     if (cooldown > 0) return;
+
     setResendLoading(true);
     setError('');
     setSuccess('');
+
     try {
       const res = await authService.resendConfirmEmail(email.trim());
       if (res.ok) {
-        setSuccess(res.message || 'Đã gửi lại mã OTP.');
+        setSuccess(res.message || 'Mã OTP mới đã được gửi tới email của bạn.');
         setCooldown(60);
         setDigits(['', '', '', '', '', '']);
         inputsRef.current[0]?.focus();
       } else {
-        setError(res.message || 'Không gửi lại được OTP.');
+        setError(res.message || 'Gửi lại mã OTP thất bại. Vui lòng thử lại sau.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Không gửi lại được OTP.');
+      setError(err?.message || 'Lỗi khi yêu cầu gửi lại mã OTP.');
     } finally {
       setResendLoading(false);
     }
   };
 
   return (
-    <div className="section container" style={{ maxWidth: 480, margin: '48px auto' }}>
+    <div className="auth-otp-page">
+      {/* Decorative Glow Blobs */}
+      <div className="auth-otp-glow-1" />
+      <div className="auth-otp-glow-2" />
+
+      {/* Main OTP Card with Motion Entrance */}
       <motion.div
-        className="card"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{ padding: 32 }}
+        className="auth-otp-card"
+        initial={{ opacity: 0, y: 22, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <ShieldCheck size={22} color="#03BFFF" />
-          <h1 style={{ margin: 0, fontSize: '1.45rem' }}>Xác nhận OTP</h1>
+        {/* Brand Logo */}
+        <div className="auth-otp-logo-wrap">
+          <img
+            src="/logo.png"
+            alt="HireMate Logo"
+            className="auth-otp-logo"
+          />
         </div>
-        <p className="muted" style={{ marginBottom: 20 }}>
-          Nhập mã 6 số đã gửi tới email đăng ký. Mã có hiệu lực 10 phút.
+
+        {/* Animated Floating Shield Badge */}
+        <motion.div
+          className="auth-otp-icon-badge"
+          animate={{ y: [0, -5, 0] }}
+          transition={{ repeat: Infinity, duration: 3.5, ease: 'easeInOut' }}
+        >
+          <ShieldCheck size={32} />
+        </motion.div>
+
+        {/* Heading */}
+        <h1 className="auth-otp-title">Xác thực mã bảo mật (OTP)</h1>
+        <p className="auth-otp-desc">
+          Vui lòng nhập 6 chữ số được gửi tới hòm thư của bạn để kích hoạt tài khoản HireMate.
         </p>
 
-        <form onSubmit={handleVerify}>
-          <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>
-            <Mail size={14} style={{ marginRight: 6 }} />
-            Email
-          </label>
-          <input
-            type="email"
-            className="form-control"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            readOnly={Boolean(emailFromQuery)}
-            style={{
-              width: '100%',
-              marginBottom: 18,
-              background: emailFromQuery ? '#F8FAFC' : undefined,
-            }}
-          />
-
-          <label style={{ display: 'block', fontWeight: 600, marginBottom: 10, fontSize: '0.9rem' }}>
-            Mã OTP
-          </label>
-          <div
-            onPaste={handlePaste}
-            style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginBottom: 16 }}
+        {/* Target Email Chip */}
+        <div className="auth-otp-email-chip">
+          <Mail size={14} color="#0284c7" />
+          <span>Gửi tới: <strong>{email || 'Chưa cung cấp email'}</strong></span>
+          <button
+            type="button"
+            className="auth-otp-change-btn"
+            onClick={() => setIsEditingEmail((prev) => !prev)}
+            title="Đổi email nhận mã"
           >
-            {digits.map((d, i) => (
+            {isEditingEmail ? 'Thu gọn' : 'Đổi email'}
+          </button>
+        </div>
+
+        {/* Animated Expandable Edit Email Box */}
+        <AnimatePresence>
+          {isEditingEmail && (
+            <motion.div
+              className="auth-otp-edit-email-box"
+              initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <label htmlFor="otp-email-input">Địa chỉ email xác thực:</label>
               <input
-                key={i}
-                ref={(el) => {
-                  inputsRef.current[i] = el;
-                }}
-                inputMode="numeric"
-                maxLength={1}
-                value={d}
-                onChange={(e) => handleDigitChange(i, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(i, e)}
-                className="form-control"
-                style={{
-                  width: 48,
-                  height: 52,
-                  textAlign: 'center',
-                  fontSize: '1.25rem',
-                  fontWeight: 700,
-                  letterSpacing: 0,
-                }}
+                id="otp-email-input"
+                type="email"
+                className="auth-otp-email-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tennguoidung@example.com"
+                required
               />
-            ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Verification Form */}
+        <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+          {/* 6-Digit Grid Slots */}
+          <div className="auth-otp-digits-container">
+            <span className="auth-otp-digits-label">Mã xác thực 6 chữ số:</span>
+            <div className="auth-otp-digits-row" onPaste={handlePaste}>
+              {digits.map((digit, idx) => (
+                <motion.input
+                  key={idx}
+                  ref={(el) => {
+                    inputsRef.current[idx] = el;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleDigitChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(idx, e)}
+                  className={`auth-otp-digit-slot ${digit ? 'has-value' : ''}`}
+                  whileFocus={{ scale: 1.05 }}
+                  transition={{ duration: 0.12 }}
+                />
+              ))}
+            </div>
           </div>
 
-          {error && (
-            <p style={{ color: '#EF4444', fontSize: '0.9rem', marginBottom: 12 }}>{error}</p>
-          )}
-          {success && (
-            <p style={{ color: '#16A34A', fontSize: '0.9rem', marginBottom: 12 }}>{success}</p>
-          )}
+          {/* Feedback Messages with Animation */}
+          <AnimatePresence mode="wait">
+            {error && (
+              <motion.div
+                key="otp-err"
+                className="auth-otp-alert error"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+              >
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <span>{error}</span>
+              </motion.div>
+            )}
 
-          <button
+            {success && (
+              <motion.div
+                key="otp-ok"
+                className="auth-otp-alert success"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+              >
+                <CheckCircle2 size={18} style={{ flexShrink: 0 }} />
+                <span>{success}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Submit Button */}
+          <motion.button
             type="submit"
-            className="btn btn-primary btn-block"
-            disabled={loading}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            className="auth-otp-submit-btn"
+            disabled={loading || otpValue.length !== 6}
+            whileTap={{ scale: 0.98 }}
           >
-            {loading ? <Loader2 className="animate-spin" size={18} /> : <ArrowRight size={18} />}
-            {loading ? 'Đang xác nhận...' : 'Xác nhận OTP'}
-          </button>
+            {loading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                <span>Đang kiểm tra mã...</span>
+              </>
+            ) : (
+              <>
+                <span>Xác nhận & Kích hoạt</span>
+                <ArrowRight size={17} />
+              </>
+            )}
+          </motion.button>
         </form>
 
-        <button
-          type="button"
-          className="btn btn-ghost btn-block"
-          onClick={handleResend}
-          disabled={resendLoading || cooldown > 0}
-          style={{
-            width: '100%',
-            marginTop: 12,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-          }}
-        >
-          {resendLoading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-          {cooldown > 0 ? `Gửi lại sau ${cooldown}s` : 'Gửi lại mã OTP'}
-        </button>
+        {/* Resend OTP Row */}
+        <div className="auth-otp-resend-row">
+          <span>Chưa nhận được mã?</span>
+          {cooldown > 0 ? (
+            <div className="auth-otp-cooldown-badge">
+              <Clock size={13} />
+              <span>Gửi lại sau 00:{cooldown < 10 ? `0${cooldown}` : cooldown}</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="auth-otp-resend-btn"
+              onClick={handleResend}
+              disabled={resendLoading}
+            >
+              {resendLoading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Đang gửi...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={14} />
+                  <span>Gửi lại mã OTP</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
 
-        <p style={{ textAlign: 'center', marginTop: 18, fontSize: '0.9rem' }}>
-          <Link to="/login">Quay lại đăng nhập</Link>
-        </p>
+        {/* Back Link */}
+        <Link to="/login" className="auth-otp-footer-link">
+          <ArrowLeft size={15} />
+          <span>Quay lại trang Đăng nhập</span>
+        </Link>
       </motion.div>
     </div>
   );

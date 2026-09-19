@@ -51,7 +51,7 @@ export const JdMatcher: React.FC<JdMatcherProps> = ({
             {userCvs.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.id === activeCvId
-                  ? `🎯 [Đang kích hoạt phỏng vấn] ${c.title} — (${c.role})`
+                  ? `[Đang kích hoạt phỏng vấn] ${c.title} — (${c.role})`
                   : `${c.title} — (${c.role})`}
               </option>
             ))}

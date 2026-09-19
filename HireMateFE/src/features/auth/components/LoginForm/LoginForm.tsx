@@ -423,7 +423,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
             theme="outline"
             size="large"
             text="signin_with"
-            shape="pill"
+            shape="rectangular"
             width="340"
           />
         </div>

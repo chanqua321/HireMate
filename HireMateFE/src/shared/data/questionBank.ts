@@ -122,9 +122,9 @@ export const normalizeRole = (role?: string, industry?: string): string => {
   if (lower.includes('product') || lower.includes('quản lý sản phẩm') || lower === 'pm' || lower.includes('product manager')) {
     return 'Quản lý sản phẩm (Product Manager)';
   }
-  if (lower.includes('backend') || lower.includes('back-end')) return 'Lập trình viên Backend';
-  if (lower.includes('frontend') || lower.includes('front-end')) return 'Lập trình viên Frontend';
-  if (lower.includes('fullstack') || lower.includes('full-stack')) return 'Lập trình viên Fullstack';
+  if (lower.includes('backend') || lower.includes('back-end') || lower.includes('back end')) return 'Lập trình viên Backend';
+  if (lower.includes('frontend') || lower.includes('front-end') || lower.includes('front end')) return 'Lập trình viên Frontend';
+  if (lower.includes('fullstack') || lower.includes('full-stack') || lower.includes('full stack')) return 'Lập trình viên Fullstack';
   if (lower.includes('ai') || lower.includes('machine learning') || lower.includes('ml')) return 'Kỹ sư AI / Machine Learning';
   if (lower.includes('data') || lower.includes('dữ liệu')) return 'Chuyên viên dữ liệu (Data Scientist)';
   if (lower.includes('ui/ux') || lower.includes('thiết kế') || lower.includes('design')) return 'Thiết kế UI/UX';
