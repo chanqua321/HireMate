@@ -43,7 +43,7 @@ const AdminUsers: React.FC = () => {
       role: (u.roles && u.roles[0]) || u.role || 'User',
       plan: u.isPremium ? 'Premium' : 'Free',
       interviews: u.interviewCount ?? 0,
-      joinDate: (u.createdAt || '').slice(0, 10),
+      joinDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : '—',
       status: u.isDeleted || u.lockoutEnd ? 'banned' : 'active',
       emailConfirmed: !!u.emailConfirmed,
       avatarUrl: u.avatarUrl || null,
@@ -116,23 +116,66 @@ const AdminUsers: React.FC = () => {
     <div>
       <div className="admin-page-header">
         <h1 className="admin-page-title">👥 Quản lý Users</h1>
-        <p className="admin-page-subtitle">Xem, tìm kiếm và quản lý toàn bộ tài khoản người dùng (API).</p>
+        {/* <p className="admin-page-subtitle">Xem, tìm kiếm và quản lý toàn bộ tài khoản người dùng (API).</p> */}
         {error && <p style={{ color: '#EF4444' }}>{error}</p>}
       </div>
 
-      {/* Summary stats */}
-      <div className="admin-stats-grid" style={{ marginBottom: '1.5rem' }}>
-        {[
-          { label: 'Tổng Users', value: users.length, color: 'blue' },
-          { label: 'Đang active', value: users.filter(u => u.status === 'active').length, color: 'green' },
-          { label: 'Bị ban', value: users.filter(u => u.status === 'banned').length, color: 'orange' },
-          { label: 'Chưa xác nhận', value: users.filter(u => !u.emailConfirmed).length, color: 'purple' },
-        ].map((s, i) => (
-          <div key={i} className="admin-stat-card" style={{ padding: '1.25rem' }}>
-            <div className="admin-stat-value" style={{ fontSize: '1.75rem', color: '#FFFFFF' }}>{s.value}</div>
-            <div className="admin-stat-label">{s.label}</div>
-          </div>
-        ))}
+      {/* Summary stats: Pie Chart & Info */}
+      <div className="admin-card" style={{ marginBottom: '1.5rem' }}>
+        <div className="admin-card-body" style={{ display: 'flex', gap: '2.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {(() => {
+            const total = users.length || 1;
+            const banned = users.filter(u => u.status === 'banned').length;
+            const unconfirmed = users.filter(u => !u.emailConfirmed && u.status !== 'banned').length;
+            const active = total - banned - unconfirmed;
+
+            const pActive = (active / total) * 100;
+            const pBanned = (banned / total) * 100;
+            const pUnconfirmed = (unconfirmed / total) * 100;
+
+            const conicStr = `conic-gradient(
+              #10B981 0% ${pActive}%, 
+              #F59E0B ${pActive}% ${pActive + pBanned}%, 
+              #8B5CF6 ${pActive + pBanned}% 100%
+            )`;
+
+            return (
+              <>
+                <div style={{
+                  width: '140px', height: '140px', borderRadius: '50%',
+                  background: conicStr,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  position: 'relative'
+                }}>
+                  <div style={{
+                    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                    width: '100px', height: '100px', background: '#FFF', borderRadius: '50%',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#001B3F' }}>{users.length}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>Tổng Users</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', flex: 1 }}>
+                  {[
+                    { label: 'Đang active', value: active, color: '#10B981' },
+                    { label: 'Bị ban', value: banned, color: '#F59E0B' },
+                    { label: 'Chưa xác nhận', value: unconfirmed, color: '#8B5CF6' },
+                  ].map((s, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(0,0,0,0.02)', padding: '1rem 1.5rem', borderRadius: '12px', flex: '1 1 150px' }}>
+                      <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: s.color }} />
+                      <div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#001B3F' }}>{s.value}</div>
+                        <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 500 }}>{s.label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -145,6 +188,7 @@ const AdminUsers: React.FC = () => {
                 placeholder="Tìm theo tên hoặc email..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
+                style={{ color: '#001B3F' }}
               />
             </div>
             <select className="admin-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
@@ -173,8 +217,8 @@ const AdminUsers: React.FC = () => {
                   <th>Người dùng</th>
                   <th>Role</th>
                   <th>Gói</th>
-                  <th>Phỏng vấn</th>
-                  <th>Ngày tham gia</th>
+                  {/* <th>Phỏng vấn</th> */}
+                  {/* <th>Ngày tham gia</th> */}
                   <th>Email</th>
                   <th>Trạng thái</th>
                   <th>Hành động</th>
@@ -215,8 +259,8 @@ const AdminUsers: React.FC = () => {
                     </td>
                     <td><span className={`admin-badge ${roleColor(u.role)}`}>{u.role}</span></td>
                     <td><span className={`admin-badge ${planColor(u.plan)}`}>{u.plan}</span></td>
-                    <td style={{ fontWeight: 600, color: 'var(--admin-accent, #00F2FE)' }}>{u.interviews}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{u.joinDate || 'Mới tham gia'}</td>
+                    {/* <td style={{ fontWeight: 600, color: 'var(--admin-accent, #00F2FE)' }}>{u.interviews}</td> */}
+                    {/* <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{u.joinDate || 'Mới tham gia'}</td> */}
                     <td>
                       {u.emailConfirmed
                         ? <span className="admin-badge success"><Check size={11} /> Confirmed</span>

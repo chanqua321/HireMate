@@ -112,14 +112,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
     <aside className={`admin-sidebar ${isOpen ? 'open' : ''}`}>
       {/* Logo */}
       <div className="sidebar-logo">
-        <div className="sidebar-logo-container">
-          <div className="sidebar-logo-icon">🤝</div>
-          <div className="sidebar-logo-text">
-            <h1>HireMate</h1>
-            <p>Quản trị hệ thống</p>
-          </div>
+        <div className="sidebar-logo-container" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          <img src="/logo.png" alt="HireMate" style={{ height: '36px' }} />
         </div>
-        <button className="admin-mobile-close" onClick={onClose}><X size={20}/></button>
+        <button className="admin-mobile-close" onClick={onClose}><X size={20} /></button>
       </div>
 
       {/* Navigation */}
@@ -186,7 +182,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
           <div className="sidebar-user-avatar">A</div>
           <div>
             <div className="sidebar-user-name">Admin HireMate</div>
-            <div className="sidebar-user-role">Super Administrator</div>
+            {/* <div className="sidebar-user-role">Super Administrator</div> */}
           </div>
         </div>
         <button type="button" className="sidebar-logout-btn" onClick={handleLogout} title="Đăng xuất khỏi hệ thống Quản trị">

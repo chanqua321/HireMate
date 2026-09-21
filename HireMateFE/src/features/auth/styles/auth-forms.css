@@ -1,75 +1,129 @@
-/* ---- Auth Form Inputs & Controls ---- */
+/* =====================================================================
+   HireMate — Auth Form Inputs & Controls
+   Theme: High SaaS • Cohesive Border Radius • Auto-fill Fixes
+   ===================================================================== */
+
+/* Container wrap */
 .auth-input-wrap {
   position: relative;
   width: 100%;
 }
+
 .auth-input-wrap .auth-icon-left {
   position: absolute;
-  left: 14px;
+  left: 15px;
   top: 50%;
   transform: translateY(-50%);
-  color: #93A1BD;
+  color: #94a3b8;
   pointer-events: none;
   display: flex;
   align-items: center;
   z-index: 2;
+  transition: color 0.2s ease;
 }
+
+.auth-input-wrap:focus-within .auth-icon-left {
+  color: #0284c7;
+}
+
 .auth-input-wrap .auth-icon-right {
   position: absolute;
-  right: 12px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #93A1BD;
+  color: #94a3b8;
   cursor: pointer;
   display: flex;
   align-items: center;
   padding: 4px;
+  border-radius: 6px;
   z-index: 2;
+  transition: color 0.15s ease, background 0.15s ease;
 }
+
+.auth-input-wrap .auth-icon-right:hover {
+  color: #0284c7;
+  background: #f0f9ff;
+}
+
+/* Modern Text Inputs */
 .auth-input {
   width: 100%;
-  padding: 13px 42px 13px 44px;
-  background: #F7F9FC;
-  border: 1.5px solid #E5E7EB;
-  border-radius: 12px;
+  padding: 13px 44px 13px 44px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 14px;
   font-family: inherit;
   font-size: 0.92rem;
   font-weight: 500;
-  color: #1B1D21;
+  color: #0f172a;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: all 0.2s ease;
   box-sizing: border-box;
 }
-.auth-input:focus {
-  border-color: #03BFFF;
-  box-shadow: 0 0 0 3px rgba(3, 191, 255, 0.18);
-  background: #fff;
-}
-.auth-input::placeholder {
-  color: #93A1BD;
+
+.auth-input:hover {
+  border-color: #94a3b8;
 }
 
+.auth-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3.5px rgba(2, 132, 199, 0.15);
+  background: #ffffff;
+}
+
+.auth-input::placeholder {
+  color: #94a3b8;
+}
+
+/* Hide Microsoft Edge / Browser Native Password Reveal Eye & Clear Icons */
+.auth-input::-ms-reveal,
+.auth-input::-ms-clear,
+input::-ms-reveal,
+input::-ms-clear {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Prevent Chrome/Edge Autofill ugly blue/yellow discoloration */
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover, 
+.auth-input:-webkit-autofill:focus, 
+.auth-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 50px #ffffff inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  transition: background-color 5000s ease-in-out 0s;
+  border-radius: 14px !important;
+}
+
+/* Submit Action Button */
 .auth-submit-btn {
   width: 100%;
   padding: 13px 20px;
-  background: linear-gradient(135deg, #03BFFF 0%, #0085FF 100%);
+  background: linear-gradient(135deg, #0284c7 0%, #03bfff 100%);
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 750;
   font-size: 0.95rem;
-  border-radius: 999px;
+  border-radius: 14px;
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(3, 191, 255, 0.35);
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.2s ease;
   box-sizing: border-box;
 }
+
 .auth-submit-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(3, 191, 255, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.42);
+}
+
+.auth-submit-btn:active {
+  transform: translateY(0);
 }

@@ -17,11 +17,6 @@ const AdminLayout: React.FC = () => {
   const { logout } = useApp();
   const navigate = useNavigate();
 
-  // Đảm bảo đưa về giao diện tối Cyber Dark Cockpit
-  useEffect(() => {
-    localStorage.setItem('hm_admin_theme_config', JSON.stringify({ preset: 'cyber-dark', mode: 'dark' }));
-  }, []);
-
   const handleMobileLogout = () => {
     logout();
     navigate('/login');
@@ -29,12 +24,12 @@ const AdminLayout: React.FC = () => {
   };
 
   return (
-    <div className="admin-layout theme-cyber-dark">
+    <div className="admin-layout">
       {/* Mobile header */}
       <div className="admin-mobile-header">
         <div className="admin-mobile-logo">
-           <span className="sidebar-logo-icon" style={{width: '2rem', height: '2rem', fontSize: '1rem', borderRadius: 8}}>🤝</span>
-           <span style={{fontWeight: 700}}>HireMate Admin</span>
+          <span className="sidebar-logo-icon" style={{ width: '2rem', height: '2rem', fontSize: '1rem', borderRadius: 8 }}>🤝</span>
+          <span style={{ fontWeight: 700 }}>HireMate Admin</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { careerService } from '../../shared/services/career.service';
 import { publicService } from '../../shared/services/public.service';
+import { authService } from '../../features/auth';
 import { useApp } from '../../app/context/AppContext';
 import { Link } from 'react-router-dom';
 import './css/CareerOS.css';
@@ -73,10 +74,37 @@ interface LearningResourceItem {
   matchPct: number;
 }
 
+const isPaidPlan = (code?: string | null, isPrem?: boolean | null): boolean => {
+  if (isPrem) return true;
+  if (!code) return false;
+  const c = code.trim().toLowerCase();
+  return c !== 'free' && c !== '' && c !== 'none';
+};
+
 export const CareerOS: React.FC = () => {
-  const { profile } = useApp();
+  const { profile, updateProfile } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'path' | 'memory' | 'learning'>('overview');
   const [loading, setLoading] = useState(true);
+
+  // Chỉ gói Tiêu chuẩn và Cao cấp (Rank >= 1) mới được mở khóa tính năng AI Path & Learning
+  const [isPaidTier, setIsPaidTier] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('hm_profile');
+      if (stored) {
+        const p = JSON.parse(stored);
+        if (p.isPremium !== undefined || p.currentPlanCode !== undefined) {
+          return isPaidPlan(p.currentPlanCode, p.isPremium);
+        }
+      }
+    } catch {}
+    return isPaidPlan(profile.currentPlanCode, profile.isPremium);
+  });
+
+  useEffect(() => {
+    if (!isPaidTier && (activeTab === 'path' || activeTab === 'learning')) {
+      setActiveTab('overview');
+    }
+  }, [isPaidTier, activeTab]);
 
   // Real data states initialized with clean empty/neutral values
   const [progress, setProgress] = useState<CareerProgressState>({
@@ -102,22 +130,54 @@ export const CareerOS: React.FC = () => {
   const fetchCareerData = async () => {
     setLoading(true);
     try {
-      const [devRes, hubRes, progRes, memRes, pathRes, learnRes, resRes] = await Promise.allSettled([
+      // 1. Đồng bộ và xác thực quyền hạn gói cước từ Auth Service (Backend DB)
+      let currentPaid = isPaidPlan(profile.currentPlanCode, profile.isPremium);
+      try {
+        const meRes = await authService.getMe();
+        if (meRes.ok && meRes.data) {
+          const pCode = meRes.data.currentPlanCode;
+          const pPrem = Boolean(meRes.data.isPremium);
+          currentPaid = isPaidPlan(pCode, pPrem);
+          setIsPaidTier(currentPaid);
+          if (updateProfile) {
+            updateProfile({
+              currentPlanCode: pCode || 'free',
+              isPremium: pPrem,
+            });
+          }
+        }
+      } catch {}
+
+      const baseRequests: Promise<any>[] = [
         careerService.getDevelopment(),
         careerService.getProfileHub(),
         careerService.getProgress(),
         careerService.getMemory(),
-        careerService.getPath(),
-        careerService.getLearning(),
         publicService.getResources(),
-      ]);
+      ];
+
+      // Chỉ gọi API path và learning khi user thuộc gói Tiêu chuẩn hoặc Cao cấp (tránh lỗi 403 Forbidden)
+      if (currentPaid) {
+        baseRequests.push(careerService.getPath());
+        baseRequests.push(careerService.getLearning());
+      }
+
+      const results = await Promise.allSettled(baseRequests);
+
+      const devRes = results[0];
+      const hubRes = results[1];
+      const progRes = results[2];
+      const memRes = results[3];
+      const resRes = results[4];
+      const pathRes = currentPaid ? results[5] : null;
+      const learnRes = currentPaid ? results[6] : null;
 
       const dev = devRes.status === 'fulfilled' && devRes.value?.ok ? devRes.value.data : null;
       const hub = hubRes.status === 'fulfilled' && hubRes.value?.ok ? hubRes.value.data : null;
       const prog = progRes.status === 'fulfilled' && progRes.value?.ok ? progRes.value.data : null;
       const mem = memRes.status === 'fulfilled' && memRes.value?.ok ? memRes.value.data : null;
-      const pathData = pathRes.status === 'fulfilled' && pathRes.value?.ok ? pathRes.value.data : null;
-      const learnData = learnRes.status === 'fulfilled' && learnRes.value?.ok ? learnRes.value.data : null;
+      const pathData = currentPaid && pathRes && pathRes.status === 'fulfilled' && pathRes.value?.ok ? pathRes.value.data : null;
+      const learnData = currentPaid && learnRes && learnRes.status === 'fulfilled' && learnRes.value?.ok ? learnRes.value.data : null;
       const realResources = resRes.status === 'fulfilled' && resRes.value?.ok && Array.isArray(resRes.value.data) ? resRes.value.data : [];
 
       // 1. Tính toán chỉ số Readiness & Breakdown thực tế từ Backend
@@ -466,13 +526,15 @@ export const CareerOS: React.FC = () => {
         >
           <Compass size={16} /> Tổng quan lộ trình
         </button>
-        <button
-          type="button"
-          className={`career-tab-btn ${activeTab === 'path' ? 'active' : ''}`}
-          onClick={() => setActiveTab('path')}
-        >
-          <TrendingUp size={16} /> Chi tiết chặng phát triển ({path.length})
-        </button>
+        {isPaidTier && (
+          <button
+            type="button"
+            className={`career-tab-btn ${activeTab === 'path' ? 'active' : ''}`}
+            onClick={() => setActiveTab('path')}
+          >
+            <TrendingUp size={16} /> Chi tiết chặng phát triển ({path.length})
+          </button>
+        )}
         <button
           type="button"
           className={`career-tab-btn ${activeTab === 'memory' ? 'active' : ''}`}
@@ -480,13 +542,15 @@ export const CareerOS: React.FC = () => {
         >
           <BrainCircuit size={16} /> Bộ nhớ AI Memory ({memory.recentEvents.length})
         </button>
-        <button
-          type="button"
-          className={`career-tab-btn ${activeTab === 'learning' ? 'active' : ''}`}
-          onClick={() => setActiveTab('learning')}
-        >
-          <BookOpen size={16} /> Khóa học & Tài nguyên ({learning.length})
-        </button>
+        {isPaidTier && (
+          <button
+            type="button"
+            className={`career-tab-btn ${activeTab === 'learning' ? 'active' : ''}`}
+            onClick={() => setActiveTab('learning')}
+          >
+            <BookOpen size={16} /> Khóa học & Tài nguyên ({learning.length})
+          </button>
+        )}
       </div>
 
       {/* Tab Content */}
@@ -589,7 +653,7 @@ export const CareerOS: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'path' && (
+            {isPaidTier && activeTab === 'path' && (
               <div className="career-card-glass">
                 <div className="card-glass-header">
                   <h3 className="card-glass-title">
@@ -734,7 +798,7 @@ export const CareerOS: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'learning' && (
+            {isPaidTier && activeTab === 'learning' && (
               <div className="career-card-glass">
                 <div className="card-glass-header">
                   <h3 className="card-glass-title">

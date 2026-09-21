@@ -150,7 +150,7 @@ const AdminPlans: React.FC = () => {
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="admin-page-title">💳 Gói dịch vụ</h1>
-          <p className="admin-page-subtitle">Quản lý các gói dịch vụ và giá cước của HireMate đồng bộ với cổng thanh toán.</p>
+          {/* <p className="admin-page-subtitle">Quản lý các gói dịch vụ và giá cước của HireMate đồng bộ với cổng thanh toán.</p> */}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 

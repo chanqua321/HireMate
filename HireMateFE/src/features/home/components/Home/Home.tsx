@@ -157,7 +157,7 @@ export const Home: React.FC = () => {
   return (
     <div className="hm-homepage lusion-architecture">
       {/* LAYER 0: CUSTOM MAGNETIC GLOWING CURSOR */}
-      <CustomCursor />
+      
 
       {/* LAYER 1: WEBGL 3D THREE.JS PARTICLE TUNNEL BACKGROUND */}
       <ThreeCanvasBackground />

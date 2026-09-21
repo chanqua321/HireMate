@@ -207,9 +207,9 @@ const AdminDashboard: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div>
             <h1 className="admin-page-title">Trung Tâm Điều Hành Quản Trị</h1>
-            <p className="admin-page-subtitle">
+            {/* <p className="admin-page-subtitle">
               Báo cáo hiệu suất hệ thống thời gian thực từ HireMate API (.NET 8)
-            </p>
+            </p> */}
           </div>
         </div>
       </div>
@@ -321,7 +321,7 @@ const AdminDashboard: React.FC = () => {
       {/* Middle Grid: Analytical Deep Dive */}
       <div className="admin-grid-2" style={{ marginBottom: 24 }}>
         {/* Visual Analytics 1: Thống Kê Vận Hành Toàn Sàn */}
-        <div className="admin-card">
+        {/* <div className="admin-card">
           <div className="admin-card-header">
             <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <TrendingUp size={18} color="#0085FF" /> Thống Kê Vận Hành Toàn Sàn
@@ -359,7 +359,7 @@ const AdminDashboard: React.FC = () => {
               <b style={{ color: '#001B3F', fontSize: '0.938rem' }}>{revenue?.premiumUsers ?? 0} tài khoản</b>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Visual Analytics 2: Top Positions */}
         <div className="admin-card">
@@ -449,7 +449,6 @@ const AdminDashboard: React.FC = () => {
                   <th>Tài khoản</th>
                   <th>Gói</th>
                   <th>Trạng thái</th>
-                  <th style={{ textAlign: 'right' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -465,29 +464,12 @@ const AdminDashboard: React.FC = () => {
                         <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{u.email}</div>
                       </td>
                       <td>
-                        <span className={`admin-badge ${u.isPremium ? 'primary' : 'neutral'}`} style={{ fontWeight: 650 }}>
+                        <span className={`admin-badge ${u.isPremium ? 'purple' : 'neutral'}`} style={{ fontWeight: 650 }}>
                           {u.isPremium ? '⭐ Premium' : 'Free'}
                         </span>
                       </td>
                       <td>
                         {statusBadge(isLocked ? 'locked' : 'active')}
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        {isSelf ? (
-                          <span className="admin-badge neutral" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                            Tài khoản hiện tại
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleToggleLock(u)}
-                            disabled={isBusy}
-                            className={`admin-action-btn-sm ${isLocked ? 'unlock' : 'lock'}`}
-                            title={isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
-                          >
-                            {isLocked ? <Unlock size={13} /> : <Lock size={13} />}
-                            <span>{isLocked ? 'Mở khóa' : 'Khóa'}</span>
-                          </button>
-                        )}
                       </td>
                     </tr>
                   );
