@@ -4,11 +4,14 @@ using HireMate.BuildingBlocks;
 
 using Common;
 using Common.DTOs.InterviewDto;
+using Common.DTOs.OnboardingDto;
 using Common.DTOs.PublicDto;
+using Infrastructure.Data;
 using Infrastructure.IUnitOfWork;
 using Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace HireMate.Modules.Interview.Services;
@@ -16,12 +19,43 @@ namespace HireMate.Modules.Interview.Services;
 public class InterviewService(
     UserManager<UserAccount> userManager,
     IUnitOfWork unitOfWork,
-    IAiQuotaService aiQuota) : IInterviewService
+    HireMateContext db,
+    IAiQuotaService aiQuota,
+    ISpeechToTextService speechToText,
+    ILogger<InterviewService> logger) : IInterviewService
 {
-    private const int FreeMonthlyLimit = 3;
+    private const int FreeMonthlyLimit = 3; // legacy alias — dùng PlanTier.MonthlyInterviewSessions
+    private const long MaxVoiceAudioBytes = 10 * 1024 * 1024; // 10 MB
     private readonly UserManager<UserAccount> _userManager = userManager;
     private readonly IUnitOfWork _unitOfWork = unitOfWork;
+    private readonly HireMateContext _db = db;
     private readonly IAiQuotaService _aiQuota = aiQuota;
+    private readonly ISpeechToTextService _speechToText = speechToText;
+    private readonly ILogger<InterviewService> _logger = logger;
+
+    public async Task<IServiceResult> BuildContextAsync(Guid userId, BuildInterviewContextDto dto)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
+        if (!user.OnboardingCompleted)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Vui lòng hoàn thiện hồ sơ (Confirm CV) trước khi phỏng vấn");
+
+        var profile = await _unitOfWork.CareerProfileRepository.GetQueryable().AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+        var (cvStatus, cv) = await ResolveOperationCvAsync(userId, dto.CvDocumentId, profile);
+        if (cvStatus == OpCvStatus.NotFound)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy CV");
+        if (cvStatus == OpCvStatus.ActiveRequired)
+            return ActiveCvRequiredResult("Hãy kích hoạt một CV trước khi phỏng vấn.");
+        if (cv == null)
+            return await CvInterviewGateFailAsync(userId, "Cần CV đã phân tích thành công làm ngữ cảnh phỏng vấn");
+
+        var jdText = await ResolveJdTextAsync(userId, dto.JobDescriptionId, dto.JobDescription);
+        var context = await BuildPersonalizedProfileAsync(user, profile, cv, dto.Position, dto.Industry, jdText, dto.JobDescriptionId);
+        // Không trừ interview quota; không gọi AI (heuristic) — không trừ AI char
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, context);
+    }
 
     public async Task<IServiceResult> CreateSessionAsync(Guid userId, CreateInterviewSessionDto dto)
     {
@@ -31,33 +65,101 @@ public class InterviewService(
 
         if (!user.OnboardingCompleted)
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Vui lòng hoàn thiện hồ sơ (cần CV) trước khi bắt đầu phỏng vấn");
+        if (user.PlanSelectedAt == null)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Vui lòng chọn gói trước khi bắt đầu phỏng vấn");
 
         await _aiQuota.RefreshExpiryAsync(user);
-        var planBlock = await _aiQuota.RequireActivePlanAsync(user, minRank: 1);
-        if (planBlock != null)
-            return planBlock;
 
-        if (dto.Mode.Equals("Voice", StringComparison.OrdinalIgnoreCase))
+        var mode = string.IsNullOrWhiteSpace(dto.Mode) ? "Text" : dto.Mode.Trim();
+        var isVoice = mode.Equals("Voice", StringComparison.OrdinalIgnoreCase);
+        if (isVoice)
+            mode = "Voice";
+        else
+            mode = "Text";
+
+        if (isVoice)
         {
-            var voiceBlock = await _aiQuota.RequireActivePlanAsync(user, minRank: 2);
-            if (voiceBlock != null)
-                return voiceBlock;
+            if (!await _aiQuota.IsVoiceAllowedAsync(user))
+            {
+                return new ServiceResult(Const.FAIL_QUOTA_CODE,
+                    "VOICE_NOT_ENTITLED: Voice Interview chỉ dành cho gói Tiêu chuẩn và Cao cấp.",
+                    new { errorCode = "VOICE_NOT_ENTITLED" });
+            }
         }
+
+        var planCode = await _aiQuota.GetEffectivePlanCodeAsync(user);
+
+        // CV ownership / Active resolution BEFORE interview quota consumption.
+        var profile = await _unitOfWork.CareerProfileRepository.GetQueryable().AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+        var (cvStatus, cv) = await ResolveOperationCvAsync(userId, dto.CvDocumentId, profile);
+        if (cvStatus == OpCvStatus.NotFound)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy CV");
+        if (cvStatus == OpCvStatus.ActiveRequired)
+            return ActiveCvRequiredResult("Hãy kích hoạt một CV trước khi luyện phỏng vấn.");
+        if (cv == null)
+            return await CvInterviewGateFailAsync(userId, "Cần CV đã phân tích thành công trước khi luyện phỏng vấn");
+
+        var limit = PlanTier.MonthlyInterviewSessions(planCode);
+        var used = await CountSessionsThisMonthAsync(userId);
+        if (used >= limit)
+            return new ServiceResult(Const.FAIL_QUOTA_CODE,
+                $"Đã hết hạn mức {limit} phiên phỏng vấn/tháng của gói {PlanTier.DisplayName(planCode)}. Nâng cấp hoặc đợi chu kỳ mới.");
+
+        var qCount = dto.QuestionCount is int qc and > 0
+            ? Math.Clamp(qc, 3, PlanTier.QuestionsPerSession(planCode))
+            : PlanTier.QuestionsPerSession(planCode);
+
+        var industry = string.IsNullOrWhiteSpace(dto.Industry)
+            ? (profile?.DesiredIndustry ?? "Công nghệ thông tin")
+            : dto.Industry.Trim();
+        var position = dto.Position.Trim();
+
+        var jdText = await ResolveJdTextAsync(userId, dto.JobDescriptionId, dto.JobDescription);
+
+        object contextObj;
+        if (!string.IsNullOrWhiteSpace(dto.ContextJson))
+        {
+            try { contextObj = JsonSerializer.Deserialize<JsonElement>(dto.ContextJson); }
+            catch { contextObj = await BuildPersonalizedProfileAsync(user, profile, cv, position, industry, jdText, dto.JobDescriptionId); }
+        }
+        else
+            contextObj = await BuildPersonalizedProfileAsync(user, profile, cv, position, industry, jdText, dto.JobDescriptionId);
 
         var session = new InterviewSession
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Industry = dto.Industry,
-            Position = dto.Position,
-            Difficulty = string.IsNullOrWhiteSpace(dto.Difficulty) ? "Medium" : dto.Difficulty,
-            Mode = string.IsNullOrWhiteSpace(dto.Mode) ? "Text" : dto.Mode,
+            Industry = industry,
+            Position = position,
+            Difficulty = "Personalized",
+            Mode = mode,
             Status = "Setup",
-            QuestionCount = dto.QuestionCount <= 0 ? 5 : dto.QuestionCount,
-            StartedAt = DateTime.UtcNow
+            QuestionCount = qCount,
+            StartedAt = DateTime.UtcNow,
+            // Voice: quota consumed only when VoiceStartedAt is set (StartVoice).
+            VoiceStartedAt = null,
+            FeedbackSummary = Truncate($"JD:{(jdText ?? "").Trim()}", 2000)
         };
 
         await _unitOfWork.InterviewSessionRepository.CreateAsync(session);
+        await _unitOfWork.CareerMemoryEventRepository.CreateAsync(new CareerMemoryEvent
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            EventType = CareerMemoryTypes.InterviewContext,
+            RefId = session.Id,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                position,
+                industry,
+                jobDescription = jdText,
+                jobDescriptionId = dto.JobDescriptionId,
+                cvDocumentId = cv.Id,
+                context = contextObj
+            }),
+            CreatedAt = DateTime.UtcNow
+        });
         await _unitOfWork.SaveChangesAsync();
 
         return new ServiceResult(Const.SUCCESS_CREATE_CODE, Const.SUCCESS_CREATE_MSG, MapSummary(session));
@@ -91,19 +193,37 @@ public class InterviewService(
             return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, reuse);
         }
 
-        var picked = await PickQuestionsAsync(session.Industry, session.Position, session.Difficulty, session.QuestionCount);
-        if (picked.Count == 0)
-            return new ServiceResult(Const.FAIL_READ_CODE, "Ngân hàng câu hỏi hiện không có dữ liệu");
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user == null)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
+
+        var contextJson = await LoadContextPayloadAsync(userId, sessionId);
+        var generated = await GeneratePersonalizedQuestionsAsync(user, session, contextJson);
+        if (generated.Count == 0)
+        {
+            var picked = await PickQuestionsAsync(session.Industry, session.Position, session.QuestionCount, userId);
+            generated = picked.Select((q, i) => new InterviewQuestionDto
+            {
+                QuestionId = q.Id,
+                OrderIndex = i,
+                Content = q.Content,
+                Hint = q.Hint,
+                Category = q.Category
+            }).ToList();
+        }
+
+        if (generated.Count == 0)
+            return new ServiceResult(Const.FAIL_READ_CODE, "Không tạo được câu hỏi phỏng vấn. Thử lại hoặc kiểm tra hạn mức AI.");
 
         var result = new List<InterviewQuestionDto>();
-        for (var i = 0; i < picked.Count; i++)
+        for (var i = 0; i < generated.Count; i++)
         {
-            var q = picked[i];
+            var q = generated[i];
             var answer = new InterviewAnswer
             {
                 Id = Guid.NewGuid(),
                 SessionId = session.Id,
-                QuestionId = q.Id,
+                QuestionId = q.QuestionId == Guid.Empty ? null : q.QuestionId,
                 OrderIndex = i,
                 QuestionText = q.Content,
                 Skipped = false,
@@ -112,7 +232,7 @@ public class InterviewService(
             await _unitOfWork.InterviewAnswerRepository.CreateAsync(answer);
             result.Add(new InterviewQuestionDto
             {
-                QuestionId = q.Id,
+                QuestionId = answer.QuestionId ?? Guid.Empty,
                 OrderIndex = i,
                 Content = q.Content,
                 Hint = q.Hint,
@@ -121,7 +241,7 @@ public class InterviewService(
         }
 
         session.Status = "InProgress";
-        session.QuestionCount = picked.Count;
+        session.QuestionCount = result.Count;
         await _unitOfWork.SaveChangesAsync();
 
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, result);
@@ -136,11 +256,24 @@ public class InterviewService(
         if (session.Status is "Completed" or "Abandoned")
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Phiên phỏng vấn đã kết thúc");
 
+        var voiceGate = EnsureVoiceSessionActive(session);
+        if (voiceGate != null)
+            return voiceGate;
+
         if (session.Status == "Setup")
             session.Status = "InProgress";
 
         var answer = await _unitOfWork.InterviewAnswerRepository.GetQueryable()
             .FirstOrDefaultAsync(a => a.SessionId == sessionId && a.OrderIndex == dto.OrderIndex);
+
+        // Idempotent: already answered → return existing analysis, do not overwrite / re-bill AI.
+        if (answer != null
+            && !string.IsNullOrWhiteSpace(answer.AnswerText)
+            && !answer.Skipped
+            && !dto.Skipped)
+        {
+            return await BuildAnswerSubmitResultAsync(answer, sessionId, dto.OrderIndex, idempotent: true);
+        }
 
         if (answer == null)
         {
@@ -148,26 +281,120 @@ public class InterviewService(
             {
                 Id = Guid.NewGuid(),
                 SessionId = sessionId,
-                QuestionId = dto.QuestionId,
+                QuestionId = dto.QuestionId is { } createQid && createQid != Guid.Empty ? createQid : null,
                 OrderIndex = dto.OrderIndex,
-                QuestionText = dto.QuestionText ?? string.Empty
+                QuestionText = dto.QuestionText ?? string.Empty,
+                IsFollowUp = false
             };
-            await _unitOfWork.InterviewAnswerRepository.CreateAsync(answer);
+            try
+            {
+                await _unitOfWork.InterviewAnswerRepository.CreateAsync(answer);
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Concurrent create on unique (SessionId, OrderIndex) — reload and treat as idempotent if answered.
+                _db.ChangeTracker.Clear();
+                answer = await _unitOfWork.InterviewAnswerRepository.GetQueryable()
+                    .FirstOrDefaultAsync(a => a.SessionId == sessionId && a.OrderIndex == dto.OrderIndex);
+                if (answer != null && !string.IsNullOrWhiteSpace(answer.AnswerText) && !answer.Skipped)
+                    return await BuildAnswerSubmitResultAsync(answer, sessionId, dto.OrderIndex, idempotent: true);
+                if (answer == null)
+                    return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không thể lưu câu trả lời (xung đột). Thử lại.");
+            }
         }
 
-        answer.QuestionId ??= dto.QuestionId;
+        // AI-generated questions use QuestionId=null; clients may send Guid.Empty — never persist Empty (FK).
+        if (answer.QuestionId == null
+            && dto.QuestionId is { } qid
+            && qid != Guid.Empty)
+        {
+            answer.QuestionId = qid;
+        }
         if (!string.IsNullOrWhiteSpace(dto.QuestionText))
             answer.QuestionText = dto.QuestionText;
         answer.AnswerText = dto.AnswerText;
         answer.Skipped = dto.Skipped || string.IsNullOrWhiteSpace(dto.AnswerText);
         answer.DurationSec = Math.Max(0, dto.DurationSec);
 
+        // Persist raw answer BEFORE AI analysis (must survive AI failure)
         await _unitOfWork.SaveChangesAsync();
+
+        AnswerAnalysisDto? analysisDto = null;
+        object? followUp = null;
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+
+        if (user != null && !answer.Skipped && !string.IsNullOrWhiteSpace(answer.AnswerText))
+        {
+            var category = await ResolveQuestionCategoryAsync(answer);
+            answer.QuestionCategory = category;
+
+            var profile = await _unitOfWork.CareerProfileRepository.GetQueryable().AsNoTracking()
+                .FirstOrDefaultAsync(p => p.UserId == userId);
+            var contextPayload = await LoadContextPayloadAsync(userId, sessionId);
+
+            analysisDto = await AnalyzeAnswerWithAiAsync(user, session, answer, category, profile, contextPayload);
+            ApplyAnalysisToAnswer(answer, analysisDto);
+            await _unitOfWork.SaveChangesAsync();
+
+            // Max 1 follow-up per main question — never follow-up a follow-up
+            if (!answer.IsFollowUp && analysisDto.NeedsFollowUp)
+            {
+                var nextIndex = dto.OrderIndex + 1;
+                var hasNext = await _unitOfWork.InterviewAnswerRepository.GetQueryable().AsNoTracking()
+                    .AnyAsync(a => a.SessionId == sessionId && a.OrderIndex == nextIndex);
+                var totalPlanned = session.QuestionCount;
+
+                if (!hasNext && nextIndex < totalPlanned + 2) // allow one adaptive slot beyond planned
+                {
+                    var fu = await TryGenerateFollowUpAsync(user, session, answer, analysisDto);
+                    if (!string.IsNullOrWhiteSpace(fu))
+                    {
+                        var follow = new InterviewAnswer
+                        {
+                            Id = Guid.NewGuid(),
+                            SessionId = sessionId,
+                            OrderIndex = nextIndex,
+                            QuestionText = fu,
+                            QuestionCategory = "Follow-up",
+                            IsFollowUp = true,
+                            Skipped = false,
+                            DurationSec = 0
+                        };
+                        await _unitOfWork.InterviewAnswerRepository.CreateAsync(follow);
+                        await _unitOfWork.SaveChangesAsync();
+                        followUp = new InterviewQuestionDto
+                        {
+                            QuestionId = Guid.Empty,
+                            OrderIndex = nextIndex,
+                            Content = fu,
+                            Category = "Follow-up",
+                            Hint = analysisDto.FollowUpReason ?? "Cần đào sâu evidence / STAR gap"
+                        };
+                    }
+                }
+            }
+        }
+
+        var evidenceGap = analysisDto?.EvidenceGap
+            ?? (!answer.Skipped && LooksLikeEvidenceGap(answer.AnswerText));
+
         return new ServiceResult(Const.SUCCESS_UPDATE_CODE, Const.SUCCESS_UPDATE_MSG, new
         {
+            answerId = answer.Id,
             answer.OrderIndex,
+            answerText = answer.AnswerText,
             answer.Skipped,
-            answer.DurationSec
+            answer.DurationSec,
+            evidenceGap,
+            analysisAvailable = answer.AnalysisAvailable,
+            analysis = analysisDto,
+            evidence = analysisDto == null ? null : new
+            {
+                status = analysisDto.EvidenceStatus,
+                detail = analysisDto.EvidenceJson
+            },
+            followUp
         });
     }
 
@@ -188,22 +415,45 @@ public class InterviewService(
         if (answers.Count == 0)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Chưa có câu trả lời để chấm điểm");
 
-        var score = await ScoreWithAiOrHeuristicAsync(user, session.Id, answers, session.Position, session.Industry);
-        session.OverallScore = score.Overall;
-        session.ScoreS = score.S;
-        session.ScoreT = score.T;
-        session.ScoreA = score.A;
-        session.ScoreR = score.R;
-        session.ClarityScore = score.Clarity;
-        session.FeedbackSummary = score.FeedbackSummary;
+        var structured = StructuredFeedbackBuilder.Build(session, answers);
+        var (s, t, a, r, clarity) = StructuredFeedbackBuilder.DeriveStarAndClarity(answers);
+
+        // Legacy sessions without per-answer analysis: STAR heuristic only (does not invent per-answer scores).
+        if (!answers.Any(x => x.AnalysisAvailable))
+        {
+            var heur = StarHeuristicScorer.Score(answers);
+            s = heur.S;
+            t = heur.T;
+            a = heur.A;
+            r = heur.R;
+            clarity = heur.Clarity;
+            structured.OverallScore ??= heur.Overall;
+            if (string.IsNullOrWhiteSpace(structured.Summary) || structured.Summary.Contains("Chưa đủ dữ liệu"))
+                structured.Summary = heur.FeedbackSummary;
+        }
+
+        // One AI call for narrative only — never re-score. Replaces previous interview_score AI call (no double-charge).
+        await EnrichFeedbackNarrativeAsync(user, session.Id, structured, answers);
+
+        session.OverallScore = structured.OverallScore;
+        session.ScoreS = s;
+        session.ScoreT = t;
+        session.ScoreA = a;
+        session.ScoreR = r;
+        session.ClarityScore = clarity;
+        session.FeedbackSummary = Truncate(structured.Summary ?? "", 2000);
+        session.StructuredFeedbackJson = JsonSerializer.Serialize(structured, FeedbackJsonOptions);
         session.Status = "Completed";
         session.CompletedAt = DateTime.UtcNow;
+
+        // Learning signals from structured feedback (deterministic). AI narrative failure does not block this.
+        await CareerMemoryLearningService.UpsertFromFeedbackAsync(_unitOfWork, userId, session, structured, answers);
 
         var memory = new CareerMemoryEvent
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            EventType = "InterviewCompleted",
+            EventType = CareerMemoryTypes.InterviewCompleted,
             RefId = session.Id,
             PayloadJson = JsonSerializer.Serialize(new
             {
@@ -214,7 +464,15 @@ public class InterviewService(
                 session.ScoreT,
                 session.ScoreA,
                 session.ScoreR,
-                session.ClarityScore
+                session.ClarityScore,
+                session.FeedbackSummary,
+                strengths = structured.Strengths.Select(x => x.Area).ToList(),
+                weaknesses = structured.Weaknesses.Count > 0
+                    ? structured.Weaknesses.Select(x => x.Area).ToList()
+                    : ExtractWeaknessHints(session.FeedbackSummary),
+                skillGaps = structured.SkillGaps.Select(x => x.Area).ToList(),
+                evidenceGaps = structured.EvidenceGaps.Count,
+                readiness = session.OverallScore
             }),
             CreatedAt = DateTime.UtcNow
         };
@@ -222,6 +480,31 @@ public class InterviewService(
         await _unitOfWork.SaveChangesAsync();
 
         return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Hoàn thành phỏng vấn", MapDetail(session));
+    }
+
+    public async Task<IServiceResult> GetFeedbackAsync(Guid userId, Guid sessionId)
+    {
+        var session = await GetOwnedSessionAsync(userId, sessionId, includeAnswers: true, asNoTracking: true);
+        if (session == null)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
+
+        if (session.Status != "Completed")
+            return new ServiceResult(Const.FAIL_READ_CODE, "Feedback đầy đủ chỉ khả dụng khi phiên đã hoàn thành.");
+
+        var feedback = TryDeserializeFeedback(session.StructuredFeedbackJson);
+        if (feedback == null)
+        {
+            var answers = session.Answers.OrderBy(a => a.OrderIndex).ToList();
+            feedback = StructuredFeedbackBuilder.Build(session, answers);
+            feedback.Summary ??= session.FeedbackSummary;
+        }
+
+        feedback.SessionId = session.Id;
+        feedback.OverallScore ??= session.OverallScore;
+        if (string.IsNullOrWhiteSpace(feedback.Summary))
+            feedback.Summary = session.FeedbackSummary;
+
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, feedback);
     }
 
     public async Task<IServiceResult> GetHistoryAsync(Guid userId)
@@ -253,10 +536,7 @@ public class InterviewService(
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
         if (!user.OnboardingCompleted)
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Vui lòng hoàn thiện hồ sơ (cần CV) trước.");
-        var planBlock = await _aiQuota.RequireActivePlanAsync(user, minRank: 1);
-        if (planBlock != null)
-            return planBlock;
-
+        // Free cũng được gợi ý STAR — trừ AI char budget
         var system = "Write a strong STAR sample answer in Vietnamese.";
         var userPrompt = $"Question: {dto.QuestionText}\nUser draft: {dto.UserAnswer}\nViết mẫu STAR ngắn gọn.";
         var quotaBlock = await _aiQuota.EnsureCanCallAsync(user, system.Length + userPrompt.Length);
@@ -273,23 +553,316 @@ public class InterviewService(
         });
     }
 
-    public async Task<IServiceResult> UploadVoiceAsync(Guid userId, Guid sessionId, Stream audio, string fileName)
+    public async Task<IServiceResult> StartVoiceAsync(Guid userId, Guid sessionId)
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null || user.IsDeleted)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
-        var voiceBlock = await _aiQuota.RequireActivePlanAsync(user, minRank: 2);
-        if (voiceBlock != null)
-            return voiceBlock;
 
         var session = await GetOwnedSessionAsync(userId, sessionId);
         if (session == null)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
 
-        // STT chưa sẵn sàng — không trả transcript giả
-        return new ServiceResult(Const.FAIL_CREATE_CODE,
-            "Chuyển giọng nói thành văn bản chưa được cấu hình. Vui lòng dùng chế độ văn bản.");
+        if (!session.Mode.Equals("Voice", StringComparison.OrdinalIgnoreCase))
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Phiên này không phải Voice Interview");
+
+        if (session.Status is "Completed" or "Abandoned")
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Phiên phỏng vấn đã kết thúc");
+
+        // Idempotent: already started → no second consume
+        if (session.VoiceStartedAt != null)
+        {
+            var expiresAlready = session.VoiceStartedAt.Value.Add(PlanTier.VoiceMaxDuration);
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Voice session đã bắt đầu", new
+            {
+                errorCode = (string?)null,
+                sessionId = session.Id,
+                voiceStartedAt = session.VoiceStartedAt,
+                voiceExpiresAt = expiresAlready,
+                maxMinutes = PlanTier.VoiceMaxMinutes,
+                idempotent = true
+            });
+        }
+
+        if (!await _aiQuota.IsVoiceAllowedAsync(user))
+        {
+            _logger.LogInformation("Voice entitlement denied for user {UserId}", userId);
+            return new ServiceResult(Const.FAIL_QUOTA_CODE,
+                "VOICE_NOT_ENTITLED: Voice Interview chỉ dành cho gói Tiêu chuẩn và Cao cấp.",
+                new { errorCode = "VOICE_NOT_ENTITLED" });
+        }
+
+        var planCode = await _aiQuota.GetEffectivePlanCodeAsync(user);
+        var limit = PlanTier.MonthlyInterviewSessions(planCode);
+        var used = await CountSessionsThisMonthAsync(userId);
+        if (used >= limit)
+            return new ServiceResult(Const.FAIL_QUOTA_CODE,
+                $"Đã hết hạn mức {limit} phiên phỏng vấn/tháng của gói {PlanTier.DisplayName(planCode)}.");
+
+        // Consume = set VoiceStartedAt (counted by quota queries). Save failure → not counted.
+        session.VoiceStartedAt = DateTime.UtcNow;
+        session.StartedAt = session.VoiceStartedAt.Value;
+        if (session.Status == "Setup")
+            session.Status = "InProgress";
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Voice start failed before commit for session {SessionId}", sessionId);
+            session.VoiceStartedAt = null;
+            return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                "Không thể bắt đầu Voice session. Thử lại.",
+                new { errorCode = "VOICE_SESSION_NOT_ACTIVE" });
+        }
+
+        _logger.LogInformation("Voice session started {SessionId} user {UserId}", sessionId, userId);
+        var expires = session.VoiceStartedAt.Value.Add(PlanTier.VoiceMaxDuration);
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Voice session đã bắt đầu", new
+        {
+            sessionId = session.Id,
+            voiceStartedAt = session.VoiceStartedAt,
+            voiceExpiresAt = expires,
+            maxMinutes = PlanTier.VoiceMaxMinutes,
+            idempotent = false
+        });
     }
+
+    public async Task<IServiceResult> UploadVoiceAsync(
+        Guid userId,
+        Guid sessionId,
+        Stream audio,
+        string fileName,
+        string contentType,
+        long contentLength,
+        int orderIndex,
+        Guid? questionId,
+        string? questionText,
+        int durationSec)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user == null || user.IsDeleted)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
+
+        if (!await _aiQuota.IsVoiceAllowedAsync(user))
+            return new ServiceResult(Const.FAIL_QUOTA_CODE,
+                "VOICE_NOT_ENTITLED: Voice Interview chỉ dành cho gói Tiêu chuẩn và Cao cấp.",
+                new { errorCode = "VOICE_NOT_ENTITLED" });
+
+        var session = await GetOwnedSessionAsync(userId, sessionId);
+        if (session == null)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
+
+        if (!session.Mode.Equals("Voice", StringComparison.OrdinalIgnoreCase))
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Phiên này không phải Voice Interview");
+
+        var voiceGate = EnsureVoiceSessionActive(session);
+        if (voiceGate != null)
+            return voiceGate;
+
+        // Idempotent before STT — avoid duplicate transcription / answer rows.
+        var existingAnswer = await _unitOfWork.InterviewAnswerRepository.GetQueryable().AsNoTracking()
+            .FirstOrDefaultAsync(a => a.SessionId == sessionId && a.OrderIndex == orderIndex);
+        if (existingAnswer != null
+            && !string.IsNullOrWhiteSpace(existingAnswer.AnswerText)
+            && !existingAnswer.Skipped)
+        {
+            return await BuildAnswerSubmitResultAsync(existingAnswer, sessionId, orderIndex, idempotent: true);
+        }
+
+        if (contentLength <= 0 || contentLength > MaxVoiceAudioBytes)
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "File audio không hợp lệ hoặc vượt quá 10MB.",
+                new { errorCode = "VOICE_AUDIO_INVALID" });
+
+        await using var buffer = new MemoryStream();
+        await audio.CopyToAsync(buffer);
+        if (buffer.Length <= 0 || buffer.Length > MaxVoiceAudioBytes)
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "File audio không hợp lệ hoặc vượt quá 10MB.",
+                new { errorCode = "VOICE_AUDIO_INVALID" });
+
+        if (!LooksLikeAudio(buffer, contentType, fileName))
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "Định dạng audio không được hỗ trợ. Dùng webm/ogg/wav/mp3.",
+                new { errorCode = "VOICE_AUDIO_INVALID" });
+
+        buffer.Position = 0;
+        var stt = await _speechToText.TranscribeAsync(buffer, fileName, contentType);
+        // Audio is not persisted; buffer disposed by await using (do not SetLength —
+        // Whisper StreamContent disposes the stream, which makes SetLength throw).
+
+        if (!stt.Ok)
+        {
+            _logger.LogInformation("Voice transcription failed session {SessionId}", sessionId);
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "VOICE_TRANSCRIPTION_FAILED: Không chuyển được giọng nói thành văn bản. Thử ghi lại.",
+                new { errorCode = "VOICE_TRANSCRIPTION_FAILED", provider = stt.Provider });
+        }
+
+        if (string.IsNullOrWhiteSpace(stt.Transcript))
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "VOICE_EMPTY_TRANSCRIPT: Không nhận được nội dung giọng nói. Hãy nói rõ hơn và thử lại.",
+                new { errorCode = "VOICE_EMPTY_TRANSCRIPT" });
+
+        _logger.LogInformation("Voice transcription succeeded session {SessionId}", sessionId);
+
+        // Reuse existing answer analysis pipeline — no Voice-specific analysis.
+        return await SubmitAnswerAsync(userId, sessionId, new SubmitAnswerDto
+        {
+            OrderIndex = orderIndex,
+            QuestionId = questionId,
+            QuestionText = questionText,
+            AnswerText = Truncate(stt.Transcript, 4000),
+            Skipped = false,
+            DurationSec = Math.Max(0, durationSec)
+        });
+    }
+
+    private async Task<IServiceResult> BuildAnswerSubmitResultAsync(
+        InterviewAnswer answer,
+        Guid sessionId,
+        int orderIndex,
+        bool idempotent)
+    {
+        AnswerAnalysisDto? analysisDto = null;
+        if (!string.IsNullOrWhiteSpace(answer.AnalysisJson))
+        {
+            try
+            {
+                analysisDto = JsonSerializer.Deserialize<AnswerAnalysisDto>(answer.AnalysisJson, FeedbackJsonOptions);
+            }
+            catch { /* fall through */ }
+        }
+
+        analysisDto ??= new AnswerAnalysisDto
+        {
+            AnalysisAvailable = answer.AnalysisAvailable,
+            Relevance = answer.RelevanceScore,
+            Completeness = answer.CompletenessScore,
+            TechnicalKnowledge = answer.TechnicalKnowledgeScore,
+            ProblemSolving = answer.ProblemSolvingScore,
+            Communication = answer.CommunicationScore,
+            StarScore = answer.StarScore,
+            StarSituation = answer.StarHasSituation,
+            StarTask = answer.StarHasTask,
+            StarAction = answer.StarHasAction,
+            StarResult = answer.StarHasResult,
+            CvConsistency = answer.CvConsistencyScore,
+            EvidenceStatus = answer.EvidenceStatus,
+            EvidenceJson = answer.EvidenceJson,
+            FollowUpReason = answer.FollowUpReason,
+            EvidenceGap = LooksLikeEvidenceGap(answer.AnswerText)
+                || string.Equals(answer.EvidenceStatus, "MissingEvidence", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(answer.EvidenceStatus, "WeakEvidence", StringComparison.OrdinalIgnoreCase),
+            NeedsFollowUp = false
+        };
+
+        object? followUp = null;
+        var nextIndex = orderIndex + 1;
+        var next = await _unitOfWork.InterviewAnswerRepository.GetQueryable().AsNoTracking()
+            .FirstOrDefaultAsync(a => a.SessionId == sessionId && a.OrderIndex == nextIndex && a.IsFollowUp);
+        if (next != null && string.IsNullOrWhiteSpace(next.AnswerText))
+        {
+            followUp = new InterviewQuestionDto
+            {
+                QuestionId = next.QuestionId ?? Guid.Empty,
+                OrderIndex = next.OrderIndex,
+                Content = next.QuestionText,
+                Category = next.QuestionCategory ?? "Follow-up",
+                Hint = next.FollowUpReason ?? analysisDto.FollowUpReason
+            };
+        }
+
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, Const.SUCCESS_UPDATE_MSG, new
+        {
+            answerId = answer.Id,
+            answer.OrderIndex,
+            answerText = answer.AnswerText,
+            answer.Skipped,
+            answer.DurationSec,
+            evidenceGap = analysisDto.EvidenceGap,
+            analysisAvailable = answer.AnalysisAvailable,
+            analysis = analysisDto.AnalysisAvailable ? analysisDto : null,
+            evidence = analysisDto.AnalysisAvailable
+                ? new { status = analysisDto.EvidenceStatus, detail = analysisDto.EvidenceJson }
+                : null,
+            followUp,
+            idempotent
+        });
+    }
+
+    /// <summary>
+    /// Voice sessions only count after VoiceStartedAt (actual start).
+    /// Text sessions count from create (StartedAt).
+    /// </summary>
+    private async Task<int> CountSessionsThisMonthAsync(Guid userId)
+    {
+        var start = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        return await _unitOfWork.InterviewSessionRepository.GetQueryable()
+            .AsNoTracking()
+            .CountAsync(s => s.UserId == userId && s.StartedAt >= start
+                && (s.VoiceStartedAt != null || s.Mode != "Voice"));
+    }
+
+    private static IServiceResult? EnsureVoiceSessionActive(InterviewSession session)
+    {
+        if (!session.Mode.Equals("Voice", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (session.VoiceStartedAt == null)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                "VOICE_SESSION_NOT_ACTIVE: Voice session chưa bắt đầu.",
+                new { errorCode = "VOICE_SESSION_NOT_ACTIVE" });
+
+        var expires = session.VoiceStartedAt.Value.Add(PlanTier.VoiceMaxDuration);
+        if (DateTime.UtcNow >= expires)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                "VOICE_SESSION_EXPIRED: Phiên Voice đã hết 15 phút.",
+                new { errorCode = "VOICE_SESSION_EXPIRED", voiceExpiresAt = expires });
+
+        return null;
+    }
+
+    private static bool LooksLikeAudio(MemoryStream buffer, string contentType, string fileName)
+    {
+        var mime = (contentType ?? "").Split(';')[0].Trim().ToLowerInvariant();
+        if (mime is "audio/webm" or "audio/ogg" or "audio/wav" or "audio/wave" or "audio/x-wav"
+            or "audio/mpeg" or "audio/mp3" or "audio/mp4" or "audio/m4a" or "video/webm")
+            return true;
+
+        var ext = Path.GetExtension(fileName ?? "").ToLowerInvariant();
+        if (ext is ".webm" or ".ogg" or ".wav" or ".mp3" or ".m4a" or ".mp4")
+        {
+            // Soft allow by extension only if magic looks plausible or empty check already passed
+            if (buffer.Length < 4) return false;
+            var header = new byte[4];
+            buffer.Position = 0;
+            _ = buffer.Read(header, 0, 4);
+            buffer.Position = 0;
+            // OggS, RIFF, ID3, ftyp, or EBML (webm) 0x1A45DFA3
+            if (header[0] == 0x4F && header[1] == 0x67 && header[2] == 0x67 && header[3] == 0x53) return true; // OggS
+            if (header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46) return true; // RIFF
+            if (header[0] == 0x49 && header[1] == 0x44 && header[2] == 0x33) return true; // ID3
+            if (header[0] == 0x1A && header[1] == 0x45 && header[2] == 0xDF && header[3] == 0xA3) return true; // EBML/webm
+            if (header[0] == 0xFF && (header[1] & 0xE0) == 0xE0) return true; // MPEG frame
+            // webm from MediaRecorder often EBML; if unknown but size ok, allow webm/ogg extensions
+            return ext is ".webm" or ".ogg";
+        }
+
+        if (buffer.Length < 4) return false;
+        var h = new byte[4];
+        buffer.Position = 0;
+        _ = buffer.Read(h, 0, 4);
+        buffer.Position = 0;
+        if (h[0] == 0x1A && h[1] == 0x45 && h[2] == 0xDF && h[3] == 0xA3) return true;
+        if (h[0] == 0x4F && h[1] == 0x67 && h[2] == 0x67 && h[3] == 0x53) return true;
+        if (h[0] == 0x52 && h[1] == 0x49 && h[2] == 0x46 && h[3] == 0x46) return true;
+        return false;
+    }
+
 
     public async Task<IServiceResult> GetQuestionBankAsync()
     {
@@ -312,64 +885,150 @@ public class InterviewService(
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
     }
 
-    private async Task<(int Overall, int S, int T, int A, int R, int Clarity, string FeedbackSummary)> ScoreWithAiOrHeuristicAsync(
+    private static readonly JsonSerializerOptions FeedbackJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+
+    /// <summary>
+    /// Optional AI narrative for structured feedback. Scores remain deterministic from persisted analysis.
+    /// Replaces the former interview_score AI call — still at most 1 AI request on complete (no double-charge).
+    /// </summary>
+    private async Task EnrichFeedbackNarrativeAsync(
         UserAccount user,
         Guid sessionId,
-        List<InterviewAnswer> answers,
-        string position,
-        string industry)
+        StructuredFeedbackDto feedback,
+        List<InterviewAnswer> answers)
     {
         try
         {
-            var payload = string.Join("\n---\n", answers.Select(a =>
-                $"Q{a.OrderIndex}: {a.QuestionText}\nA: {(a.Skipped ? "[skipped]" : a.AnswerText)}"));
-            var system = "You are an interview coach. Score STAR answers. Return JSON only with keys: overall,s,t,a,r,clarity (ints 0-100), feedback (Vietnamese string).";
-            var userPrompt = $"Position: {position}\nIndustry: {industry}\nAnswers:\n{payload}";
-            var quotaBlock = await _aiQuota.EnsureCanCallAsync(user, system.Length + userPrompt.Length);
-            if (quotaBlock == null)
+            var input = new
             {
-                var ai = await _aiQuota.CompleteAndLogAsync(
-                    user, system, userPrompt, "interview_score", sessionId, SettingKeys.AiInterviewMaxOutputChars);
-
-                if (!ai.UsedFallback && !string.IsNullOrWhiteSpace(ai.Content))
+                overallScores = feedback.CategoryScores,
+                overallScore = feedback.OverallScore,
+                strengths = feedback.Strengths.Select(s => new { s.Area, s.Description }),
+                weaknesses = feedback.Weaknesses.Select(w => new { w.Area, w.Description, w.RelatedAnswerIds }),
+                skillGaps = feedback.SkillGaps.Select(g => new { g.Area, g.Score }),
+                evidenceGaps = feedback.EvidenceGaps.Select(g => new { g.AnswerId, g.Status, g.Gap }),
+                answers = answers.Where(a => !a.Skipped).Select(a => new
                 {
-                    var json = ExtractJsonObject(ai.Content);
-                    if (json != null)
+                    answerId = a.Id,
+                    orderIndex = a.OrderIndex,
+                    question = Truncate(a.QuestionText, 200),
+                    scores = new
                     {
-                        using var doc = JsonDocument.Parse(json);
-                        var root = doc.RootElement;
-                        int Get(string key, string alt)
-                        {
-                            if (root.TryGetProperty(key, out var v) && v.TryGetInt32(out var n)) return ClampInt(n);
-                            if (root.TryGetProperty(alt, out var v2) && v2.TryGetInt32(out var n2)) return ClampInt(n2);
-                            return -1;
-                        }
-                        var s = Get("s", "S");
-                        var t = Get("t", "T");
-                        var a = Get("a", "A");
-                        var r = Get("r", "R");
-                        var clarity = Get("clarity", "Clarity");
-                        var overall = Get("overall", "Overall");
-                        var feedback = root.TryGetProperty("feedback", out var fb) ? fb.GetString() : null;
-                        if (s >= 0 && t >= 0 && a >= 0 && r >= 0 && clarity >= 0)
-                        {
-                            if (overall < 0)
-                                overall = (int)Math.Round((s + t + a + r + clarity) / 5.0);
-                            return (overall, s, t, a, r, clarity,
-                                string.IsNullOrWhiteSpace(feedback)
-                                    ? StarHeuristicScorer.BuildFeedback(overall)
-                                    : feedback!);
-                        }
-                    }
-                }
+                        a.RelevanceScore,
+                        a.CompletenessScore,
+                        a.CommunicationScore,
+                        a.TechnicalKnowledgeScore,
+                        a.ProblemSolvingScore,
+                        a.StarScore,
+                        a.CvConsistencyScore
+                    },
+                    evidenceStatus = a.EvidenceStatus,
+                    evidence = a.EvidenceJson,
+                    followUp = a.FollowUpReason
+                })
+            };
+
+            var system =
+                "You are an interview coach. Given deterministic scores and evidence from a completed mock interview, " +
+                "write Vietnamese coaching text. Return JSON only with keys: summary (string), strengths (array of {area,description}), " +
+                "weaknesses (array of {area,description}), improvements (string array). " +
+                "Do NOT invent or change numeric scores. Do NOT accuse of fake CV unless evidenceStatus is CvInconsistency. " +
+                "MissingEvidence means insufficient proof, not lying.";
+            var userPrompt = JsonSerializer.Serialize(input, FeedbackJsonOptions);
+
+            var quotaBlock = await _aiQuota.EnsureCanCallAsync(user, system.Length + userPrompt.Length);
+            if (quotaBlock != null)
+                return;
+
+            var ai = await _aiQuota.CompleteAndLogAsync(
+                user, system, userPrompt, "interview_feedback", sessionId, SettingKeys.AiInterviewMaxOutputChars);
+
+            if (ai.UsedFallback || string.IsNullOrWhiteSpace(ai.Content))
+                return;
+
+            var json = ExtractJsonObject(ai.Content);
+            if (json == null) return;
+
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            // Ignore any overallScore the model may invent — backend scores are source of truth.
+            if (root.TryGetProperty("summary", out var sum) && sum.ValueKind == JsonValueKind.String)
+            {
+                var text = sum.GetString();
+                if (!string.IsNullOrWhiteSpace(text))
+                    feedback.Summary = Truncate(text!, 2000);
             }
+
+            if (root.TryGetProperty("strengths", out var strengths) && strengths.ValueKind == JsonValueKind.Array)
+            {
+                var mapped = MapAiFeedbackItems(strengths, feedback.Strengths);
+                if (mapped.Count > 0) feedback.Strengths = mapped;
+            }
+
+            if (root.TryGetProperty("weaknesses", out var weaknesses) && weaknesses.ValueKind == JsonValueKind.Array)
+            {
+                var mapped = MapAiFeedbackItems(weaknesses, feedback.Weaknesses);
+                if (mapped.Count > 0) feedback.Weaknesses = mapped;
+            }
+
+            if (root.TryGetProperty("improvements", out var imps) && imps.ValueKind == JsonValueKind.Array)
+            {
+                var list = imps.EnumerateArray()
+                    .Select(x => x.GetString())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x!)
+                    .Take(8)
+                    .ToList();
+                if (list.Count > 0) feedback.Improvements = list;
+            }
+
+            feedback.AiSummaryAvailable = true;
         }
         catch
         {
-            // fall through to deterministic heuristic
+            // Deterministic feedback already set — AI failure must not fail completion.
         }
+    }
 
-        return StarHeuristicScorer.Score(answers);
+    private static List<FeedbackItemDto> MapAiFeedbackItems(JsonElement arr, List<FeedbackItemDto> existing)
+    {
+        var result = new List<FeedbackItemDto>();
+        foreach (var el in arr.EnumerateArray())
+        {
+            var area = el.TryGetProperty("area", out var a) ? a.GetString() : null;
+            var desc = el.TryGetProperty("description", out var d) ? d.GetString() : null;
+            if (string.IsNullOrWhiteSpace(area) || string.IsNullOrWhiteSpace(desc)) continue;
+
+            var match = existing.FirstOrDefault(x =>
+                x.Area.Equals(area, StringComparison.OrdinalIgnoreCase));
+            result.Add(new FeedbackItemDto
+            {
+                Area = area!,
+                Description = desc!,
+                Evidence = match?.Evidence,
+                RelatedAnswerIds = match?.RelatedAnswerIds
+            });
+        }
+        return result;
+    }
+
+    private static StructuredFeedbackDto? TryDeserializeFeedback(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<StructuredFeedbackDto>(json, FeedbackJsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string? ExtractJsonObject(string content)
@@ -383,15 +1042,758 @@ public class InterviewService(
     private static int ClampInt(int n) => Math.Max(0, Math.Min(100, n));
 
     private async Task<int> CountCompletedThisMonthAsync(Guid userId)
+        => await CountSessionsThisMonthAsync(userId);
+
+    private enum OpCvStatus { Ok, NotFound, ActiveRequired, Invalid }
+
+    /// <summary>
+    /// Explicit CV → ownership → use it (no Active fallback).
+    /// Null → Active/Confirmed only. Never latest/first CV.
+    /// Does not change ConfirmedCvDocumentId / IsConfirmed.
+    /// </summary>
+    private async Task<(OpCvStatus Status, CvDocument? Cv)> ResolveOperationCvAsync(
+        Guid userId, Guid? cvDocumentId, CareerProfile? profile)
     {
-        var start = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        return await _unitOfWork.InterviewSessionRepository.GetQueryable()
-            .AsNoTracking()
-            .CountAsync(s => s.UserId == userId
-                && s.Status == "Completed"
-                && s.CompletedAt != null
-                && s.CompletedAt >= start);
+        static bool IsAnalyzedOk(CvDocument c) => c.ParseSucceeded && c.AnalyzedAt != null;
+
+        var outcome = OperationCvResolvePolicy.Decide(cvDocumentId, profile?.ConfirmedCvDocumentId);
+
+        if (outcome == OperationCvResolveOutcome.ResolveExplicit)
+        {
+            var byId = await _unitOfWork.CvDocumentRepository.GetQueryable().AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == cvDocumentId && c.UserId == userId);
+            if (OperationCvResolvePolicy.IsExplicitNotFound(cvDocumentId, byId != null))
+                return (OpCvStatus.NotFound, null);
+            if (!IsAnalyzedOk(byId!))
+                return (OpCvStatus.Invalid, null);
+            return (OpCvStatus.Ok, byId);
+        }
+
+        if (outcome == OperationCvResolveOutcome.ActiveCvRequired)
+            return (OpCvStatus.ActiveRequired, null);
+
+        // ResolveActive — ConfirmedCvDocumentId only (no latest fallback).
+        var confirmed = await _unitOfWork.CvDocumentRepository.GetQueryable().AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == profile!.ConfirmedCvDocumentId && c.UserId == userId);
+        if (confirmed == null)
+            return (OpCvStatus.ActiveRequired, null);
+        if (!IsAnalyzedOk(confirmed))
+            return (OpCvStatus.Invalid, null);
+        return (OpCvStatus.Ok, confirmed);
     }
+
+    private static IServiceResult ActiveCvRequiredResult(string detail)
+        => new ServiceResult(Const.FAIL_CREATE_CODE,
+            $"{OperationCvResolvePolicy.ActiveCvRequiredCode}: {detail}",
+            new { errorCode = OperationCvResolvePolicy.ActiveCvRequiredCode });
+
+    private async Task<IServiceResult> CvInterviewGateFailAsync(Guid userId, string fallback)
+    {
+        var hasAny = await _unitOfWork.CvDocumentRepository.GetQueryable().AsNoTracking()
+            .AnyAsync(c => c.UserId == userId);
+        if (!hasAny)
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "Bạn chưa có CV. Hãy tạo hoặc tải CV trên Dashboard trước khi luyện phỏng vấn.");
+        return new ServiceResult(Const.FAIL_CREATE_CODE,
+            "CV chưa được phân tích thành công. Mở Kho CV → xem gợi ý ATS → Phân tích lại trước khi luyện phỏng vấn.");
+    }
+
+    /// <summary>Heuristic: claim mơ hồ / thiếu chứng minh — ghi Evidence gap, không kết luận CV giả.</summary>
+    private static bool LooksLikeEvidenceGap(string? answer)
+    {
+        if (string.IsNullOrWhiteSpace(answer)) return true;
+        var t = answer.Trim().ToLowerInvariant();
+        if (t.Length < 80) return true;
+        var vague = new[]
+        {
+            "phụ trách backend", "làm backend", "tôi làm", "tôi tham gia", "có kinh nghiệm",
+            "responsible for", "i worked on", "i handled"
+        };
+        if (vague.Any(v => t.Contains(v)) && t.Length < 220)
+            return true;
+        return false;
+    }
+
+    private async Task<object> BuildPersonalizedProfileAsync(
+        UserAccount user,
+        CareerProfile? profile,
+        CvDocument cv,
+        string position,
+        string? industry,
+        string? jobDescription,
+        Guid? jobDescriptionId = null)
+    {
+        var skills = ParseJsonStringList(profile?.SkillsJson);
+        if (skills.Count == 0)
+            skills = ParseJsonStringList(profile?.HobbiesJson);
+        var experiences = ParseJsonExperiences(profile?.ExperiencesJson);
+        var projects = ParseJsonProjects(profile?.ProjectsJson);
+        var certifications = ParseJsonCertifications(profile?.CertificationsJson);
+
+        var prev = await _unitOfWork.CareerMemoryEventRepository.GetQueryable().AsNoTracking()
+            .Where(e => e.UserId == user.Id && e.EventType == CareerMemoryTypes.InterviewCompleted)
+            .OrderByDescending(e => e.CreatedAt)
+            .Take(5)
+            .Select(e => e.PayloadJson)
+            .ToListAsync();
+
+        var learning = await CareerMemoryLearningService.LoadLearningBundleAsync(
+            _unitOfWork, user.Id, CareerMemoryThresholds.LoadTake);
+
+        var careerLearning = new
+        {
+            weaknesses = learning.Weaknesses
+                .Take(CareerMemoryThresholds.ContextWeaknessLimit)
+                .Select(CompactLearningSignal),
+            skillGaps = learning.SkillGaps
+                .Take(CareerMemoryThresholds.ContextSkillGapLimit)
+                .Select(CompactLearningSignal),
+            evidenceGaps = learning.EvidenceGaps
+                .Take(CareerMemoryThresholds.ContextEvidenceGapLimit)
+                .Select(CompactLearningSignal),
+            strengths = learning.Strengths
+                .Take(CareerMemoryThresholds.ContextStrengthLimit)
+                .Select(CompactLearningSignal)
+        };
+
+        var knownWeaknessTitles = learning.Weaknesses
+            .Select(w => w.Title ?? w.MemoryKey)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t!)
+            .Take(CareerMemoryThresholds.ContextWeaknessLimit)
+            .ToList();
+
+        // Transient JD match context (NOT written to Career Memory).
+        object? jdMatchContext = null;
+        if (jobDescriptionId.HasValue)
+        {
+            var latestMatch = await _unitOfWork.JdMatchRepository.GetQueryable().AsNoTracking()
+                .Where(m => m.UserId == user.Id && m.JobDescriptionId == jobDescriptionId)
+                .OrderByDescending(m => m.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (latestMatch != null)
+            {
+                jdMatchContext = ParseJdMatchContext(latestMatch.OverallScore, latestMatch.ResultJson);
+            }
+        }
+
+        var positionTokens = Tokenize(position + " " + (jobDescription ?? ""));
+        var matched = skills.Where(s => positionTokens.Any(t => s.Contains(t, StringComparison.OrdinalIgnoreCase)
+            || t.Contains(s, StringComparison.OrdinalIgnoreCase))).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var gaps = positionTokens
+            .Where(t => t.Length > 3 && !skills.Any(s => s.Contains(t, StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .ToList();
+
+        // Fallback: if no dedicated projects, surface experience titles as project-like evidence
+        var relevantProjects = projects.Count > 0
+            ? projects.Select(p => (object)new
+            {
+                name = p.Name,
+                description = p.Description,
+                role = p.Role,
+                technologies = p.Technologies,
+                url = p.Url,
+                period = p.Period,
+                needsValidation = true
+            }).ToList()
+            : experiences.Select(e => (object)new
+            {
+                name = e.Title,
+                description = e.Description,
+                role = (string?)null,
+                technologies = (List<string>?)null,
+                url = (string?)null,
+                period = e.Period,
+                org = e.Org,
+                needsValidation = true
+            }).ToList();
+
+        var projectNames = projects
+            .Select(p => p.Name)
+            .Concat(experiences.Select(e => e.Title))
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Take(5);
+
+        return new
+        {
+            candidateExperienceLevel = profile?.ExperienceLevel,
+            bio = profile?.Bio,
+            graduationYear = profile?.GraduationYear,
+            desiredPosition = profile?.DesiredPosition,
+            desiredIndustry = profile?.DesiredIndustry,
+            relevantSkills = skills,
+            matchedSkills = matched,
+            skillGaps = gaps,
+            relevantProjects,
+            certifications,
+            evidenceAvailable = new
+            {
+                hasCvText = !string.IsNullOrWhiteSpace(cv.ExtractedText),
+                readinessScore = cv.ReadinessScore,
+                fitT1 = cv.FitT1Score,
+                education = profile?.University,
+                university = profile?.University,
+                major = profile?.Major,
+                hasProjects = projects.Count > 0,
+                hasCertifications = certifications.Count > 0,
+                hasExperiences = experiences.Count > 0
+            },
+            evidenceNeedsValidation = projectNames,
+            relevantExperience = experiences,
+            roleSpecificRequirements = positionTokens.Take(12),
+            behavioralAreas = new[] { "STAR storytelling", "Teamwork", "Conflict handling" },
+            technicalAreas = matched.Count > 0 ? matched.Take(6) : skills.Take(6),
+            problemSolvingAreas = new[] { "Debugging", "Trade-offs", "Prioritization" },
+            previousWeaknesses = knownWeaknessTitles.Count > 0
+                ? knownWeaknessTitles
+                : prev.Select(ExtractWeaknessHints).SelectMany(x => x).Distinct().Take(8).ToList(),
+            careerLearning,
+            jdMatchContext,
+            jobDescriptionId,
+            areasToExploreDeeper = gaps.Take(5)
+                .Concat(matched.Take(3))
+                .Concat(learning.EvidenceGaps.Select(e => e.Title ?? "evidence").Take(3))
+                .Distinct()
+                .Take(8),
+            targetPosition = position,
+            industry = industry ?? profile?.DesiredIndustry,
+            jobDescription = jobDescription,
+            cvDocumentId = cv.Id,
+            fullName = user.FullName
+        };
+    }
+
+    private static object ParseJdMatchContext(int overallScore, string? resultJson)
+    {
+        List<string> Read(params string[] keys)
+        {
+            if (string.IsNullOrWhiteSpace(resultJson)) return [];
+            try
+            {
+                using var doc = JsonDocument.Parse(resultJson);
+                foreach (var key in keys)
+                {
+                    if (!doc.RootElement.TryGetProperty(key, out var el) || el.ValueKind != JsonValueKind.Array)
+                        continue;
+                    return el.EnumerateArray()
+                        .Select(x => x.GetString())
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .Select(s => s!)
+                        .Take(8)
+                        .ToList();
+                }
+            }
+            catch { /* ignore */ }
+            return [];
+        }
+
+        return new
+        {
+            overallScore,
+            matchedSkills = Read("matchedSkills", "skills", "matchingSkills"),
+            missingSkillsNotEvidenced = Read("missingSkills", "gaps"),
+            keywordGaps = Read("keywordGaps", "keywords"),
+            experienceGaps = Read("experienceGaps"),
+            note = "JD missing skills are not Career Memory — interview may probe if relevant to role."
+        };
+    }
+
+    private async Task<string?> ResolveJdTextAsync(Guid userId, Guid? jobDescriptionId, string? pasted)
+    {
+        if (jobDescriptionId.HasValue)
+        {
+            var jd = await _unitOfWork.JobDescriptionRepository.GetQueryable().AsNoTracking()
+                .FirstOrDefaultAsync(j => j.Id == jobDescriptionId && j.UserId == userId && !j.IsArchived);
+            if (jd != null)
+                return jd.Content;
+        }
+        return string.IsNullOrWhiteSpace(pasted) ? null : pasted.Trim();
+    }
+
+    private static object CompactLearningSignal(LearningSignalDto s) => new
+    {
+        title = s.Title,
+        topic = s.MemoryKey != null && s.MemoryKey.Contains('|')
+            ? s.MemoryKey.Split('|')[1]
+            : s.MemoryKey,
+        occurrenceCount = s.OccurrenceCount,
+        confidence = s.Confidence,
+        recurring = s.OccurrenceCount >= CareerMemoryThresholds.RecurrenceThreshold
+    };
+
+    private static List<string> Tokenize(string text)
+    {
+        return text.Split([' ', ',', '.', '/', '|', ';', '\n', '\r', '\t', '-', '(', ')'],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(t => t.Length > 2)
+            .Select(t => t.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static List<string> ExtractWeaknessHints(string? feedback)
+    {
+        if (string.IsNullOrWhiteSpace(feedback)) return [];
+        var hints = new List<string>();
+        if (feedback.Contains("Action", StringComparison.OrdinalIgnoreCase)) hints.Add("Action depth");
+        if (feedback.Contains("Result", StringComparison.OrdinalIgnoreCase)) hints.Add("Quantified results");
+        if (feedback.Contains("cải thiện", StringComparison.OrdinalIgnoreCase)) hints.Add("General improvement");
+        if (feedback.Contains("STAR", StringComparison.OrdinalIgnoreCase)) hints.Add("STAR structure");
+        return hints;
+    }
+
+    private async Task<string?> LoadContextPayloadAsync(Guid userId, Guid sessionId)
+    {
+        var ev = await _unitOfWork.CareerMemoryEventRepository.GetQueryable().AsNoTracking()
+            .Where(e => e.UserId == userId && e.RefId == sessionId && e.EventType == CareerMemoryTypes.InterviewContext)
+            .OrderByDescending(e => e.CreatedAt)
+            .FirstOrDefaultAsync();
+        return ev?.PayloadJson;
+    }
+
+    private async Task<List<InterviewQuestionDto>> GeneratePersonalizedQuestionsAsync(
+        UserAccount user, InterviewSession session, string? contextJson)
+    {
+        var count = Math.Max(3, session.QuestionCount);
+        var learning = await CareerMemoryLearningService.LoadLearningBundleAsync(
+            _unitOfWork, user.Id, CareerMemoryThresholds.LoadTake);
+
+        var memoryHints = new
+        {
+            weaknesses = learning.Weaknesses.Take(CareerMemoryThresholds.ContextWeaknessLimit)
+                .Select(w => w.Title ?? w.MemoryKey).Where(x => !string.IsNullOrWhiteSpace(x)).ToList(),
+            skillGaps = learning.SkillGaps.Take(CareerMemoryThresholds.ContextSkillGapLimit)
+                .Select(w => w.Title ?? w.MemoryKey).Where(x => !string.IsNullOrWhiteSpace(x)).ToList(),
+            evidenceGaps = learning.EvidenceGaps.Take(CareerMemoryThresholds.ContextEvidenceGapLimit)
+                .Select(w => w.Title ?? w.MemoryKey).Where(x => !string.IsNullOrWhiteSpace(x)).ToList(),
+            strengths = learning.Strengths.Take(CareerMemoryThresholds.ContextStrengthLimit)
+                .Select(w => w.Title ?? w.MemoryKey).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+        };
+
+        var hasMemory = memoryHints.weaknesses.Count + memoryHints.skillGaps.Count
+            + memoryHints.evidenceGaps.Count + memoryHints.strengths.Count > 0;
+
+        // Soft JD personalization from context JSON if present (jdMatchContext).
+        var system =
+            "You are a hiring interviewer. Generate personalized interview questions in Vietnamese based on the candidate CV context and target role. " +
+            "Return JSON array of objects with keys: content, category, hint. " +
+            "No generic trivia unrelated to CV evidence. Compact. " +
+            "Career memory is a SOFT signal only — prefer targeting 1–2 known weaknesses/evidence gaps when relevant to position/JD/CV, " +
+            "but do NOT force the same topic every session; vary wording; still cover role-fit and Active CV evidence. " +
+            "If context includes jdMatchContext.missingSkillsNotEvidenced, you MAY ask about 0–2 of them when relevant to the role " +
+            "(e.g. containerization if Docker listed) — do not treat as proven skill gaps; phrase as exploration.";
+
+        var userPrompt =
+            $"Target position: {session.Position}\nIndustry: {session.Industry}\nCount: {count}\n" +
+            $"CareerMemory (titles only):\n{JsonSerializer.Serialize(memoryHints)}\n" +
+            (hasMemory
+                ? "Prefer probing measurable Result / evidence / known skill gaps when natural; keep most questions role-aligned.\n"
+                : "No prior learning memory — generate a balanced role-aligned set.\n") +
+            $"Context JSON:\n{(contextJson ?? "{}")}";
+
+        var quotaBlock = await _aiQuota.EnsureCanCallAsync(user, system.Length + Math.Min(userPrompt.Length, 12000));
+        if (quotaBlock != null)
+            return [];
+
+        var clipped = userPrompt.Length > 12000 ? userPrompt[..12000] : userPrompt;
+        var ai = await _aiQuota.CompleteAndLogAsync(
+            user, system, clipped, "interview_questions", session.Id, SettingKeys.AiInterviewMaxOutputChars);
+        if (ai.UsedFallback || string.IsNullOrWhiteSpace(ai.Content))
+            return [];
+
+        try
+        {
+            var json = ai.Content.Trim();
+            var arrStart = json.IndexOf('[');
+            var arrEnd = json.LastIndexOf(']');
+            if (arrStart < 0 || arrEnd <= arrStart) return [];
+            using var doc = JsonDocument.Parse(json[arrStart..(arrEnd + 1)]);
+            var list = new List<InterviewQuestionDto>();
+            var i = 0;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var content = el.TryGetProperty("content", out var c) ? c.GetString()
+                    : el.TryGetProperty("q", out var q) ? q.GetString() : null;
+                if (string.IsNullOrWhiteSpace(content)) continue;
+                list.Add(new InterviewQuestionDto
+                {
+                    QuestionId = Guid.Empty,
+                    OrderIndex = i++,
+                    Content = content.Trim(),
+                    Category = el.TryGetProperty("category", out var cat) ? cat.GetString() ?? "CV-based" : "CV-based",
+                    Hint = el.TryGetProperty("hint", out var h) ? h.GetString() : null
+                });
+                if (list.Count >= count) break;
+            }
+            return list;
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private async Task<string> ResolveQuestionCategoryAsync(InterviewAnswer answer)
+    {
+        if (!string.IsNullOrWhiteSpace(answer.QuestionCategory))
+            return answer.QuestionCategory!;
+        if (answer.IsFollowUp)
+            return "Follow-up";
+        if (answer.QuestionId.HasValue)
+        {
+            var q = await _unitOfWork.QuestionRepository.GetQueryable().AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == answer.QuestionId.Value);
+            if (!string.IsNullOrWhiteSpace(q?.Category))
+                return q!.Category;
+        }
+        var text = (answer.QuestionText ?? "").ToLowerInvariant();
+        if (text.Contains("star") || text.Contains("kể") || text.Contains("trải nghiệm") || text.Contains("conflict")
+            || text.Contains("teamwork") || text.Contains("xung đột"))
+            return "Behavioral";
+        if (text.Contains("api") || text.Contains("database") || text.Contains("algorithm") || text.Contains("code")
+            || text.Contains("kiến trúc") || text.Contains("technical") || text.Contains("sql"))
+            return "Technical";
+        if (text.Contains("project") || text.Contains("dự án"))
+            return "Project";
+        if (text.Contains("vấn đề") || text.Contains("debug") || text.Contains("giải quyết") || text.Contains("trade-off"))
+            return "ProblemSolving";
+        return "Experience";
+    }
+
+    private async Task<AnswerAnalysisDto> AnalyzeAnswerWithAiAsync(
+        UserAccount user,
+        InterviewSession session,
+        InterviewAnswer answer,
+        string category,
+        CareerProfile? profile,
+        string? contextJson)
+    {
+        var unavailable = new AnswerAnalysisDto { AnalysisAvailable = false };
+        try
+        {
+            var isTechnical = category.Contains("Technical", StringComparison.OrdinalIgnoreCase)
+                || category.Contains("Problem", StringComparison.OrdinalIgnoreCase);
+            var isBehavioral = category.Contains("Behavioral", StringComparison.OrdinalIgnoreCase)
+                || category.Contains("Experience", StringComparison.OrdinalIgnoreCase)
+                || category.Contains("Project", StringComparison.OrdinalIgnoreCase);
+
+            var system = """
+You are an interview answer analyzer for Vietnamese candidates. Return ONE compact JSON object ONLY with keys:
+relevance (0-100), completeness (0-100), technicalKnowledge (0-100 or null if not technical),
+problemSolving (0-100 or null if not problem-solving), communication (0-100),
+star: { score (0-100 or null if STAR not applicable), situation, task, action, result (booleans) },
+cvConsistency (0-100), evidence: { status one of Verified|StrongEvidence|WeakEvidence|MissingEvidence|NeedsValidation|CvInconsistency,
+claim, evidence, missing (string array max 3), validationNote },
+followUpReason (string or null), needsFollowUp (boolean).
+Rules: MissingEvidence is NOT fake CV. Use CvInconsistency ONLY for clear contradiction with CV/profile.
+Do not invent facts. Null scores when not applicable. No markdown. Keep total JSON under 900 characters.
+""";
+            var profileBrief = JsonSerializer.Serialize(new
+            {
+                university = profile?.University,
+                major = profile?.Major,
+                experienceLevel = profile?.ExperienceLevel,
+                desiredPosition = profile?.DesiredPosition,
+                skills = ParseJsonStringList(profile?.SkillsJson),
+                experiences = ParseJsonExperiences(profile?.ExperiencesJson).Take(5),
+                projects = ParseJsonProjects(profile?.ProjectsJson).Take(5),
+                certifications = ParseJsonCertifications(profile?.CertificationsJson).Take(5)
+            });
+
+            var userPrompt =
+                $"Position: {session.Position}\nIndustry: {session.Industry}\nCategory: {category}\n" +
+                $"IsTechnicalHint: {isTechnical}\nIsBehavioralHint: {isBehavioral}\n" +
+                $"Question: {answer.QuestionText}\nAnswer: {answer.AnswerText}\n" +
+                $"Profile: {profileBrief}\nContext(optional): {Truncate(contextJson ?? "{}", 4000)}";
+
+            var block = await _aiQuota.EnsureCanCallAsync(user, system.Length + Math.Min(userPrompt.Length, 10000));
+            if (block != null)
+                return unavailable;
+
+            var clipped = userPrompt.Length > 10000 ? userPrompt[..10000] : userPrompt;
+            var ai = await _aiQuota.CompleteAndLogAsync(
+                user, system, clipped, "interview_answer_analysis", session.Id, SettingKeys.AiInterviewMaxOutputChars);
+
+            // Do not fabricate scores when AI is unavailable — AnalysisAvailable must stay false.
+            if (ai.UsedFallback || string.IsNullOrWhiteSpace(ai.Content))
+                return unavailable;
+
+            var parsed = TryParseAnswerAnalysis(ai.Content, category);
+            return parsed ?? unavailable;
+        }
+        catch
+        {
+            return unavailable;
+        }
+    }
+
+    private static AnswerAnalysisDto HeuristicAnalysis(InterviewAnswer answer, string category)
+    {
+        var text = answer.AnswerText ?? "";
+        var len = text.Trim().Length;
+        var gap = LooksLikeEvidenceGap(text);
+        var isTechnical = category.Contains("Technical", StringComparison.OrdinalIgnoreCase)
+            || category.Contains("Problem", StringComparison.OrdinalIgnoreCase);
+        var isBehavioral = !isTechnical;
+
+        var status = gap
+            ? (len < 80 ? EvidenceStatus.MissingEvidence : EvidenceStatus.WeakEvidence)
+            : EvidenceStatus.StrongEvidence;
+
+        var needsFollowUp = gap || len < 180;
+        return new AnswerAnalysisDto
+        {
+            AnalysisAvailable = true,
+            Relevance = len < 40 ? 40 : Math.Min(90, 55 + len / 40),
+            Completeness = len < 100 ? 45 : Math.Min(88, 50 + len / 50),
+            TechnicalKnowledge = isTechnical ? (len < 120 ? 50 : 70) : null,
+            ProblemSolving = category.Contains("Problem", StringComparison.OrdinalIgnoreCase)
+                ? (gap ? 45 : 70) : null,
+            Communication = Math.Min(90, 50 + len / 30),
+            StarScore = isBehavioral ? (gap ? 55 : 72) : null,
+            StarSituation = isBehavioral ? true : null,
+            StarTask = isBehavioral ? (len > 80) : null,
+            StarAction = isBehavioral ? (len > 120) : null,
+            StarResult = isBehavioral ? (!gap && len > 200) : null,
+            CvConsistency = 80,
+            EvidenceStatus = status,
+            EvidenceJson = JsonSerializer.Serialize(new
+            {
+                status,
+                claim = Truncate(text, 200),
+                missing = gap ? new[] { "specific action", "measurable result" } : Array.Empty<string>(),
+                validationNote = gap
+                    ? "Thiếu bằng chứng cụ thể — không kết luận CV giả."
+                    : (string?)null
+            }),
+            FollowUpReason = needsFollowUp
+                ? (gap ? "MissingEvidence — cần action/result cụ thể" : "Câu trả lời còn ngắn")
+                : null,
+            EvidenceGap = gap,
+            NeedsFollowUp = needsFollowUp
+        };
+    }
+
+    private static AnswerAnalysisDto? TryParseAnswerAnalysis(string content, string category)
+    {
+        try
+        {
+            var json = ExtractJsonObject(content);
+            if (json == null) return null;
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            int? ReadScore(string name)
+            {
+                if (!root.TryGetProperty(name, out var p) || p.ValueKind == JsonValueKind.Null)
+                    return null;
+                if (p.TryGetInt32(out var n)) return ClampInt(n);
+                return null;
+            }
+
+            bool? ReadBool(JsonElement el, string name)
+            {
+                if (!el.TryGetProperty(name, out var p) || p.ValueKind == JsonValueKind.Null)
+                    return null;
+                if (p.ValueKind == JsonValueKind.True) return true;
+                if (p.ValueKind == JsonValueKind.False) return false;
+                return null;
+            }
+
+            var isTechnical = category.Contains("Technical", StringComparison.OrdinalIgnoreCase)
+                || category.Contains("Problem", StringComparison.OrdinalIgnoreCase);
+            var isBehavioral = category.Contains("Behavioral", StringComparison.OrdinalIgnoreCase)
+                || category.Contains("Experience", StringComparison.OrdinalIgnoreCase)
+                || category.Contains("Project", StringComparison.OrdinalIgnoreCase);
+
+            int? tech = ReadScore("technicalKnowledge");
+            int? problem = ReadScore("problemSolving");
+            if (!isTechnical) tech = null;
+            if (!category.Contains("Problem", StringComparison.OrdinalIgnoreCase)
+                && !category.Contains("Technical", StringComparison.OrdinalIgnoreCase))
+                problem = null;
+
+            int? starScore = null;
+            bool? s = null, t = null, a = null, r = null;
+            if (root.TryGetProperty("star", out var starEl) && starEl.ValueKind == JsonValueKind.Object)
+            {
+                if (starEl.TryGetProperty("score", out var ss) && ss.ValueKind != JsonValueKind.Null && ss.TryGetInt32(out var sn))
+                    starScore = ClampInt(sn);
+                s = ReadBool(starEl, "situation");
+                t = ReadBool(starEl, "task");
+                a = ReadBool(starEl, "action");
+                r = ReadBool(starEl, "result");
+            }
+            if (!isBehavioral)
+            {
+                starScore = null;
+                s = t = a = r = null;
+            }
+
+            string? evidenceStatus = null;
+            string? evidenceJson = null;
+            if (root.TryGetProperty("evidence", out var ev) && ev.ValueKind == JsonValueKind.Object)
+            {
+                if (ev.TryGetProperty("status", out var st))
+                    evidenceStatus = EvidenceStatus.Normalize(st.GetString());
+                evidenceJson = ev.GetRawText();
+            }
+            evidenceStatus ??= EvidenceStatus.NeedsValidation;
+
+            var needsFollowUp = root.TryGetProperty("needsFollowUp", out var nf) && nf.ValueKind == JsonValueKind.True;
+            var followReason = root.TryGetProperty("followUpReason", out var fr) && fr.ValueKind == JsonValueKind.String
+                ? fr.GetString() : null;
+
+            // Only allow follow-up for valid evidence/STAR/technical reasons — not arbitrary low score
+            if (!needsFollowUp)
+            {
+                needsFollowUp = evidenceStatus is EvidenceStatus.MissingEvidence or EvidenceStatus.WeakEvidence
+                    or EvidenceStatus.NeedsValidation or EvidenceStatus.CvInconsistency
+                    || (isBehavioral && (a == false || r == false))
+                    || (isTechnical && (tech ?? 100) < 55);
+                followReason ??= evidenceStatus switch
+                {
+                    EvidenceStatus.MissingEvidence => "MissingEvidence — cần bằng chứng cụ thể",
+                    EvidenceStatus.WeakEvidence => "WeakEvidence — cần đào sâu action/result",
+                    EvidenceStatus.CvInconsistency => "CvInconsistency — làm rõ mâu thuẫn với hồ sơ",
+                    EvidenceStatus.NeedsValidation => "NeedsValidation — cần thẩm định claim",
+                    _ => isBehavioral && r == false ? "STAR gap — thiếu Result" : null
+                };
+            }
+
+            var evidenceGap = evidenceStatus is EvidenceStatus.MissingEvidence or EvidenceStatus.WeakEvidence
+                or EvidenceStatus.NeedsValidation;
+
+            return new AnswerAnalysisDto
+            {
+                AnalysisAvailable = true,
+                Relevance = ReadScore("relevance"),
+                Completeness = ReadScore("completeness"),
+                TechnicalKnowledge = tech,
+                ProblemSolving = problem,
+                Communication = ReadScore("communication"),
+                StarScore = starScore,
+                StarSituation = s,
+                StarTask = t,
+                StarAction = a,
+                StarResult = r,
+                CvConsistency = ReadScore("cvConsistency"),
+                EvidenceStatus = evidenceStatus,
+                EvidenceJson = evidenceJson,
+                FollowUpReason = followReason,
+                EvidenceGap = evidenceGap,
+                NeedsFollowUp = needsFollowUp
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void ApplyAnalysisToAnswer(InterviewAnswer answer, AnswerAnalysisDto dto)
+    {
+        answer.AnalysisAvailable = dto.AnalysisAvailable;
+        if (!dto.AnalysisAvailable)
+        {
+            answer.RelevanceScore = null;
+            answer.CompletenessScore = null;
+            answer.TechnicalKnowledgeScore = null;
+            answer.ProblemSolvingScore = null;
+            answer.CommunicationScore = null;
+            answer.StarScore = null;
+            answer.CvConsistencyScore = null;
+            answer.StarHasSituation = null;
+            answer.StarHasTask = null;
+            answer.StarHasAction = null;
+            answer.StarHasResult = null;
+            answer.EvidenceStatus = null;
+            answer.EvidenceJson = null;
+            answer.AnalysisJson = null;
+            answer.FollowUpReason = null;
+            return;
+        }
+
+        answer.RelevanceScore = dto.Relevance;
+        answer.CompletenessScore = dto.Completeness;
+        answer.TechnicalKnowledgeScore = dto.TechnicalKnowledge;
+        answer.ProblemSolvingScore = dto.ProblemSolving;
+        answer.CommunicationScore = dto.Communication;
+        answer.StarScore = dto.StarScore;
+        answer.CvConsistencyScore = dto.CvConsistency;
+        answer.StarHasSituation = dto.StarSituation;
+        answer.StarHasTask = dto.StarTask;
+        answer.StarHasAction = dto.StarAction;
+        answer.StarHasResult = dto.StarResult;
+        answer.EvidenceStatus = dto.EvidenceStatus;
+        answer.EvidenceJson = dto.EvidenceJson;
+        answer.FollowUpReason = dto.FollowUpReason;
+        answer.AnalysisJson = JsonSerializer.Serialize(dto);
+    }
+
+    private async Task<string?> TryGenerateFollowUpAsync(
+        UserAccount user,
+        InterviewSession session,
+        InterviewAnswer answer,
+        AnswerAnalysisDto analysis)
+    {
+        var system = "Generate one short Vietnamese follow-up interview question based on the analysis. Dig into missing evidence, STAR gaps, or unclear technical points. Never accuse fake CV or lying. Return plain text only.";
+        var userPrompt =
+            $"Position: {session.Position}\nQ: {answer.QuestionText}\nA: {answer.AnswerText}\n" +
+            $"EvidenceStatus: {analysis.EvidenceStatus}\nReason: {analysis.FollowUpReason}\n" +
+            $"Ask one follow-up that helps the candidate add concrete evidence.";
+        var block = await _aiQuota.EnsureCanCallAsync(user, system.Length + userPrompt.Length);
+        if (block != null) return null;
+        var ai = await _aiQuota.CompleteAndLogAsync(
+            user, system, userPrompt, "interview_followup", session.Id, SettingKeys.AiInterviewMaxOutputChars);
+        if (ai.UsedFallback || string.IsNullOrWhiteSpace(ai.Content)) return null;
+        return ai.Content.Trim().Trim('"');
+    }
+
+    private static List<string> ParseJsonStringList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch { return []; }
+    }
+
+    private static List<CvExperienceDto> ParseJsonExperiences(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<CvExperienceDto>>(json) ?? [];
+        }
+        catch { return []; }
+    }
+
+    private static List<CvProjectDto> ParseJsonProjects(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<CvProjectDto>>(json) ?? [];
+        }
+        catch { return []; }
+    }
+
+    private static List<CvCertificationDto> ParseJsonCertifications(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<CvCertificationDto>>(json) ?? [];
+        }
+        catch { return []; }
+    }
+
+    private static string Truncate(string s, int max)
+        => string.IsNullOrEmpty(s) ? s : (s.Length <= max ? s : s[..max]);
 
     private async Task<InterviewSession?> GetOwnedSessionAsync(
         Guid userId,
@@ -411,8 +1813,8 @@ public class InterviewService(
     private async Task<List<Question>> PickQuestionsAsync(
         string industry,
         string position,
-        string difficulty,
-        int count)
+        int count,
+        Guid? userId = null)
     {
         var all = await _unitOfWork.QuestionRepository.GetQueryable()
             .AsNoTracking()
@@ -434,16 +1836,50 @@ public class InterviewService(
             : industryMatched.Count >= count ? industryMatched
             : all;
 
-        var difficultyFiltered = pool
-            .Where(q => string.Equals(q.Difficulty, difficulty, StringComparison.OrdinalIgnoreCase)
-                        || q.Difficulty == "Medium"
-                        || q.Category == "Hành vi (HR)")
-            .ToList();
+        // Soft bias from Career Memory when bank fallback is used (not a hard rule).
+        HashSet<string> preferTokens = [];
+        if (userId.HasValue)
+        {
+            var learning = await CareerMemoryLearningService.LoadLearningBundleAsync(
+                _unitOfWork, userId.Value, CareerMemoryThresholds.LoadTake);
+            foreach (var w in learning.Weaknesses.Concat(learning.EvidenceGaps).Concat(learning.SkillGaps)
+                         .Take(CareerMemoryThresholds.ContextWeaknessLimit))
+            {
+                var key = (w.MemoryKey ?? w.Title ?? "").ToLowerInvariant();
+                if (key.Contains("star") || key.Contains("result") || key.Contains("evidence"))
+                {
+                    preferTokens.Add("kết quả");
+                    preferTokens.Add("result");
+                    preferTokens.Add("đo lường");
+                    preferTokens.Add("hành vi");
+                }
+                if (key.Contains("problem") || key.Contains("technical"))
+                {
+                    preferTokens.Add("vấn đề");
+                    preferTokens.Add("technical");
+                    preferTokens.Add("giải quyết");
+                }
+                if (key.Contains("communication"))
+                {
+                    preferTokens.Add("trình bày");
+                    preferTokens.Add("giao tiếp");
+                }
+            }
+        }
 
-        if (difficultyFiltered.Count >= count)
-            pool = difficultyFiltered;
+        if (preferTokens.Count == 0)
+            return pool.OrderBy(_ => Guid.NewGuid()).Take(count).ToList();
 
-        return pool.OrderBy(_ => Guid.NewGuid()).Take(count).ToList();
+        var preferred = pool.Where(q =>
+        {
+            var text = (q.Content + " " + q.Category).ToLowerInvariant();
+            return preferTokens.Any(t => text.Contains(t));
+        }).OrderBy(_ => Guid.NewGuid()).ToList();
+
+        var rest = pool.Except(preferred).OrderBy(_ => Guid.NewGuid()).ToList();
+        // At most ~40% of questions from memory-preferred pool — soft signal.
+        var preferTake = Math.Min(preferred.Count, Math.Max(1, count / 3));
+        return preferred.Take(preferTake).Concat(rest).Take(count).ToList();
     }
 
     private static string MapRoleHint(string position)
@@ -482,7 +1918,9 @@ public class InterviewService(
         Mode = s.Mode,
         Status = s.Status,
         OverallScore = s.OverallScore,
+        QuestionCount = s.QuestionCount,
         StartedAt = s.StartedAt,
+        VoiceStartedAt = s.VoiceStartedAt,
         CompletedAt = s.CompletedAt
     };
 
@@ -497,7 +1935,9 @@ public class InterviewService(
             Mode = s.Mode,
             Status = s.Status,
             OverallScore = s.OverallScore,
+            QuestionCount = s.QuestionCount,
             StartedAt = s.StartedAt,
+            VoiceStartedAt = s.VoiceStartedAt,
             CompletedAt = s.CompletedAt,
             ScoreS = s.ScoreS,
             ScoreT = s.ScoreT,
@@ -505,14 +1945,36 @@ public class InterviewService(
             ScoreR = s.ScoreR,
             ClarityScore = s.ClarityScore,
             FeedbackSummary = s.FeedbackSummary,
+            StructuredFeedback = TryDeserializeFeedback(s.StructuredFeedbackJson),
             Answers = s.Answers.OrderBy(a => a.OrderIndex).Select(a => new InterviewAnswerViewDto
             {
+                Id = a.Id,
                 OrderIndex = a.OrderIndex,
                 QuestionId = a.QuestionId,
                 QuestionText = a.QuestionText,
                 AnswerText = a.AnswerText,
                 Skipped = a.Skipped,
-                DurationSec = a.DurationSec
+                DurationSec = a.DurationSec,
+                IsFollowUp = a.IsFollowUp,
+                QuestionCategory = a.QuestionCategory,
+                AnalysisAvailable = a.AnalysisAvailable,
+                RelevanceScore = a.RelevanceScore,
+                CompletenessScore = a.CompletenessScore,
+                TechnicalKnowledgeScore = a.TechnicalKnowledgeScore,
+                ProblemSolvingScore = a.ProblemSolvingScore,
+                CommunicationScore = a.CommunicationScore,
+                StarScore = a.StarScore,
+                CvConsistencyScore = a.CvConsistencyScore,
+                StarHasSituation = a.StarHasSituation,
+                StarHasTask = a.StarHasTask,
+                StarHasAction = a.StarHasAction,
+                StarHasResult = a.StarHasResult,
+                EvidenceStatus = a.EvidenceStatus,
+                EvidenceJson = a.EvidenceJson,
+                AnalysisJson = a.AnalysisJson,
+                FollowUpReason = a.FollowUpReason,
+                EvidenceGap = a.EvidenceStatus is EvidenceStatus.MissingEvidence
+                    or EvidenceStatus.WeakEvidence or EvidenceStatus.NeedsValidation
             }).ToList()
         };
         return dto;

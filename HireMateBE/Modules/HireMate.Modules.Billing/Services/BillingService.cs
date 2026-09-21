@@ -1,9 +1,9 @@
 using HireMate.BuildingBlocks;
 using Common;
 using Common.DTOs.PublicDto;
+using Infrastructure.Data;
 using Infrastructure.IUnitOfWork;
 using Infrastructure.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -16,14 +16,15 @@ namespace HireMate.Modules.Billing.Services;
 
 public class BillingService(
     IUnitOfWork uow,
+    HireMateContext db,
     UserManager<UserAccount> users,
     IAiQuotaService aiQuota,
     IConfiguration config,
-    Microsoft.Extensions.Options.IOptions<HireMate.Modules.Billing.Payments.PayOsOptions> payOsOptions,
-    HireMate.Modules.Billing.Payments.PayOsClient payOsClient) : IBillingService
+    Microsoft.Extensions.Options.IOptions<PayOsOptions> payOsOptions,
+    PayOsClient payOsClient) : IBillingService
 {
-    private readonly HireMate.Modules.Billing.Payments.PayOsOptions _payOs = payOsOptions.Value;
-    private readonly HireMate.Modules.Billing.Payments.PayOsClient _payOsClient = payOsClient;
+    private readonly PayOsOptions _payOs = payOsOptions.Value;
+    private readonly PayOsClient _payOsClient = payOsClient;
 
     public async Task<IServiceResult> GetPlansAsync()
     {
@@ -32,7 +33,6 @@ public class BillingService(
             .OrderBy(p => p.SortOrder).ThenBy(p => p.PriceVnd)
             .ToListAsync();
 
-        // Tự sửa gói admin bị lưu code rỗng (gây lỗi PlanCode required khi checkout)
         var broken = plans.Where(p => string.IsNullOrWhiteSpace(p.Code)).ToList();
         if (broken.Count > 0)
         {
@@ -72,6 +72,7 @@ public class BillingService(
         var user = await users.FindByIdAsync(userId.ToString());
         if (user == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
+        // Plan + amount from server DB only — never trust FE amount.
         var plan = await uow.PlanRepository.GetQueryable()
             .FirstOrDefaultAsync(p => p.Code == dto.PlanCode && p.IsActive);
         if (plan == null) return new ServiceResult(Const.FAIL_CREATE_CODE, "Không tìm thấy gói");
@@ -83,7 +84,6 @@ public class BillingService(
         var targetRank = PlanTier.Rank(plan.Code);
         var targetCode = plan.Code.Trim().ToLowerInvariant();
 
-        // Còn hạn gói trả phí: không mua lại cùng gói, không hạ gói; chỉ được nâng cấp
         if (currentRank > 0)
         {
             var snap = await aiQuota.GetSnapshotAsync(user);
@@ -160,32 +160,47 @@ public class BillingService(
         if (!_payOs.Enabled)
             return new ServiceResult(Const.FAIL_CREATE_CODE, "PayOS chưa được cấu hình. Thiết lập PayOS:Enabled + ClientId + ApiKey + ChecksumKey.");
 
-        var orderCode = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 900_000_000_000L + Random.Shared.Next(1, 999);
+        long orderCode;
+        try
+        {
+            orderCode = await AllocateUniquePayOsOrderCodeAsync();
+        }
+        catch
+        {
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Không tạo được mã đơn PayOS duy nhất. Thử lại.");
+        }
+
         var invoice = new Invoice
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             PlanId = plan.Id,
-            InvoiceNumber = $"HM-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+            InvoiceNumber = await AllocateInvoiceNumberAsync(),
             AmountVnd = amount,
-            Status = "Pending",
+            Status = InvoiceStatuses.Pending,
             PaymentMethod = "PayOS"
         };
-        await uow.InvoiceRepository.CreateAsync(invoice);
-        await uow.PaymentRepository.CreateAsync(new Payment
+        var payment = new Payment
         {
             Id = Guid.NewGuid(),
             InvoiceId = invoice.Id,
             AmountVnd = amount,
             Provider = "PayOS",
-            Status = "Pending",
+            Status = PaymentStatuses.Pending,
             TransactionRef = orderCode.ToString()
-        });
+        };
+        await uow.InvoiceRepository.CreateAsync(invoice);
+        await uow.PaymentRepository.CreateAsync(payment);
         await uow.SaveChangesAsync();
 
         var created = await _payOsClient.CreatePaymentLinkAsync(orderCode, (int)amount, "HireMate");
         if (!created.Ok || string.IsNullOrWhiteSpace(created.CheckoutUrl))
+        {
+            payment.Status = PaymentStatuses.Failed;
+            invoice.Status = InvoiceStatuses.Failed;
+            await uow.SaveChangesAsync();
             return new ServiceResult(Const.FAIL_CREATE_CODE, created.Error ?? "Tạo thanh toán PayOS thất bại");
+        }
 
         return new ServiceResult(Const.SUCCESS_CREATE_CODE, "Chuyển hướng tới PayOS", new
         {
@@ -219,12 +234,12 @@ public class BillingService(
             Id = Guid.NewGuid(),
             UserId = userId,
             PlanId = plan.Id,
-            InvoiceNumber = $"HM-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+            InvoiceNumber = await AllocateInvoiceNumberAsync(),
             AmountVnd = amount,
-            Status = "Pending",
+            Status = InvoiceStatuses.Pending,
             PaymentMethod = "VNPay"
         };
-        var txnRef = Common.Helper.PaymentHelper.GenerateTxnRef(invoice.Id);
+        var txnRef = await AllocateUniqueTxnRefAsync("VNPay", () => Common.Helper.PaymentHelper.GenerateTxnRef(invoice.Id));
         await uow.InvoiceRepository.CreateAsync(invoice);
         await uow.PaymentRepository.CreateAsync(new Payment
         {
@@ -232,7 +247,7 @@ public class BillingService(
             InvoiceId = invoice.Id,
             AmountVnd = amount,
             Provider = "VNPay",
-            Status = "Pending",
+            Status = PaymentStatuses.Pending,
             TransactionRef = txnRef
         });
         await uow.SaveChangesAsync();
@@ -258,9 +273,9 @@ public class BillingService(
             Id = Guid.NewGuid(),
             UserId = userId,
             PlanId = plan.Id,
-            InvoiceNumber = $"HM-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+            InvoiceNumber = await AllocateInvoiceNumberAsync(),
             AmountVnd = amount,
-            Status = "Paid",
+            Status = InvoiceStatuses.Paid,
             PaymentMethod = "Mock",
             PaidAt = DateTime.UtcNow
         };
@@ -271,11 +286,10 @@ public class BillingService(
             InvoiceId = mockInvoice.Id,
             AmountVnd = amount,
             Provider = "Mock",
-            Status = "Success",
+            Status = PaymentStatuses.Success,
             TransactionRef = Guid.NewGuid().ToString("N")[..12]
         });
 
-        user.IsPremium = plan.Code is not "free";
         ApplyPlanFlags(user, plan, renew: true);
         user.UpdatedAt = DateTime.UtcNow;
         await users.UpdateAsync(user);
@@ -305,13 +319,20 @@ public class BillingService(
         if (!root.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Webhook PayOS không hợp lệ");
 
-        if (!HireMate.Modules.Billing.Payments.PayOsHelper.VerifyWebhookSignature(data, signature, _payOs.ChecksumKey))
+        if (!PayOsHelper.VerifyWebhookSignature(data, signature, _payOs.ChecksumKey))
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Chữ ký PayOS không hợp lệ");
 
         var orderCode = data.TryGetProperty("orderCode", out var oc)
             ? (oc.ValueKind == JsonValueKind.Number ? oc.GetInt64().ToString() : oc.GetString())
             : null;
         var code = data.TryGetProperty("code", out var dc) ? dc.GetString() : root.TryGetProperty("code", out var rc) ? rc.GetString() : null;
+
+        decimal? webhookAmount = null;
+        if (data.TryGetProperty("amount", out var amtEl))
+        {
+            if (amtEl.TryGetDecimal(out var ad)) webhookAmount = ad;
+            else if (amtEl.TryGetInt64(out var al)) webhookAmount = al;
+        }
 
         var payment = await uow.PaymentRepository.GetQueryable()
             .Include(p => p.Invoice)!.ThenInclude(i => i!.Plan)
@@ -320,38 +341,25 @@ public class BillingService(
         if (payment?.Invoice == null)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy đơn hàng");
 
-        if (payment.Status == "Success" && payment.Invoice.Status == "Paid")
-            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đơn hàng đã được thanh toán", new { success = true });
+        if (IsAlreadySettled(payment))
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đơn hàng đã được thanh toán", new { success = true, idempotent = true });
 
         if (code == "00" || (root.TryGetProperty("success", out var ok) && ok.ValueKind == JsonValueKind.True))
         {
-            payment.Status = "Success";
-            payment.Invoice.Status = "Paid";
-            payment.Invoice.PaidAt = DateTime.UtcNow;
-            var user = await users.FindByIdAsync(payment.Invoice.UserId.ToString());
-            if (user != null)
-            {
-                ApplyPlanFlags(user, payment.Invoice.Plan, renew: true);
-                user.UpdatedAt = DateTime.UtcNow;
-                await users.UpdateAsync(user);
-            }
-            await uow.SaveChangesAsync();
-            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Thanh toán thành công", new { success = true });
+            var settle = await TrySettlePaymentAsync(payment.Id, webhookAmount, source: "payos_webhook");
+            return settle.Ok
+                ? new ServiceResult(Const.SUCCESS_UPDATE_CODE, settle.Message, new { success = true, idempotent = settle.Idempotent })
+                : new ServiceResult(Const.FAIL_UPDATE_CODE, settle.Message, new { success = false });
         }
 
-        payment.Status = "Failed";
-        payment.Invoice.Status = "Failed";
-        await uow.SaveChangesAsync();
+        await MarkPaymentFailedAsync(payment.Id);
         return new ServiceResult(Const.FAIL_UPDATE_CODE, "Thanh toán thất bại", new { success = false });
     }
 
-    public async Task<IServiceResult> ConfirmPayOsAsync(ConfirmPayOsDto dto)
+    public async Task<IServiceResult> ConfirmPayOsAsync(Guid userId, ConfirmPayOsDto dto)
     {
         if (!_payOs.Enabled)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "PayOS đang tắt");
-
-        if (dto.Cancel)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Người dùng hủy thanh toán", new { success = false, status = "cancel" });
 
         Payment? payment = null;
         if (!string.IsNullOrWhiteSpace(dto.OrderCode))
@@ -367,14 +375,23 @@ public class BillingService(
                 .FirstOrDefaultAsync(p => p.InvoiceId == dto.InvoiceId && p.Provider == "PayOS");
         }
 
-        if (payment?.Invoice == null)
+        // Ownership: do not leak other users' payment existence details.
+        if (payment?.Invoice == null || payment.Invoice.UserId != userId)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy đơn hàng PayOS");
 
-        if (payment.Status == "Success" && payment.Invoice.Status == "Paid")
+        if (dto.Cancel)
+        {
+            if (payment.Status == PaymentStatuses.Pending)
+                await MarkPaymentCancelledAsync(payment.Id);
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Người dùng hủy thanh toán", new { success = false, status = "cancel" });
+        }
+
+        if (IsAlreadySettled(payment))
         {
             return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đơn hàng đã được thanh toán", new
             {
                 success = true,
+                idempotent = true,
                 invoiceId = payment.InvoiceId,
                 invoiceNumber = payment.Invoice.InvoiceNumber,
                 plan = payment.Invoice.Plan?.Code,
@@ -382,42 +399,49 @@ public class BillingService(
             });
         }
 
-        // Chỉ tin PayOS merchant API — không tin query FE (tránh fake success)
+        // Ignore FE Status/Code — verify with PayOS merchant API only.
         if (!long.TryParse(payment.TransactionRef, out var orderCode))
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mã đơn PayOS không hợp lệ");
 
-        var status = await _payOsClient.GetPaymentStatusAsync(orderCode);
-        var paidByApi = string.Equals(status, "PAID", StringComparison.OrdinalIgnoreCase);
+        PayOsLinkDetail? detail;
+        try
+        {
+            detail = await _payOsClient.GetPaymentLinkDetailAsync(orderCode);
+        }
+        catch
+        {
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không xác minh được trạng thái PayOS (timeout/lỗi mạng). Thử lại sau.");
+        }
+
+        var paidByApi = string.Equals(detail?.Status, "PAID", StringComparison.OrdinalIgnoreCase);
         if (!paidByApi)
         {
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Thanh toán chưa hoàn tất", new
             {
                 success = false,
                 invoiceId = payment.InvoiceId,
-                status = status ?? "pending"
+                status = detail?.Status ?? "pending"
             });
         }
 
-        payment.Status = "Success";
-        payment.Invoice.Status = "Paid";
-        payment.Invoice.PaidAt = DateTime.UtcNow;
-        var user = await users.FindByIdAsync(payment.Invoice.UserId.ToString());
-        if (user != null)
-        {
-            ApplyPlanFlags(user, payment.Invoice.Plan, renew: true);
-            user.UpdatedAt = DateTime.UtcNow;
-            await users.UpdateAsync(user);
-        }
-        await uow.SaveChangesAsync();
+        var settle = await TrySettlePaymentAsync(payment.Id, detail?.Amount, source: "payos_confirm");
+        if (!settle.Ok)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, settle.Message, new { success = false });
 
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Thanh toán thành công", new
+        // Reload for response
+        payment = await uow.PaymentRepository.GetQueryable().AsNoTracking()
+            .Include(p => p.Invoice)!.ThenInclude(i => i!.Plan)
+            .FirstAsync(p => p.Id == payment.Id);
+
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, settle.Message, new
         {
             success = true,
+            idempotent = settle.Idempotent,
             invoiceId = payment.InvoiceId,
-            invoiceNumber = payment.Invoice.InvoiceNumber,
+            invoiceNumber = payment.Invoice!.InvoiceNumber,
             plan = payment.Invoice.Plan?.Code,
             amountVnd = payment.Invoice.AmountVnd,
-            isPremium = true
+            isPremium = PlanTier.Rank(payment.Invoice.Plan?.Code) > 0
         });
     }
 
@@ -444,6 +468,7 @@ public class BillingService(
             queryParams.TryGetValue("vnp_TxnRef", out var txnRef);
             queryParams.TryGetValue("vnp_ResponseCode", out var responseCode);
             queryParams.TryGetValue("vnp_TransactionStatus", out var transactionStatus);
+            queryParams.TryGetValue("vnp_Amount", out var amountRaw);
 
             if (string.IsNullOrWhiteSpace(txnRef))
                 return VnPayJsonResponse("01", "Không tìm thấy đơn thanh toán");
@@ -455,39 +480,32 @@ public class BillingService(
             if (payment?.Invoice == null)
                 return VnPayJsonResponse("01", "Không tìm thấy đơn thanh toán");
 
-            if (payment.Status == "Success" && payment.Invoice.Status == "Paid")
+            if (IsAlreadySettled(payment))
                 return VnPayJsonResponse("00", "Đơn hàng đã được thanh toán");
 
             if (responseCode == "00" && (string.IsNullOrWhiteSpace(transactionStatus) || transactionStatus == "00"))
             {
-                payment.Status = "Success";
-                payment.Invoice.Status = "Paid";
-                payment.Invoice.PaidAt = DateTime.UtcNow;
+                decimal? paidVnd = null;
+                if (long.TryParse(amountRaw, out var amountCents))
+                    paidVnd = amountCents / 100m;
 
-                var user = await users.FindByIdAsync(payment.Invoice.UserId.ToString());
-                if (user != null)
-                {
-                    ApplyPlanFlags(user, payment.Invoice.Plan, renew: true);
-                    user.UpdatedAt = DateTime.UtcNow;
-                    await users.UpdateAsync(user);
-                }
-                await uow.SaveChangesAsync();
-                return VnPayJsonResponse("00", "Thanh toán thành công");
+                var settle = await TrySettlePaymentAsync(payment.Id, paidVnd, source: "vnpay_ipn");
+                return settle.Ok
+                    ? VnPayJsonResponse("00", settle.Message)
+                    : VnPayJsonResponse("04", settle.Message);
             }
 
-            payment.Status = "Failed";
-            payment.Invoice.Status = "Failed";
-            await uow.SaveChangesAsync();
+            await MarkPaymentFailedAsync(payment.Id);
             return VnPayJsonResponse("02", "Thanh toán thất bại");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return VnPayJsonResponse("99", "Lỗi không xác định: " + ex.Message);
+            return VnPayJsonResponse("99", "Lỗi không xác định");
         }
     }
 
     private static string VnPayJsonResponse(string rspCode, string message)
-        => System.Text.Json.JsonSerializer.Serialize(new { RspCode = rspCode, Message = message });
+        => JsonSerializer.Serialize(new { RspCode = rspCode, Message = message });
 
     public async Task<IServiceResult> GetInvoicesAsync(Guid userId)
     {
@@ -507,6 +525,190 @@ public class BillingService(
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, inv);
     }
 
+    public async Task<IServiceResult> GetPaymentsAsync(Guid userId)
+    {
+        var list = await uow.PaymentRepository.GetQueryable().AsNoTracking()
+            .Include(p => p.Invoice)
+            .Where(p => p.Invoice != null && p.Invoice.UserId == userId)
+            .OrderByDescending(p => p.CreatedAt)
+            .Take(50)
+            .Select(p => new
+            {
+                p.Id,
+                p.InvoiceId,
+                invoiceNumber = p.Invoice!.InvoiceNumber,
+                p.AmountVnd,
+                p.Provider,
+                p.Status,
+                p.TransactionRef,
+                p.CreatedAt,
+                invoiceStatus = p.Invoice.Status,
+                planId = p.Invoice.PlanId
+            })
+            .ToListAsync();
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
+    }
+
+    /// <summary>
+    /// Atomic settle: only Pending → Success. Duplicate calls are idempotent.
+    /// Verifies amount when provided. Applies plan once inside the same transaction.
+    /// </summary>
+    private async Task<SettleResult> TrySettlePaymentAsync(Guid paymentId, decimal? verifiedAmountVnd, string source)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync();
+        try
+        {
+            var payment = await db.Payments
+                .Include(p => p.Invoice)!.ThenInclude(i => i!.Plan)
+                .FirstOrDefaultAsync(p => p.Id == paymentId);
+
+            if (payment?.Invoice == null)
+            {
+                await tx.RollbackAsync();
+                return SettleResult.Fail("Không tìm thấy đơn thanh toán");
+            }
+
+            if (payment.Status == PaymentStatuses.Success && payment.Invoice.Status == InvoiceStatuses.Paid)
+            {
+                await tx.CommitAsync();
+                return SettleResult.Already("Đơn hàng đã được thanh toán");
+            }
+
+            if (payment.Status is PaymentStatuses.Cancelled or PaymentStatuses.Expired)
+            {
+                await tx.RollbackAsync();
+                return SettleResult.Fail($"Đơn hàng ở trạng thái {payment.Status}, không thể thanh toán.");
+            }
+
+            if (verifiedAmountVnd.HasValue)
+            {
+                var expected = payment.AmountVnd;
+                if (Math.Abs(verifiedAmountVnd.Value - expected) > 0.01m)
+                {
+                    await tx.RollbackAsync();
+                    return SettleResult.Fail("Số tiền thanh toán không khớp hóa đơn (từ chối cấp gói).");
+                }
+            }
+
+            // Conditional update — race-safe if two handlers run together.
+            var updated = await db.Payments
+                .Where(p => p.Id == paymentId && p.Status == PaymentStatuses.Pending)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, PaymentStatuses.Success));
+
+            if (updated == 0)
+            {
+                await db.Entry(payment).ReloadAsync();
+                if (payment.Status == PaymentStatuses.Success)
+                {
+                    await tx.CommitAsync();
+                    return SettleResult.Already("Đơn hàng đã được thanh toán");
+                }
+                await tx.RollbackAsync();
+                return SettleResult.Fail("Không thể cập nhật trạng thái thanh toán.");
+            }
+
+            payment.Invoice.Status = InvoiceStatuses.Paid;
+            payment.Invoice.PaidAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            var user = await users.FindByIdAsync(payment.Invoice.UserId.ToString());
+            if (user != null)
+            {
+                ApplyPlanFlags(user, payment.Invoice.Plan, renew: true);
+                user.UpdatedAt = DateTime.UtcNow;
+                await users.UpdateAsync(user);
+            }
+
+            await tx.CommitAsync();
+            return SettleResult.Success($"Thanh toán thành công ({source})");
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    private async Task MarkPaymentFailedAsync(Guid paymentId)
+    {
+        await db.Payments
+            .Where(p => p.Id == paymentId && p.Status == PaymentStatuses.Pending)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, PaymentStatuses.Failed));
+
+        var invoiceId = await db.Payments.AsNoTracking()
+            .Where(p => p.Id == paymentId)
+            .Select(p => p.InvoiceId)
+            .FirstOrDefaultAsync();
+        if (invoiceId != Guid.Empty)
+        {
+            await db.Invoices
+                .Where(i => i.Id == invoiceId && i.Status == InvoiceStatuses.Pending)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, InvoiceStatuses.Failed));
+        }
+    }
+
+    private async Task MarkPaymentCancelledAsync(Guid paymentId)
+    {
+        await db.Payments
+            .Where(p => p.Id == paymentId && p.Status == PaymentStatuses.Pending)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, PaymentStatuses.Cancelled));
+
+        var invoiceId = await db.Payments.AsNoTracking()
+            .Where(p => p.Id == paymentId)
+            .Select(p => p.InvoiceId)
+            .FirstOrDefaultAsync();
+        if (invoiceId != Guid.Empty)
+        {
+            await db.Invoices
+                .Where(i => i.Id == invoiceId && i.Status == InvoiceStatuses.Pending)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, InvoiceStatuses.Cancelled));
+        }
+    }
+
+    private static bool IsAlreadySettled(Payment payment)
+        => payment.Status == PaymentStatuses.Success
+           && payment.Invoice != null
+           && payment.Invoice.Status == InvoiceStatuses.Paid;
+
+    private async Task<long> AllocateUniquePayOsOrderCodeAsync()
+    {
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            var code = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 800_000_000_000L) * 1000L
+                       + Random.Shared.Next(0, 1000);
+            if (code <= 0) code = Math.Abs(code) + 1;
+            var key = code.ToString();
+            var exists = await uow.PaymentRepository.GetQueryable()
+                .AnyAsync(p => p.Provider == "PayOS" && p.TransactionRef == key);
+            if (!exists) return code;
+            await Task.Delay(5);
+        }
+        throw new InvalidOperationException("Unable to allocate unique PayOS orderCode");
+    }
+
+    private async Task<string> AllocateUniqueTxnRefAsync(string provider, Func<string> factory)
+    {
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            var refCode = factory();
+            var exists = await uow.PaymentRepository.GetQueryable()
+                .AnyAsync(p => p.Provider == provider && p.TransactionRef == refCode);
+            if (!exists) return refCode;
+        }
+        return $"{factory()}-{Random.Shared.Next(1000, 9999)}";
+    }
+
+    private async Task<string> AllocateInvoiceNumberAsync()
+    {
+        for (var i = 0; i < 6; i++)
+        {
+            var num = $"HM-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
+            var exists = await uow.InvoiceRepository.GetQueryable().AnyAsync(x => x.InvoiceNumber == num);
+            if (!exists) return num;
+        }
+        return $"HM-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
+    }
+
     private async Task<IServiceResult> ActivateFreeAsync(UserAccount user, Guid userId, SubscriptionPlan plan)
     {
         var invoice = new Invoice
@@ -514,9 +716,9 @@ public class BillingService(
             Id = Guid.NewGuid(),
             UserId = userId,
             PlanId = plan.Id,
-            InvoiceNumber = $"HM-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+            InvoiceNumber = await AllocateInvoiceNumberAsync(),
             AmountVnd = 0,
-            Status = "Paid",
+            Status = InvoiceStatuses.Paid,
             PaymentMethod = "Free",
             PaidAt = DateTime.UtcNow
         };
@@ -538,9 +740,13 @@ public class BillingService(
         });
     }
 
+    /// <summary>
+    /// Renewal semantics (existing): set PlanSelectedAt = now on paid renew/upgrade.
+    /// Expiration is derived from last Paid invoice + DurationDays (AiQuotaService.RefreshExpiryAsync).
+    /// Business has not confirmed stack-remaining-time renewal — keep current simple reset of period start.
+    /// </summary>
     private static void ApplyPlanFlags(UserAccount user, SubscriptionPlan? plan, bool renew = false)
     {
-        // Lưu đúng mã gói đã mua (vd. test), không ép về premium
         var code = string.IsNullOrWhiteSpace(plan?.Code)
             ? "free"
             : plan!.Code.Trim().ToLowerInvariant();
@@ -564,6 +770,15 @@ public class BillingService(
         var raw = await GetSettingAsync(key);
         return raw is "true" or "1" or "True";
     }
+
+    private sealed class SettleResult
+    {
+        public bool Ok { get; private init; }
+        public bool Idempotent { get; private init; }
+        public string Message { get; private init; } = "";
+
+        public static SettleResult Success(string msg) => new() { Ok = true, Message = msg };
+        public static SettleResult Already(string msg) => new() { Ok = true, Idempotent = true, Message = msg };
+        public static SettleResult Fail(string msg) => new() { Ok = false, Message = msg };
+    }
 }
-
-

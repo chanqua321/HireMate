@@ -15,5 +15,7 @@ public class ConfirmOnboardingDto
     public List<string>? Hobbies { get; set; }
     public List<string>? Skills { get; set; }
     public List<CvExperienceDto>? Experiences { get; set; }
+    public List<CvProjectDto>? Projects { get; set; }
+    public List<CvCertificationDto>? Certifications { get; set; }
 }
 

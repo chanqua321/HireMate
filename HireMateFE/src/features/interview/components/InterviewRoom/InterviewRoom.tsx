@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { interviewService } from '../../api/interview.service';
+import type { AnswerAnalysis, SubmitAnswerResult } from '../../types';
 import {
   playVietnameseSpeech,
   stopVietnameseSpeech,
@@ -29,6 +30,51 @@ interface ChatMessage {
   sender: 'ai' | 'user';
   text: string;
   timestamp?: string;
+  analysis?: AnswerAnalysis | null;
+}
+
+function formatEvidenceLabel(status?: string | null): string {
+  switch (status) {
+    case 'Verified':
+      return 'Đã xác minh (Verified)';
+    case 'StrongEvidence':
+      return 'Bằng chứng mạnh (Strong Evidence)';
+    case 'WeakEvidence':
+      return 'Bằng chứng yếu (Weak Evidence)';
+    case 'MissingEvidence':
+      return 'Thiếu bằng chứng (Missing Evidence)';
+    case 'NeedsValidation':
+      return 'Cần thẩm định (Needs Validation)';
+    case 'CvInconsistency':
+      return 'Mâu thuẫn với hồ sơ (CV Inconsistency)';
+    default:
+      return status || 'Chưa có';
+  }
+}
+
+function formatAnalysisSummary(a?: AnswerAnalysis | null): string {
+  if (!a || !a.analysisAvailable) {
+    return '📊 Phân tích: Analysis unavailable (câu trả lời vẫn đã được lưu).';
+  }
+  const lines: string[] = ['📊 Phân tích câu trả lời:'];
+  if (a.relevance != null) lines.push(`• Relevance: ${a.relevance}`);
+  if (a.completeness != null) lines.push(`• Completeness: ${a.completeness}`);
+  if (a.communication != null) lines.push(`• Communication: ${a.communication}`);
+  if (a.technicalKnowledge != null) lines.push(`• Technical knowledge: ${a.technicalKnowledge}`);
+  if (a.problemSolving != null) lines.push(`• Problem solving: ${a.problemSolving}`);
+  if (a.starScore != null) {
+    const parts = [
+      a.starSituation ? 'S✓' : 'S✗',
+      a.starTask ? 'T✓' : 'T✗',
+      a.starAction ? 'A✓' : 'A✗',
+      a.starResult ? 'R✓' : 'R✗',
+    ];
+    lines.push(`• STAR: ${a.starScore} (${parts.join(' ')})`);
+  }
+  if (a.cvConsistency != null) lines.push(`• CV consistency: ${a.cvConsistency}`);
+  lines.push(`• Evidence: ${formatEvidenceLabel(a.evidenceStatus)}`);
+  if (a.followUpReason) lines.push(`• Gợi ý đào sâu: ${a.followUpReason}`);
+  return lines.join('\n');
 }
 
 export const InterviewRoom: React.FC = () => {
@@ -58,9 +104,16 @@ export const InterviewRoom: React.FC = () => {
   const [activeMode, setActiveMode] = useState<'Text' | 'Voice'>(
     interviewConfig.mode === 'Voice' ? 'Voice' : 'Text'
   );
+  const isVoiceSession = activeMode === 'Voice';
+  const VOICE_MAX_SEC = 15 * 60;
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [activeVoiceName, setActiveVoiceName] = useState<string>('Tiếng Việt (AI)');
-  const [timeLeft, setTimeLeft] = useState(120);
+  const [timeLeft, setTimeLeft] = useState(isVoiceSession ? VOICE_MAX_SEC : 120);
+  const [sessionSecondsLeft, setSessionSecondsLeft] = useState(VOICE_MAX_SEC);
+  const [voiceExpiresAt, setVoiceExpiresAt] = useState<Date | null>(null);
+  const [voiceStarted, setVoiceStarted] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceWarning, setVoiceWarning] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [inputError, setInputError] = useState<string | null>(null);
@@ -68,6 +121,8 @@ export const InterviewRoom: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordStartedAtRef = useRef<number>(0);
 
   // Play auditory feedback chime when AI begins speaking
   const playChimeTone = () => {
@@ -154,10 +209,38 @@ export const InterviewRoom: React.FC = () => {
   }, []);
 
   // User clicks "Sẵn sàng & Bắt đầu phỏng vấn"
-  const handleStartInterview = () => {
+  const handleStartInterview = async () => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.resume();
     }
+
+    if (isVoiceSession && sessionId && localStorage.getItem('hm_access_token') && !voiceStarted) {
+      try {
+        const res = await interviewService.startVoice(sessionId);
+        if (!res.ok) {
+          const msg = res.message || 'Không thể bắt đầu Voice Interview';
+          setInputError(msg);
+          if (/VOICE_NOT_ENTITLED|Tiêu chuẩn|Cao cấp|hạn mức|quota/i.test(msg)) {
+            // Stay on entrance with error — no quota if start failed
+          }
+          return;
+        }
+        const expiresIso = (res.data as any)?.voiceExpiresAt;
+        const startedIso = (res.data as any)?.voiceStartedAt;
+        const expires = expiresIso ? new Date(expiresIso) : new Date(Date.now() + VOICE_MAX_SEC * 1000);
+        setVoiceExpiresAt(expires);
+        setVoiceStarted(true);
+        if (startedIso) {
+          const remaining = Math.max(0, Math.floor((expires.getTime() - Date.now()) / 1000));
+          setSessionSecondsLeft(remaining);
+          setTimeLeft(remaining);
+        }
+      } catch {
+        setInputError('Không thể bắt đầu Voice Interview. Thử lại.');
+        return;
+      }
+    }
+
     setIsEntering(false);
 
     if (messages.length > 0 && messages[0].sender === 'ai') {
@@ -242,29 +325,47 @@ export const InterviewRoom: React.FC = () => {
     initQuestions();
   }, [sessionId, currentRole]);
 
-  // Duration per question
-  const perQuestionDuration =
-    interviewConfig.difficulty === 'Khó'
-      ? 90
-      : interviewConfig.difficulty === 'Dễ'
-      ? 180
-      : 120;
+  // Personalized interview — Text: 120s/question; Voice: 15-minute session (UX; BE enforces)
+  const perQuestionDuration = 120;
 
   useEffect(() => {
+    if (isVoiceSession) return;
     setTimeLeft(perQuestionDuration);
-  }, [currentIndex, perQuestionDuration]);
+  }, [currentIndex, perQuestionDuration, isVoiceSession]);
 
   // Countdown timer
   useEffect(() => {
     if (isEntering || isCompleted) return;
     const timer = setInterval(() => {
+      if (isVoiceSession && voiceExpiresAt) {
+        const remaining = Math.max(0, Math.floor((voiceExpiresAt.getTime() - Date.now()) / 1000));
+        setSessionSecondsLeft(remaining);
+        setTimeLeft(remaining);
+        if (remaining === 60) setVoiceWarning('Còn 1 phút');
+        if (remaining <= 0) {
+          setVoiceWarning('VOICE_SESSION_EXPIRED: Phiên Voice đã hết 15 phút.');
+          setInputError('Phiên Voice đã hết 15 phút. Bạn có thể hoàn tất buổi phỏng vấn.');
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+          setRecording(false);
+        }
+        return;
+      }
       setTimeLeft((prev) => {
         if (prev <= 1) return 0;
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [currentIndex, isEntering, isCompleted]);
+  }, [currentIndex, isEntering, isCompleted, isVoiceSession, voiceExpiresAt]);
+
+  // Cleanup mic on unmount
+  useEffect(() => {
+    return () => {
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -339,39 +440,79 @@ export const InterviewRoom: React.FC = () => {
       },
     ];
 
-    // Submit answer to backend API
+    let submitResult: SubmitAnswerResult | null = null;
+    // Submit answer to backend API — await so we can show analysis / follow-up
     if (sessionId && localStorage.getItem('hm_access_token')) {
-      interviewService
-        .submitAnswer(sessionId, {
+      try {
+        const res = await interviewService.submitAnswer(sessionId, {
           orderIndex: currentIndex,
           questionId: questionIds[currentIndex] || undefined,
           questionText: questions[currentIndex]?.q || '',
           answerText: isSkipped ? '' : userAnswer,
           skipped: isSkipped,
           durationSec: Math.max(1, perQuestionDuration - timeLeft),
-        })
-        .catch(() => {});
+        });
+        if (res.ok && res.data) {
+          submitResult = res.data;
+          // Insert adaptive follow-up into local question list if returned
+          const fu = submitResult.followUp;
+          if (fu?.content) {
+            const insertAt = typeof fu.orderIndex === 'number' ? fu.orderIndex : currentIndex + 1;
+            setQuestions((prev) => {
+              const next = [...prev];
+              const qItem: Question = {
+                cat: fu.category || 'Follow-up',
+                q: fu.content,
+                hint: fu.hint || '',
+              };
+              if (insertAt >= next.length) next.push(qItem);
+              else if (!next[insertAt] || next[insertAt].q !== fu.content) {
+                next.splice(insertAt, 0, qItem);
+              }
+              return next;
+            });
+            setQuestionIds((prev) => {
+              const next = [...prev];
+              const id = fu.questionId || '';
+              if (insertAt >= next.length) next.push(id);
+              else next.splice(insertAt, 0, id);
+              return next;
+            });
+          }
+        }
+      } catch {
+        // Answer may still be saved server-side; continue UX
+      }
     }
 
+    const analysisNote = !isSkipped ? formatAnalysisSummary(submitResult?.analysis ?? null) : null;
+
     // Farewell on finishing interview
-    if (currentIndex >= (questions.length || 5) - 1) {
+    if (currentIndex >= (questions.length || 5) - 1 && !submitResult?.followUp) {
       setIsCompleted(true);
       setInputVal('');
 
       const farewellText =
         'Cảm ơn bạn đã hoàn thành buổi phỏng vấn hôm nay cùng HireMate AI! Tôi đã ghi nhận toàn bộ câu trả lời của bạn và đang hoàn tất báo cáo phân tích chi tiết 4 yếu tố STAR cùng danh sách lỗi cần cải thiện. Chúng ta cùng xem kết quả nhé!';
 
-      setMessages([
-        ...updatedMessages,
-        {
+      const endMsgs: ChatMessage[] = [...updatedMessages];
+      if (analysisNote) {
+        endMsgs.push({
           sender: 'ai',
-          text: farewellText,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        },
-      ]);
+          text: analysisNote,
+          analysis: submitResult?.analysis,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+      }
+      endMsgs.push({
+        sender: 'ai',
+        text: farewellText,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      });
+      setMessages(endMsgs);
 
       const allAnswers = [
         ...messages.filter((m) => m.sender === 'user').map((m) => m.text),
@@ -427,9 +568,13 @@ export const InterviewRoom: React.FC = () => {
     }
 
     const nextIdx = currentIndex + 1;
-    const nextQ = questions[nextIdx];
+    const nextQ =
+      submitResult?.followUp?.content
+        ? { q: submitResult.followUp.content, cat: 'Follow-up', hint: submitResult.followUp.hint || '' }
+        : questions[nextIdx];
 
-    const aiFeedback = `Cảm ơn câu trả lời của bạn.\n\n👉 Câu hỏi ${
+    const analysisBlock = analysisNote ? `${analysisNote}\n\n` : '';
+    const aiFeedback = `${analysisBlock}Cảm ơn câu trả lời của bạn.\n\n👉 Câu hỏi ${
       nextIdx + 1
     }:\n${nextQ?.q || 'Bạn giải quyết xung đột ý kiến trong nhóm như thế nào?'}`;
 
@@ -438,6 +583,7 @@ export const InterviewRoom: React.FC = () => {
       {
         sender: 'ai',
         text: aiFeedback,
+        analysis: submitResult?.analysis,
         timestamp: new Date().toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
@@ -470,38 +616,85 @@ export const InterviewRoom: React.FC = () => {
   };
 
   const handleRecordToggle = async () => {
+    if (isCompleted || isSubmitting || isTranscribing) return;
+    if (isVoiceSession && sessionSecondsLeft <= 0) {
+      setInputError('VOICE_SESSION_EXPIRED: Phiên Voice đã hết 15 phút.');
+      return;
+    }
+
     if (!recording) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
+        mediaStreamRef.current = stream;
+        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm';
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
         mediaRecorderRef.current = mediaRecorder;
         audioChunksRef.current = [];
+        recordStartedAtRef.current = Date.now();
 
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            audioChunksRef.current.push(e.data);
-          }
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
         };
 
         mediaRecorder.onstop = async () => {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          if (sessionId && localStorage.getItem('hm_access_token')) {
-            interviewService.uploadVoice(sessionId, audioBlob).catch(() => {});
-          }
           stream.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+
+          if (!sessionId || !localStorage.getItem('hm_access_token')) {
+            setInputError('Cần đăng nhập để gửi câu trả lời Voice.');
+            return;
+          }
+          if (audioBlob.size < 64) {
+            setInputError('VOICE_EMPTY_TRANSCRIPT: Không ghi được âm thanh. Thử lại.');
+            return;
+          }
+
+          setIsTranscribing(true);
+          setInputError(null);
+          const durationSec = Math.max(1, Math.round((Date.now() - recordStartedAtRef.current) / 1000));
+          try {
+            const res = await interviewService.uploadVoice(sessionId, audioBlob, {
+              orderIndex: currentIndex,
+              questionId: questionIds[currentIndex] || undefined,
+              questionText: questions[currentIndex]?.q,
+              durationSec,
+            });
+
+            if (!res.ok) {
+              const msg = res.message || 'Không thể gửi câu trả lời. Vui lòng thử lại.';
+              setInputError(msg);
+              if (/VOICE_SESSION_EXPIRED/i.test(msg)) {
+                setSessionSecondsLeft(0);
+                setTimeLeft(0);
+              }
+              return;
+            }
+
+            const transcript =
+              typeof (res.data as any)?.answerText === 'string'
+                ? String((res.data as any).answerText).trim()
+                : '';
+            if (!transcript) {
+              setInputError('VOICE_EMPTY_TRANSCRIPT: Không nhận được nội dung. Thử ghi lại.');
+              return;
+            }
+            await proceedWithAnswerFromVoice(transcript, res.data as SubmitAnswerResult);
+          } catch {
+            setInputError('Không thể gửi câu trả lời. Vui lòng thử lại.');
+          } finally {
+            setIsTranscribing(false);
+          }
         };
 
         mediaRecorder.start();
         setRecording(true);
-        setInputVal(
-          '[🎙️ Đang ghi âm giọng nói]: "[Bối cảnh]: Trong dự án gần nhất... [Nhiệm vụ]: Tôi đảm nhiệm... [Hành động]: Tôi đã triển khai... [Kết quả]: Đạt hiệu quả cao."'
-        );
-      } catch (err) {
-        // Fallback simulation if microphone not allowed
-        setRecording(true);
-        setInputVal(
-          '[🎙️ Đang ghi âm]: "[Bối cảnh]: Trong dự án gần nhất, team gặp vấn đề hiệu năng tải trang chậm... [Nhiệm vụ]: Tôi được giao tối ưu bundle và cải thiện Core Web Vitals... [Hành động]: Tôi áp dụng code-splitting, lazy load ảnh và tối ưu caching... [Kết quả]: Tốc độ tải trang tăng 42% và người dùng hài lòng hơn."'
-        );
+        setInputVal('');
+      } catch {
+        setInputError('MICROPHONE_PERMISSION_DENIED: Không có quyền micro. Bật quyền rồi thử lại.');
+        setRecording(false);
       }
     } else {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -509,6 +702,143 @@ export const InterviewRoom: React.FC = () => {
       }
       setRecording(false);
     }
+  };
+
+  /** Voice path: BE already saved+analyzed; advance UI without double submit. */
+  const proceedWithAnswerFromVoice = async (userAnswer: string, submitResult: SubmitAnswerResult | null) => {
+    if (isCompleted || isSubmitting) return;
+    setIsSubmitting(true);
+    setInputError(null);
+
+    const updatedMessages: ChatMessage[] = [
+      ...messages,
+      {
+        sender: 'user',
+        text: userAnswer,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ];
+
+    // Mirror follow-up insertion from proceedWithAnswer
+    if (submitResult?.followUp?.content) {
+      const fu = submitResult.followUp;
+      const insertAt = typeof fu.orderIndex === 'number' ? fu.orderIndex : currentIndex + 1;
+      setQuestions((prev) => {
+        const next = [...prev];
+        const qItem: Question = {
+          cat: fu.category || 'Follow-up',
+          q: fu.content,
+          hint: fu.hint || '',
+        };
+        if (insertAt >= next.length) next.push(qItem);
+        else if (!next[insertAt] || next[insertAt].q !== fu.content) next.splice(insertAt, 0, qItem);
+        return next;
+      });
+      setQuestionIds((prev) => {
+        const next = [...prev];
+        const id = fu.questionId || '';
+        if (insertAt >= next.length) next.push(id);
+        else next.splice(insertAt, 0, id);
+        return next;
+      });
+    }
+
+    const analysisNote = formatAnalysisSummary(submitResult?.analysis ?? null);
+
+    if (currentIndex >= (questions.length || 5) - 1 && !submitResult?.followUp) {
+      // Reuse completion path via proceedWithAnswer-like logic
+      setIsSubmitting(false);
+      await finishSessionWithMessages(updatedMessages, userAnswer, submitResult, analysisNote);
+      return;
+    }
+
+    const nextIdx = currentIndex + 1;
+    const nextQ = questions[nextIdx]?.q || 'Câu hỏi tiếp theo';
+    const aiFeedback = analysisNote
+      ? `${analysisNote}\n\n📌 Câu hỏi tiếp theo:\n${nextQ}`
+      : `Cảm ơn bạn. 📌 Câu hỏi tiếp theo:\n${nextQ}`;
+
+    setMessages([
+      ...updatedMessages,
+      {
+        sender: 'ai',
+        text: aiFeedback,
+        analysis: submitResult?.analysis,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+    setCurrentIndex(nextIdx);
+    setInputVal('');
+    setRecording(false);
+    setIsSubmitting(false);
+    speakVietnamese(aiFeedback);
+  };
+
+  const finishSessionWithMessages = async (
+    updatedMessages: ChatMessage[],
+    userAnswer: string,
+    submitResult: SubmitAnswerResult | null,
+    analysisNote: string | null
+  ) => {
+    setIsCompleted(true);
+    setInputVal('');
+    const farewellText =
+      'Cảm ơn bạn đã hoàn thành buổi phỏng vấn hôm nay cùng HireMate AI! Tôi đã ghi nhận toàn bộ câu trả lời của bạn và đang hoàn tất báo cáo phân tích chi tiết.';
+
+    const endMsgs: ChatMessage[] = [...updatedMessages];
+    if (analysisNote) {
+      endMsgs.push({
+        sender: 'ai',
+        text: analysisNote,
+        analysis: submitResult?.analysis,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+    }
+    endMsgs.push({
+      sender: 'ai',
+      text: farewellText,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+    setMessages(endMsgs);
+
+    const allAnswers = [
+      ...messages.filter((m) => m.sender === 'user').map((m) => m.text),
+      userAnswer,
+    ];
+    let finalResult = calculateRealisticScore(allAnswers);
+
+    if (sessionId && localStorage.getItem('hm_access_token')) {
+      try {
+        const compRes = await interviewService.completeSession(sessionId);
+        if (compRes.ok && compRes.data) {
+          const be = compRes.data;
+          finalResult = {
+            overall: be.overallScore ?? finalResult.overall,
+            role: be.position || finalResult.role,
+            clarity: be.clarityScore ?? finalResult.clarity,
+            subs: {
+              S: be.scoreS ?? finalResult.subs.S,
+              T: be.scoreT ?? finalResult.subs.T,
+              A: be.scoreA ?? finalResult.subs.A,
+              R: be.scoreR ?? finalResult.subs.R,
+            },
+            date: new Date().toISOString().split('T')[0],
+          };
+        }
+      } catch {
+        // heuristic fallback
+      }
+    }
+
+    saveLastResult(finalResult);
+    let hasNavigated = false;
+    const navigateToReport = () => {
+      if (hasNavigated) return;
+      hasNavigated = true;
+      navigate(sessionId ? `/feedback?sessionId=${sessionId}` : '/feedback');
+    };
+    speakVietnamese(farewellText, navigateToReport);
+    setTimeout(navigateToReport, 4500);
   };
 
   const insertStarPrompt = (tag: string) => {
@@ -542,6 +872,9 @@ export const InterviewRoom: React.FC = () => {
         timeLeft={timeLeft}
         currentIndex={currentIndex}
         totalQuestions={questions.length}
+        lockMode={isVoiceSession}
+        sessionLabel={isVoiceSession ? 'Voice · tối đa 15 phút' : undefined}
+        warningText={voiceWarning}
         onToggleSpeech={() => {
           if (isAiSpeaking) {
             stopSpeech();
@@ -549,7 +882,10 @@ export const InterviewRoom: React.FC = () => {
             speakVietnamese(messages[messages.length - 1].text);
           }
         }}
-        onModeChange={setActiveMode}
+        onModeChange={(m) => {
+          if (isVoiceSession) return;
+          setActiveMode(m);
+        }}
         formatTime={formatTime}
       />
 
@@ -620,6 +956,14 @@ export const InterviewRoom: React.FC = () => {
           <div className="room-input-container">
             {activeMode === 'Voice' ? (
               <div className="voice-mode-box">
+                {(voiceWarning || inputError) && (
+                  <div style={{ color: '#B91C1C', fontWeight: 700, fontSize: '0.88rem', marginBottom: 8 }}>
+                    {inputError || voiceWarning}
+                  </div>
+                )}
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                  Voice Interview · {formatTime(sessionSecondsLeft)} / 15:00
+                </div>
                 {recording && (
                   <div className="voice-wave-animation">
                     <span className="wave-bar" />
@@ -635,27 +979,33 @@ export const InterviewRoom: React.FC = () => {
                     recording ? 'is-active' : ''
                   }`}
                   onClick={handleRecordToggle}
-                  disabled={isCompleted || isSubmitting}
+                  disabled={isCompleted || isSubmitting || isTranscribing || sessionSecondsLeft <= 0}
                   style={{
-                    opacity: (isCompleted || isSubmitting) ? 0.5 : 1,
-                    cursor: (isCompleted || isSubmitting) ? 'not-allowed' : 'pointer',
+                    opacity: (isCompleted || isSubmitting || isTranscribing || sessionSecondsLeft <= 0) ? 0.5 : 1,
+                    cursor: (isCompleted || isSubmitting || isTranscribing || sessionSecondsLeft <= 0) ? 'not-allowed' : 'pointer',
                   }}
                   title={
                     isCompleted
                       ? 'Buổi phỏng vấn đã hoàn tất'
+                      : sessionSecondsLeft <= 0
+                      ? 'Hết 15 phút'
                       : recording
                       ? 'Dừng ghi âm'
                       : 'Nhấn để bắt đầu nói'
                   }
                 >
-                  <Mic size={28} />
+                  {isTranscribing ? <Loader2 size={28} className="spin" /> : <Mic size={28} />}
                 </button>
                 <span className="voice-status-text">
                   {isCompleted
                     ? 'Buổi phỏng vấn đã kết thúc thành công.'
+                    : isTranscribing
+                    ? 'Đang chuyển giọng nói thành văn bản...'
                     : recording
-                    ? 'Đang lắng nghe câu trả lời của bạn... (Nhấn lại để kết thúc)'
-                    : 'Nhấn vào Micro để trả lời bằng giọng nói'}
+                    ? 'Recording... (Nhấn Stop để gửi)'
+                    : sessionSecondsLeft <= 0
+                    ? 'Hết thời gian Voice — hãy hoàn tất phiên'
+                    : 'Nhấn Micro để trả lời · 1 phiên = 1 lượt Interview'}
                 </span>
               </div>
             ) : (

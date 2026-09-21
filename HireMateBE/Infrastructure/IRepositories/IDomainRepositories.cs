@@ -8,4 +8,5 @@ public interface IQuestionRepository : IGenericRepository<Question> { }
 public interface IInterviewSessionRepository : IGenericRepository<InterviewSession> { }
 public interface IInterviewAnswerRepository : IGenericRepository<InterviewAnswer> { }
 public interface ICareerMemoryEventRepository : IGenericRepository<CareerMemoryEvent> { }
+public interface IUserFeatureUsageRepository : IGenericRepository<UserFeatureUsage> { }
 

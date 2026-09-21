@@ -117,9 +117,12 @@ export const PaymentSuccess: React.FC = () => {
         </div>
 
         <div className="payment-actions">
-          <Link to="/dashboard" className="payment-btn-primary">
-            <span>Về Bảng điều khiển</span>
+          <Link to="/onboarding/summary" className="payment-btn-primary">
+            <span>Xác nhận hồ sơ & Phỏng vấn AI</span>
             <ArrowRight size={18} />
+          </Link>
+          <Link to="/dashboard?tab=scan" className="payment-btn-ghost">
+            <span>Về Kho CV</span>
           </Link>
           <Link
             to={`/invoice?plan=${planKey}&invoice=${invoiceParam}`}

@@ -18,6 +18,28 @@ export interface Profile {
   isPremium?: boolean;
   currentPlanCode?: string;
   avatarUrl?: string;
+  experiences?: Array<{
+    title?: string;
+    org?: string;
+    period?: string;
+    description?: string;
+  }>;
+  projects?: Array<{
+    name?: string;
+    description?: string;
+    role?: string;
+    technologies?: string[];
+    url?: string;
+    period?: string;
+  }>;
+  certifications?: Array<{
+    name?: string;
+    issuer?: string;
+    issueDate?: string;
+    expiryDate?: string;
+    credentialId?: string;
+    credentialUrl?: string;
+  }>;
 }
 
 export interface Question {

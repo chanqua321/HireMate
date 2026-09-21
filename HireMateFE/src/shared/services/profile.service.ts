@@ -1,6 +1,31 @@
 import { apiClient, ApiResponse } from '../api/apiClient';
 import { Profile } from '../types';
 
+export interface CvExperienceItem {
+  title?: string;
+  org?: string;
+  period?: string;
+  description?: string;
+}
+
+export interface CvProjectItem {
+  name?: string;
+  description?: string;
+  role?: string;
+  technologies?: string[];
+  url?: string;
+  period?: string;
+}
+
+export interface CvCertificationItem {
+  name?: string;
+  issuer?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  credentialId?: string;
+  credentialUrl?: string;
+}
+
 export interface UpdateProfileDto {
   fullName?: string;
   desiredIndustry?: string;
@@ -11,7 +36,10 @@ export interface UpdateProfileDto {
   graduationYear?: number;
   bio?: string;
   hobbies?: string[];
-  [key: string]: any;
+  skills?: string[];
+  experiences?: CvExperienceItem[];
+  projects?: CvProjectItem[];
+  certifications?: CvCertificationItem[];
 }
 
 export const profileService = {
@@ -41,9 +69,15 @@ export const profileService = {
     if (university) payload.university = university;
     if (raw.major?.trim()) payload.major = raw.major.trim();
     if (raw.graduationYear && raw.graduationYear > 0) payload.graduationYear = raw.graduationYear;
-    if (raw.bio?.trim()) payload.bio = raw.bio.trim();
-    const hobbies = raw.hobbies || raw.skills;
-    if (hobbies?.length) payload.hobbies = hobbies;
+    if (typeof raw.bio === 'string') payload.bio = raw.bio.trim();
+    if (Array.isArray(raw.hobbies)) payload.hobbies = raw.hobbies;
+    if (Array.isArray(raw.skills)) {
+      payload.skills = raw.skills;
+      if (!payload.hobbies) payload.hobbies = raw.skills;
+    }
+    if (Array.isArray(raw.experiences)) payload.experiences = raw.experiences;
+    if (Array.isArray(raw.projects)) payload.projects = raw.projects;
+    if (Array.isArray(raw.certifications)) payload.certifications = raw.certifications;
     if (Object.keys(payload).length === 0) {
       return { ok: true, status: 200, data: undefined, message: '' };
     }

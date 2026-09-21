@@ -8,12 +8,14 @@ interface DashboardSidebarProps {
   readinessScore: number;
   totalInterviews: number;
   skillsCount: number;
+  onNavigateInterview?: () => void;
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   readinessScore,
   totalInterviews,
   skillsCount,
+  onNavigateInterview,
 }) => {
   const radius = 56;
   const circumference = 2 * Math.PI * radius;
@@ -101,9 +103,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           {renderReadinessSummary()}
         </p>
 
-        <Link to="/interview-setup" className="improve-score-btn">
-          Luyện phỏng vấn nâng điểm
-        </Link>
+        {onNavigateInterview ? (
+          <button type="button" className="improve-score-btn" onClick={onNavigateInterview}>
+            Luyện phỏng vấn nâng điểm
+          </button>
+        ) : (
+          <Link to="/interview-setup" className="improve-score-btn">
+            Luyện phỏng vấn nâng điểm
+          </Link>
+        )}
       </motion.div>
 
       {/* 2. HireMate AI Coach Card */}

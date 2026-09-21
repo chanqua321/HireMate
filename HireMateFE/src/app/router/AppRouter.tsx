@@ -4,10 +4,12 @@ import { MainLayout } from '../../shared/layouts/MainLayout/MainLayout';
 
 import { Home } from '../../features/home';
 import { AuthContainer, VerifyOtp } from '../../features/auth';
-import { OnboardingProfile, OnboardingGoal, OnboardingSummary } from '../../features/onboarding';
+import { OnboardingSummary } from '../../features/onboarding';
 import { Pricing, Checkout, PaymentSuccess, Invoice } from '../../features/billing';
+import { BillingResult } from '../../pages/billing/BillingResult';
 import { Dashboard } from '../../features/dashboard';
 import { InterviewSetup, InterviewRoom, Feedback, Questions } from '../../features/interview';
+import { RequirePremium } from '../../components/common/RequirePremium';
 
 // Candidate Systems
 import CareerOS from '../../pages/career/CareerOS';
@@ -51,31 +53,32 @@ export const AppRouter: React.FC = () => {
         <Route path="email-confirmed" element={<VerifyOtp />} />
         <Route path="email-confirmation" element={<VerifyOtp />} />
 
-        {/* Onboarding (Unified In-Page Dashboard View) */}
-        <Route path="onboarding" element={<Navigate to="/dashboard?view=onboarding" replace />} />
-        <Route path="onboarding.html" element={<Navigate to="/dashboard?view=onboarding" replace />} />
-        <Route path="onboarding/profile" element={<Navigate to="/dashboard?view=onboarding" replace />} />
-        <Route path="onboarding-profile.html" element={<Navigate to="/dashboard?view=onboarding" replace />} />
-        <Route path="onboarding/goal" element={<Navigate to="/dashboard?view=onboarding" replace />} />
-        <Route path="onboarding-goal.html" element={<Navigate to="/dashboard?view=onboarding" replace />} />
-        <Route path="onboarding/summary" element={<Navigate to="/dashboard?view=onboarding" replace />} />
-        <Route path="onboarding-summary.html" element={<Navigate to="/dashboard?view=onboarding" replace />} />
+        {/* Onboarding — CV-first: vào review từ CV, không bắt form 1→2 */}
+        <Route path="onboarding" element={<Navigate to="/onboarding/summary" replace />} />
+        <Route path="onboarding.html" element={<Navigate to="/onboarding/summary" replace />} />
+        <Route path="onboarding/profile" element={<Navigate to="/onboarding/summary" replace />} />
+        <Route path="onboarding-profile.html" element={<Navigate to="/onboarding/summary" replace />} />
+        <Route path="onboarding/goal" element={<Navigate to="/onboarding/summary" replace />} />
+        <Route path="onboarding-goal.html" element={<Navigate to="/onboarding/summary" replace />} />
+        <Route path="onboarding/summary" element={<OnboardingSummary />} />
+        <Route path="onboarding-summary.html" element={<OnboardingSummary />} />
 
         {/* Billing & Pricing */}
         <Route path="pricing" element={<Pricing />} />
         <Route path="pricing.html" element={<Pricing />} />
         <Route path="checkout" element={<Checkout />} />
         <Route path="checkout.html" element={<Checkout />} />
+        <Route path="billing-result" element={<BillingResult />} />
         <Route path="payment-success" element={<PaymentSuccess />} />
         <Route path="payment-success.html" element={<PaymentSuccess />} />
         <Route path="invoice" element={<Invoice />} />
         <Route path="invoice.html" element={<Invoice />} />
 
-        {/* AI Interview */}
-        <Route path="interview-setup" element={<InterviewSetup />} />
-        <Route path="interview-setup.html" element={<InterviewSetup />} />
-        <Route path="interview-room" element={<InterviewRoom />} />
-        <Route path="interview-room.html" element={<InterviewRoom />} />
+        {/* AI Interview — RequirePremium kiểm tra onboardingCompleted */}
+        <Route path="interview-setup" element={<RequirePremium><InterviewSetup /></RequirePremium>} />
+        <Route path="interview-setup.html" element={<RequirePremium><InterviewSetup /></RequirePremium>} />
+        <Route path="interview-room" element={<RequirePremium><InterviewRoom /></RequirePremium>} />
+        <Route path="interview-room.html" element={<RequirePremium><InterviewRoom /></RequirePremium>} />
         <Route path="feedback" element={<Feedback />} />
         <Route path="feedback.html" element={<Feedback />} />
         {/* Questions (Chỉ Admin mới có quyền truy cập) */}

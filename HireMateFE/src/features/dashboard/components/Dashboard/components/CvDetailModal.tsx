@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileCheck, Check, Video } from 'lucide-react';
+import { X, FileCheck, Check, Video, Lightbulb, RefreshCw, AlertTriangle, Save } from 'lucide-react';
 import { UserCvCard } from '../Dashboard';
+import { AiTextAssistBar } from './AiTextAssistBar';
 import './CvDetailModal.css';
 
 interface CvDetailModalProps {
@@ -9,8 +10,10 @@ interface CvDetailModalProps {
   cv: UserCvCard | null;
   activeCvId: string;
   onClose: () => void;
-  onSelectActiveCv: (cv: UserCvCard) => void;
+  onSelectActiveCv: (cv: UserCvCard) => void | Promise<void>;
   onNavigateInterview: () => void;
+  onReAnalyze?: (cv: UserCvCard) => void | Promise<void>;
+  onSaveBio?: (cvId: string, bio: string) => void | Promise<void>;
 }
 
 export const CvDetailModal: React.FC<CvDetailModalProps> = ({
@@ -20,7 +23,23 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
   onClose,
   onSelectActiveCv,
   onNavigateInterview,
+  onReAnalyze,
+  onSaveBio,
 }) => {
+  const [reAnalyzing, setReAnalyzing] = useState(false);
+  const [draftBio, setDraftBio] = useState('');
+  const [savingBio, setSavingBio] = useState(false);
+  const [bioMsg, setBioMsg] = useState('');
+  const tips = cv?.suggestions?.filter(Boolean) || [];
+  const ready = !!cv?.parseSucceeded;
+
+  useEffect(() => {
+    if (cv) {
+      setDraftBio(cv.bio || '');
+      setBioMsg('');
+    }
+  }, [cv?.id, cv?.bio, isOpen]);
+
   return (
     <AnimatePresence>
       {isOpen && cv && (
@@ -33,11 +52,7 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
             className="cv-detail-modal-card"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={onClose}
-              className="modal-close-circle-btn"
-            >
+            <button type="button" onClick={onClose} className="modal-close-circle-btn">
               <X size={18} />
             </button>
 
@@ -52,30 +67,98 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
                 <p style={{ margin: '4px 0 0 0', fontSize: '0.86rem', color: '#64748B' }}>
                   {cv.role} • {cv.field}
                 </p>
+                <p
+                  style={{
+                    margin: '8px 0 0',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: ready ? '#15803D' : '#B45309',
+                  }}
+                >
+                  {ready
+                    ? 'Đã phân tích — có thể luyện phỏng vấn sau khi xem gợi ý.'
+                    : 'Chưa đạt — sửa theo gợi ý rồi phân tích lại trước khi phỏng vấn.'}
+                </p>
               </div>
             </div>
 
-            {/* ATS Scores Breakdown Grid */}
             <div className="cv-detail-scores-grid">
               <div className="ats-score-box">
                 <span>Điểm ATS</span>
-                <strong style={{ color: '#0284C7' }}>{cv.atsScore}/100</strong>
+                <strong style={{ color: cv.atsScore < 50 ? '#B45309' : '#0284C7' }}>{cv.atsScore}/100</strong>
               </div>
               <div className="ats-score-box">
                 <span>Định dạng</span>
-                <strong style={{ color: '#16A34A' }}>{cv.formatScore || 92}/100</strong>
+                <strong style={{ color: '#16A34A' }}>{cv.formatScore || 0}/100</strong>
               </div>
               <div className="ats-score-box">
                 <span>Từ khóa</span>
-                <strong style={{ color: '#D97706' }}>{cv.keywordsScore || 88}/100</strong>
+                <strong style={{ color: '#D97706' }}>{cv.keywordsScore || 0}/100</strong>
               </div>
               <div className="ats-score-box">
                 <span>Độ dễ đọc</span>
-                <strong style={{ color: '#7C3AED' }}>{cv.readabilityScore || 90}/100</strong>
+                <strong style={{ color: '#7C3AED' }}>{cv.readabilityScore || 0}/100</strong>
               </div>
             </div>
 
-            {/* Details sections */}
+            {cv.atsScore < 50 ? (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                }}
+              >
+                <div style={{ fontWeight: 750, color: '#92400E', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AlertTriangle size={16} color="#B45309" />
+                  ⚠️ CV nên được cải thiện
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: '0.84rem', color: '#78350F' }}>
+                  Điểm CV: {cv.atsScore}/100. Hệ thống không tự sửa database — dùng AI diễn đạt bên dưới để xem preview, rồi chọn Giữ bản cũ / Dùng bản AI.
+                </p>
+              </div>
+            ) : (
+              <p style={{ margin: '12px 0 0', fontSize: '0.84rem', color: '#15803D', fontWeight: 650 }}>
+                ✓ CV có thể sử dụng
+              </p>
+            )}
+
+            {tips.length > 0 && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: ready ? '#F0FDF4' : '#FFFBEB',
+                  border: `1px solid ${ready ? '#BBF7D0' : '#FDE68A'}`,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 8,
+                    fontWeight: 750,
+                    color: '#0F172A',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  {ready ? <Lightbulb size={16} color="#15803D" /> : <AlertTriangle size={16} color="#B45309" />}
+                  Gợi ý cải thiện CV
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, color: '#334155', fontSize: '0.86rem', lineHeight: 1.5 }}>
+                  {tips.map((t) => (
+                    <li key={t} style={{ marginBottom: 4 }}>
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="cv-detail-meta-two-col">
               <div className="cv-detail-meta-card">
                 <span>Kinh nghiệm:</span>
@@ -83,11 +166,10 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
               </div>
               <div className="cv-detail-meta-card">
                 <span>Trình độ học vấn:</span>
-                <strong style={{ color: '#0F172A' }}>{cv.education}</strong>
+                <strong style={{ color: '#0F172A' }}>{cv.education || '—'}</strong>
               </div>
             </div>
 
-            {/* Skills */}
             <div className="cv-detail-skills-wrap">
               <span className="cv-detail-skills-label">
                 Kỹ năng chuyên môn trích xuất ({cv.skills.length}):
@@ -101,18 +183,95 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
               </div>
             </div>
 
-            {/* Bio summary */}
-            {cv.bio && (
-              <div className="cv-detail-bio-box">
-                <span className="cv-detail-bio-label">
-                  Tóm tắt hồ sơ & Điểm mạnh:
-                </span>
-                <p className="cv-detail-bio-content">{cv.bio}</p>
-              </div>
-            )}
+            <div className="cv-detail-bio-box" style={{ marginTop: 12 }}>
+              <span className="cv-detail-bio-label">Giới thiệu / Bio (sửa trực tiếp)</span>
+              <textarea
+                value={draftBio}
+                onChange={(e) => setDraftBio(e.target.value)}
+                rows={4}
+                placeholder="Nhập ý của bạn… dùng AI diễn đạt hoặc dịch Anh/Việt bên dưới."
+                style={{
+                  width: '100%',
+                  marginTop: 8,
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  border: '1px solid #E2E8F0',
+                  fontSize: '0.9rem',
+                  lineHeight: 1.5,
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <AiTextAssistBar
+                value={draftBio}
+                onChange={setDraftBio}
+                field="bio"
+                context={[cv.role, cv.field].filter(Boolean).join(' · ')}
+                disabled={savingBio}
+              />
+              {onSaveBio && (
+                <button
+                  type="button"
+                  disabled={savingBio || draftBio.trim() === (cv.bio || '').trim()}
+                  onClick={async () => {
+                    setSavingBio(true);
+                    setBioMsg('');
+                    try {
+                      await onSaveBio(cv.id, draftBio.trim());
+                      setBioMsg('Đã lưu bio vào hồ sơ.');
+                    } catch (e: any) {
+                      setBioMsg(e?.message || 'Không lưu được bio.');
+                    } finally {
+                      setSavingBio(false);
+                    }
+                  }}
+                  style={{
+                    marginTop: 8,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: '#0284C7',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    opacity: savingBio ? 0.7 : 1,
+                  }}
+                >
+                  <Save size={14} />
+                  {savingBio ? 'Đang lưu…' : 'Lưu bio đã chỉnh'}
+                </button>
+              )}
+              {bioMsg ? (
+                <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#15803D' }}>{bioMsg}</p>
+              ) : null}
+            </div>
 
-            {/* Action buttons */}
             <div className="cv-detail-actions-footer">
+              {onReAnalyze && (
+                <button
+                  type="button"
+                  disabled={reAnalyzing}
+                  onClick={async () => {
+                    setReAnalyzing(true);
+                    try {
+                      await onReAnalyze(cv);
+                    } finally {
+                      setReAnalyzing(false);
+                    }
+                  }}
+                  className="cv-detail-set-active-btn"
+                  style={{ background: '#F1F5F9', color: '#0F172A' }}
+                >
+                  <RefreshCw size={16} className={reAnalyzing ? 'animate-spin' : undefined} />
+                  <span>{reAnalyzing ? 'Đang phân tích…' : 'Phân tích lại sau khi sửa'}</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -121,7 +280,8 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
                 }}
                 className="cv-detail-set-active-btn"
                 style={{
-                  background: cv.id === activeCvId ? '#E2E8F0' : 'linear-gradient(135deg, #0284C7 0%, #03BFFF 100%)',
+                  background:
+                    cv.id === activeCvId ? '#E2E8F0' : 'linear-gradient(135deg, #0284C7 0%, #03BFFF 100%)',
                   color: cv.id === activeCvId ? '#475569' : '#FFFFFF',
                 }}
               >
@@ -131,15 +291,19 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
 
               <button
                 type="button"
+                disabled={!ready}
+                title={ready ? 'Bắt đầu phỏng vấn' : 'Cần phân tích CV thành công trước'}
                 onClick={() => {
+                  if (!ready) return;
                   onSelectActiveCv(cv);
                   onClose();
                   onNavigateInterview();
                 }}
                 className="cv-detail-interview-btn"
+                style={{ opacity: ready ? 1 : 0.45, cursor: ready ? 'pointer' : 'not-allowed' }}
               >
                 <Video size={16} />
-                <span>Phỏng vấn ngay</span>
+                <span>{ready ? 'Phỏng vấn ngay' : 'Chưa thể phỏng vấn'}</span>
               </button>
             </div>
           </motion.div>

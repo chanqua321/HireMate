@@ -100,6 +100,9 @@ namespace Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("Confidence")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -108,11 +111,30 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MemoryKey")
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<int>("OccurrenceCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("PayloadJson")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid?>("RefId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SourceAnswerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
@@ -120,6 +142,11 @@ namespace Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("UserId", "MemoryKey")
+                        .IsUnique()
+                        .HasDatabaseName("IX_CareerMemoryEvents_UserId_MemoryKey")
+                        .HasFilter("[MemoryKey] IS NOT NULL");
 
                     b.ToTable("CareerMemoryEvents");
                 });
@@ -133,6 +160,9 @@ namespace Infrastructure.Migrations
                     b.Property<string>("Bio")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("CertificationsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("ConfirmedAt")
                         .HasColumnType("datetime2");
@@ -168,6 +198,9 @@ namespace Infrastructure.Migrations
                     b.Property<string>("Major")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ProjectsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SkillsJson")
                         .HasMaxLength(2000)
@@ -287,6 +320,13 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ExtractedText")
                         .HasColumnType("nvarchar(max)");
 
@@ -338,6 +378,9 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<Guid?>("TemplateId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("datetime2");
 
@@ -349,6 +392,8 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TemplateId");
+
                     b.HasIndex("UserId")
                         .IsUnique()
                         .HasDatabaseName("IX_CvDocuments_UserId_OneConfirmed")
@@ -357,6 +402,75 @@ namespace Infrastructure.Migrations
                     b.HasIndex("UserId", "UploadedAt");
 
                     b.ToTable("CvDocuments");
+                });
+
+            modelBuilder.Entity("Infrastructure.Models.CvTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystemTemplate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LayoutDefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LayoutKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasDefaultValue("modern-01");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PreviewUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("SourceCvDocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TemplateType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasDefaultValue("Modern");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsSystemTemplate", "IsActive");
+
+                    b.HasIndex("UserId", "IsActive");
+
+                    b.ToTable("CvTemplates");
                 });
 
             modelBuilder.Entity("Infrastructure.Models.FaqItem", b =>
@@ -396,15 +510,51 @@ namespace Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("AnalysisAvailable")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("AnalysisJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("AnswerText")
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<int?>("CommunicationScore")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CompletenessScore")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CvConsistencyScore")
+                        .HasColumnType("int");
+
                     b.Property<int>("DurationSec")
                         .HasColumnType("int");
 
+                    b.Property<string>("EvidenceJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EvidenceStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("FollowUpReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsFollowUp")
+                        .HasColumnType("bit");
+
                     b.Property<int>("OrderIndex")
                         .HasColumnType("int");
+
+                    b.Property<int?>("ProblemSolvingScore")
+                        .HasColumnType("int");
+
+                    b.Property<string>("QuestionCategory")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<Guid?>("QuestionId")
                         .HasColumnType("uniqueidentifier");
@@ -414,11 +564,32 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<int?>("RelevanceScore")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("SessionId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("Skipped")
                         .HasColumnType("bit");
+
+                    b.Property<bool?>("StarHasAction")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("StarHasResult")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("StarHasSituation")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("StarHasTask")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("StarScore")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TechnicalKnowledgeScore")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -492,8 +663,14 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("StructuredFeedbackJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("VoiceStartedAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -541,9 +718,11 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("InvoiceNumber");
+
                     b.HasIndex("PlanId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "CreatedAt");
 
                     b.ToTable("Invoices");
                 });
@@ -567,6 +746,9 @@ namespace Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("JobDescriptionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("OverallScore")
                         .HasColumnType("int");
 
@@ -578,9 +760,61 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CvDocumentId");
+
                     b.HasIndex("UserId");
 
+                    b.HasIndex("JobDescriptionId", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
                     b.ToTable("JdMatchResults");
+                });
+
+            modelBuilder.Entity("Infrastructure.Models.JobDescription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Position")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("SourceUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "IsArchived", "UpdatedAt");
+
+                    b.ToTable("JobDescriptions");
                 });
 
             modelBuilder.Entity("Infrastructure.Models.Organization", b =>
@@ -667,6 +901,11 @@ namespace Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("InvoiceId");
+
+                    b.HasIndex("Provider", "TransactionRef")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Payments_Provider_TransactionRef")
+                        .HasFilter("[TransactionRef] IS NOT NULL");
 
                     b.ToTable("Payments");
                 });
@@ -1185,6 +1424,42 @@ namespace Infrastructure.Migrations
                     b.ToTable("UserBadges");
                 });
 
+            modelBuilder.Entity("Infrastructure.Models.UserFeatureUsage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Feature")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Used")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Feature", "Period")
+                        .IsUnique();
+
+                    b.ToTable("UserFeatureUsages");
+                });
+
             modelBuilder.Entity("Infrastructure.Models.WaitlistEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1348,11 +1623,28 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Models.CvDocument", b =>
                 {
+                    b.HasOne("Infrastructure.Models.CvTemplate", "Template")
+                        .WithMany("Documents")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Infrastructure.Models.UserAccount", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Template");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Infrastructure.Models.CvTemplate", b =>
+                {
+                    b.HasOne("Infrastructure.Models.UserAccount", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("User");
                 });
@@ -1405,6 +1697,31 @@ namespace Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Infrastructure.Models.JdMatchResult", b =>
+                {
+                    b.HasOne("Infrastructure.Models.CvDocument", "CvDocument")
+                        .WithMany()
+                        .HasForeignKey("CvDocumentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Infrastructure.Models.JobDescription", "JobDescription")
+                        .WithMany("Matches")
+                        .HasForeignKey("JobDescriptionId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Infrastructure.Models.UserAccount", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CvDocument");
+
+                    b.Navigation("JobDescription");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Infrastructure.Models.JobDescription", b =>
                 {
                     b.HasOne("Infrastructure.Models.UserAccount", "User")
                         .WithMany()
@@ -1478,6 +1795,17 @@ namespace Infrastructure.Migrations
                     b.Navigation("Badge");
                 });
 
+            modelBuilder.Entity("Infrastructure.Models.UserFeatureUsage", b =>
+                {
+                    b.HasOne("Infrastructure.Models.UserAccount", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Infrastructure.Models.Role", null)
@@ -1529,9 +1857,19 @@ namespace Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Infrastructure.Models.CvTemplate", b =>
+                {
+                    b.Navigation("Documents");
+                });
+
             modelBuilder.Entity("Infrastructure.Models.InterviewSession", b =>
                 {
                     b.Navigation("Answers");
+                });
+
+            modelBuilder.Entity("Infrastructure.Models.JobDescription", b =>
+                {
+                    b.Navigation("Matches");
                 });
 
             modelBuilder.Entity("Infrastructure.Models.UserAccount", b =>

@@ -13,6 +13,9 @@ interface RoomHeaderProps {
   onToggleSpeech: () => void;
   onModeChange: (mode: 'Text' | 'Voice') => void;
   formatTime: (seconds: number) => string;
+  lockMode?: boolean;
+  sessionLabel?: string;
+  warningText?: string | null;
 }
 
 export const RoomHeader: React.FC<RoomHeaderProps> = ({
@@ -25,6 +28,9 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   onToggleSpeech,
   onModeChange,
   formatTime,
+  lockMode = false,
+  sessionLabel,
+  warningText,
 }) => {
   return (
     <motion.div
@@ -48,14 +54,13 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
 
         <div className="room-role-tag">
           <span className="room-eyebrow">
-            <Sparkles size={13} /> Phỏng vấn AI thực chiến
+            <Sparkles size={13} /> {sessionLabel || 'Phỏng vấn AI thực chiến'}
           </span>
           <h2 className="room-role-title">{currentRole}</h2>
         </div>
       </div>
 
       <div className="room-header-controls">
-        {/* Audio Auto-Speech Toggle */}
         <button
           type="button"
           className={`room-audio-toggle ${isAiSpeaking ? 'speaking' : ''}`}
@@ -66,31 +71,42 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
           <span>{isAiSpeaking ? 'AI đang nói...' : 'Phát lại giọng AI'}</span>
         </button>
 
-        {/* Mode Switcher */}
-        <div className="room-mode-switch">
-          <button
-            type="button"
-            className={`mode-toggle-btn ${activeMode === 'Text' ? 'active' : ''}`}
-            onClick={() => onModeChange('Text')}
-          >
-            <Keyboard size={15} /> Text Mode
-          </button>
-          <button
-            type="button"
-            className={`mode-toggle-btn ${activeMode === 'Voice' ? 'active' : ''}`}
-            onClick={() => onModeChange('Voice')}
-          >
-            <Mic size={15} /> Voice Mode
-          </button>
-        </div>
+        {!lockMode && (
+          <div className="room-mode-switch">
+            <button
+              type="button"
+              className={`mode-toggle-btn ${activeMode === 'Text' ? 'active' : ''}`}
+              onClick={() => onModeChange('Text')}
+            >
+              <Keyboard size={15} /> Text Mode
+            </button>
+            <button
+              type="button"
+              className={`mode-toggle-btn ${activeMode === 'Voice' ? 'active' : ''}`}
+              onClick={() => onModeChange('Voice')}
+            >
+              <Mic size={15} /> Voice Mode
+            </button>
+          </div>
+        )}
 
-        {/* Timer Badge */}
-        <div className={`room-timer-badge ${timeLeft < 30 ? 'warning' : ''}`}>
+        {lockMode && (
+          <div className="room-mode-switch">
+            <button type="button" className="mode-toggle-btn active" disabled>
+              <Mic size={15} /> Voice
+            </button>
+          </div>
+        )}
+
+        <div className={`room-timer-badge ${timeLeft < 60 ? 'warning' : ''}`}>
           <Clock size={16} />
-          <span>{formatTime(timeLeft)}</span>
+          <span>{formatTime(timeLeft)}{lockMode ? ' / 15:00' : ''}</span>
         </div>
 
-        {/* Question Index Pill */}
+        {warningText && (
+          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#B45309' }}>{warningText}</div>
+        )}
+
         <div className="room-question-badge">
           Câu {currentIndex + 1} / {totalQuestions || 5}
         </div>

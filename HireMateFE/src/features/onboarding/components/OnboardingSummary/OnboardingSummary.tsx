@@ -1,45 +1,240 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
-import { onboardingService } from '../../api/onboarding.service';
+import { onboardingService, ensureInterviewReady } from '../../api/onboarding.service';
+import { ONBOARDING_REDIRECT_KEY } from '../../../../components/common/RequirePremium';
+import { cvService } from '../../../../shared/services/cv.service';
+import { profileService } from '../../../../shared/services/profile.service';
 import {
   CheckCircle2,
   ArrowRight,
-  ArrowLeft,
-  Edit3,
   Loader2,
-  Sparkles,
   LayoutDashboard,
   User,
   Briefcase,
   GraduationCap,
+  Video,
+  FileCheck,
+  SkipForward,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import './css/OnboardingSummary.css';
 
+/**
+ * T1.1: Sau khi có CV, đây là bước review (dữ liệu lấy từ CV) — không bắt nhập lại form 1→2.
+ * Có thể bỏ qua review và vào phỏng vấn theo CV đang chọn.
+ */
 export const OnboardingSummary: React.FC = () => {
-  const { profile } = useApp();
+  const { profile, updateProfile } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [confirming, setConfirming] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [cvTitle, setCvTitle] = useState('');
+  const [cvId, setCvId] = useState<string | null>(null);
 
-  const handleFinish = async () => {
-    if (localStorage.getItem('hm_access_token')) {
-      setConfirming(true);
+  const [view, setView] = useState({
+    name: '',
+    education: '',
+    field: '',
+    role: '',
+    exp: '',
+    skills: [] as string[],
+    bio: '',
+  });
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
       try {
-        await onboardingService.confirm();
-      } catch (err) {
-        // Fallback gracefully
+        const [profRes, cvRes, statusRes] = await Promise.all([
+          profileService.getProfile().catch(() => null),
+          cvService.listCvs().catch(() => null),
+          onboardingService.getStatus().catch(() => null),
+        ]);
+
+        if (!alive) return;
+
+        const next = statusRes?.data?.nextStep || statusRes?.data?.NextStep;
+        const cvs = Array.isArray(cvRes?.data) ? cvRes!.data! : [];
+        const p: any = profRes?.data || {};
+        const confirmedId = String(
+          p.confirmedCvDocumentId || p.ConfirmedCvDocumentId || ''
+        ).trim();
+        // Server SoT only — never prefer localStorage / first CV over Confirmed.
+        const chosen =
+          (confirmedId && cvs.find((c: any) => String(c.id) === confirmedId)) ||
+          cvs.find((c: any) => c.isConfirmed || c.isActive) ||
+          null;
+
+        // Analyze + gợi ý sửa chỉ làm lúc tạo/upload CV — không kẹt ở bước này
+        if (next === 'upload_cv' || next === 'analyze' || cvs.length === 0) {
+          navigate('/dashboard?tab=scan', { replace: true });
+          return;
+        }
+        if (next === 'select_plan') {
+          navigate('/pricing', { replace: true });
+          return;
+        }
+
+        if (chosen) {
+          setCvId(chosen.id);
+          setCvTitle(
+            (chosen as any).displayName ||
+              (chosen as any).DisplayName ||
+              chosen.fileName ||
+              'CV HireMate'
+          );
+          localStorage.setItem('hm_active_cv_id', chosen.id);
+        } else {
+          localStorage.removeItem('hm_active_cv_id');
+          localStorage.removeItem('hm_active_cv');
+        }
+
+        let extract: any = null;
+        if (chosen?.analysis) {
+          try {
+            const raw = chosen.analysis;
+            extract = typeof raw === 'string' ? JSON.parse(raw)?.extract : (raw as any)?.extract;
+          } catch {}
+        }
+
+        const name =
+          p.fullName || p.FullName || extract?.fullName || profile.name || '';
+        const education =
+          p.university || p.University || extract?.university || profile.education || '';
+        const field =
+          p.desiredIndustry ||
+          p.DesiredIndustry ||
+          extract?.desiredIndustry ||
+          profile.field ||
+          '';
+        const role =
+          p.desiredPosition ||
+          p.DesiredPosition ||
+          extract?.desiredPosition ||
+          profile.role ||
+          '';
+        const exp =
+          p.experienceLevel ||
+          p.ExperienceLevel ||
+          extract?.experienceLevel ||
+          profile.exp ||
+          '';
+        const skills =
+          (Array.isArray(p.skills) && p.skills) ||
+          (Array.isArray(p.Skills) && p.Skills) ||
+          (Array.isArray(extract?.skills) && extract.skills) ||
+          profile.skills ||
+          [];
+        const bio = p.bio || p.Bio || extract?.bio || profile.bio || '';
+
+        setView({ name, education, field, role, exp, skills, bio });
+        updateProfile({
+          name,
+          fullName: name,
+          education,
+          university: education,
+          field,
+          desiredIndustry: field,
+          role,
+          desiredPosition: role,
+          exp,
+          experienceLevel: exp,
+          skills,
+          bio,
+        } as any);
+
+        if (chosen) {
+          localStorage.setItem(
+            'hm_active_cv',
+            JSON.stringify({
+              id: chosen.id,
+              title:
+                (chosen as any).displayName ||
+                (chosen as any).DisplayName ||
+                chosen.fileName ||
+                'CV',
+              filename: chosen.fileName,
+              role,
+              field,
+              exp,
+              skills,
+              bio,
+              education,
+              isBackendDoc: true,
+            })
+          );
+        }
       } finally {
-        setConfirming(false);
+        if (alive) setLoading(false);
       }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [navigate]); // load once from CV/Profile API
+
+  const goInterview = async (_skipConfirmNoise: boolean) => {
+    setErrorMsg('');
+    if (!localStorage.getItem('hm_access_token')) {
+      navigate('/login');
+      return;
     }
-    navigate('/dashboard');
+    setConfirming(true);
+    try {
+      const ready = await ensureInterviewReady(cvId);
+      if (!ready.ok) {
+        if (ready.reason === 'need_plan') {
+          navigate('/pricing');
+          return;
+        }
+        if (ready.reason === 'need_cv') {
+          navigate('/dashboard?tab=scan');
+          return;
+        }
+        setErrorMsg(ready.message);
+        return;
+      }
+
+      const fromCv = (() => {
+        try {
+          const raw = localStorage.getItem('hm_active_cv');
+          return raw ? JSON.parse(raw) : cvId ? { id: cvId } : undefined;
+        } catch {
+          return cvId ? { id: cvId } : undefined;
+        }
+      })();
+
+      const qRedirect = searchParams.get('redirect');
+      const stored = sessionStorage.getItem(ONBOARDING_REDIRECT_KEY);
+      sessionStorage.removeItem(ONBOARDING_REDIRECT_KEY);
+      let dest = '/interview-setup';
+      const candidate = qRedirect || stored;
+      if (candidate && candidate.startsWith('/') && !candidate.startsWith('//') && !candidate.includes('://')) {
+        dest = candidate;
+      }
+      navigate(dest, { state: { fromCv } });
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Có lỗi khi vào phỏng vấn.');
+    } finally {
+      setConfirming(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '50vh', display: 'grid', placeItems: 'center' }}>
+        <Loader2 className="animate-spin" size={28} color="#0284C7" />
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: 'calc(100vh - 72px)', background: '#F8FAFC', padding: '40px 20px 80px' }}>
       <div style={{ maxWidth: '680px', margin: '0 auto' }}>
-        {/* Step Indicator Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
@@ -52,13 +247,12 @@ export const OnboardingSummary: React.FC = () => {
                 fontWeight: 700,
               }}
             >
-              Bước 3 / 3
+              Review từ CV
             </span>
             <span style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: 600 }}>
-              Xác nhận & Kích hoạt lộ trình AI
+              Kiểm tra nhanh rồi vào phỏng vấn
             </span>
           </div>
-
           <Link
             to="/dashboard"
             style={{
@@ -75,196 +269,161 @@ export const OnboardingSummary: React.FC = () => {
           </Link>
         </div>
 
-        {/* Card Body */}
         <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
           style={{
-            background: '#ffffff',
-            borderRadius: '24px',
-            border: '1.5px solid #E2E8F0',
-            padding: '36px',
-            boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
+            background: '#fff',
+            borderRadius: 20,
+            padding: '32px 28px',
+            boxShadow: '0 10px 40px rgba(15,23,42,0.06)',
+            border: '1px solid #E2E8F0',
           }}
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.35 }}
         >
-          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-            <div
-              style={{
-                margin: '0 auto 16px',
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                background: '#DCFCE7',
-                color: '#16A34A',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 8px 20px rgba(34, 197, 94, 0.2)',
-              }}
-            >
-              <CheckCircle2 size={36} />
-            </div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#001B3F', margin: '0 0 8px' }}>
-              Hồ sơ của bạn đã sẵn sàng! 🎉
-            </h1>
-            <p style={{ color: '#64748B', fontSize: '0.95rem', margin: 0 }}>
-              HireMate AI đã hoàn tất cấu hình theo đúng mục tiêu nghề nghiệp và kỹ năng của bạn.
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <CheckCircle2 size={48} color="#22C55E" style={{ marginBottom: 8 }} />
+            <h2 style={{ margin: '0 0 6px', fontSize: '1.45rem', fontWeight: 800, color: '#0F172A' }}>
+              Hồ sơ đã lấy từ CV của bạn
+            </h2>
+            <p style={{ margin: 0, color: '#64748B', fontSize: '0.92rem' }}>
+              Không cần nhập lại. Chỉ kiểm tra — hoặc bỏ qua để vào phỏng vấn theo CV đã chọn.
             </p>
           </div>
+
+          {cvTitle && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                background: '#F0F9FF',
+                border: '1px solid #BAE6FD',
+                borderRadius: 12,
+                padding: '12px 14px',
+                marginBottom: 16,
+              }}
+            >
+              <FileCheck size={20} color="#0284C7" />
+              <div>
+                <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.9rem' }}>CV phỏng vấn</div>
+                <div style={{ fontSize: '0.84rem', color: '#0369A1' }}>{cvTitle}</div>
+              </div>
+            </div>
+          )}
 
           <div
             style={{
               background: '#F8FAFC',
-              border: '1.5px solid #E2E8F0',
-              borderRadius: '16px',
-              padding: '24px',
-              marginBottom: '28px',
+              borderRadius: 14,
+              padding: 16,
+              marginBottom: 20,
+              border: '1px solid #E2E8F0',
             }}
           >
-            {/* Career Goal Section */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '14px',
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 750, color: '#001B3F', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Briefcase size={16} color="#03BFFF" /> Mục tiêu nghề nghiệp
-              </h3>
-              <Link
-                to="/onboarding/goal"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '0.84rem',
-                  color: '#0284C7',
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
-                <Edit3 size={13} /> Sửa
-              </Link>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
-              <div>
-                <span style={{ fontSize: '0.82rem', color: '#64748B' }}>Ngành nghề</span>
-                <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.95rem' }}>
-                  {profile.field || 'Công nghệ thông tin'}
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <User size={16} color="#64748B" style={{ marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B' }}>Họ tên</div>
+                  <strong>{view.name || '—'}</strong>
                 </div>
               </div>
-              <div>
-                <span style={{ fontSize: '0.82rem', color: '#64748B' }}>Vị trí ứng tuyển</span>
-                <div style={{ fontWeight: 700, color: '#0284C7', fontSize: '0.95rem' }}>
-                  {profile.role || 'Frontend Developer'}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <GraduationCap size={16} color="#64748B" style={{ marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B' }}>Học vấn</div>
+                  <strong>{view.education || '—'}</strong>
                 </div>
               </div>
-            </div>
-
-            <div style={{ height: '1px', background: '#E2E8F0', margin: '14px 0' }} />
-
-            {/* Personal Profile Section */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '14px',
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 750, color: '#001B3F', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <User size={16} color="#03BFFF" /> Thông tin cá nhân & Kỹ năng
-              </h3>
-              <Link
-                to="/onboarding/profile"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '0.84rem',
-                  color: '#0284C7',
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
-                <Edit3 size={13} /> Sửa
-              </Link>
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <span style={{ fontSize: '0.82rem', color: '#64748B' }}>Họ và tên</span>
-              <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.95rem' }}>
-                {profile.name || 'Ứng viên HireMate'}
-              </div>
-            </div>
-
-            {profile.education && (
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{ fontSize: '0.82rem', color: '#64748B' }}>Học vấn / Trường học</span>
-                <div style={{ fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>
-                  {profile.education}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <Briefcase size={16} color="#64748B" style={{ marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B' }}>Ngành / Vị trí</div>
+                  <strong>
+                    {view.field || '—'} · {view.role || '—'}
+                  </strong>
+                  {view.exp ? (
+                    <div style={{ fontSize: '0.82rem', color: '#64748B', marginTop: 2 }}>{view.exp}</div>
+                  ) : null}
                 </div>
               </div>
-            )}
-
-            {profile.skills && profile.skills.length > 0 && (
-              <div>
-                <span style={{ fontSize: '0.82rem', color: '#64748B', display: 'block', marginBottom: '6px' }}>
-                  Kỹ năng chuyên môn
-                </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {profile.skills.map((t) => (
+              {view.skills.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {view.skills.slice(0, 12).map((s) => (
                     <span
-                      key={t}
+                      key={s}
                       style={{
                         background: '#EFF6FF',
                         color: '#1D4ED8',
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '0.78rem',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontSize: '0.75rem',
                         fontWeight: 600,
                       }}
                     >
-                      {t}
+                      {s}
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+            <div style={{ marginTop: 12, fontSize: '0.82rem' }}>
+              <Link to="/dashboard?tab=manual" style={{ color: '#0284C7', fontWeight: 600 }}>
+                Chỉnh sửa trên Dashboard
+              </Link>
+              {' · '}
+              <Link to="/dashboard?tab=scan" style={{ color: '#0284C7', fontWeight: 600 }}>
+                Đổi CV trong Kho CV
+              </Link>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              type="button"
-              onClick={() => navigate('/onboarding/goal')}
-              className="promo-apply-btn"
-              style={{ background: '#F1F5F9', color: '#475569', padding: '14px 20px', borderRadius: '14px' }}
-            >
-              <ArrowLeft size={16} /> Quay lại
-            </button>
+          {errorMsg && (
+            <p style={{ color: '#DC2626', fontWeight: 600, fontSize: '0.9rem', marginBottom: 12 }}>{errorMsg}</p>
+          )}
 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <button
               type="button"
-              onClick={handleFinish}
               disabled={confirming}
+              onClick={() => goInterview(false)}
               className="checkout-submit-btn"
-              style={{ flex: 1 }}
+              style={{ width: '100%' }}
             >
               {confirming ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
-                  <span>Đang lưu thiết lập...</span>
+                  <span>Đang mở phòng phỏng vấn…</span>
                 </>
               ) : (
                 <>
-                  <span>Bắt đầu trải nghiệm Dashboard</span>
+                  <Video size={18} />
+                  <span>Bắt đầu phỏng vấn AI với CV này</span>
                   <ArrowRight size={18} />
                 </>
               )}
+            </button>
+            <button
+              type="button"
+              disabled={confirming}
+              onClick={() => goInterview(true)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: 12,
+                border: '1.5px solid #E2E8F0',
+                background: '#fff',
+                color: '#475569',
+                fontWeight: 650,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                cursor: confirming ? 'wait' : 'pointer',
+              }}
+            >
+              <SkipForward size={16} />
+              Bỏ qua review — vào phỏng vấn ngay
             </button>
           </div>
         </motion.div>

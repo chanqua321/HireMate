@@ -18,8 +18,65 @@ public class CareerOsService(IUnitOfWork uow, UserManager<UserAccount> users, IA
     public async Task<IServiceResult> GetMemoryAsync(Guid userId)
     {
         var events = await uow.CareerMemoryEventRepository.GetQueryable().AsNoTracking()
-            .Where(e => e.UserId == userId).OrderByDescending(e => e.CreatedAt).Take(100).ToListAsync();
-        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, events);
+            .Where(e => e.UserId == userId)
+            .OrderByDescending(e => e.CreatedAt)
+            .Take(100)
+            .ToListAsync();
+
+        var learningTypes = new[]
+        {
+            CareerMemoryTypes.Weakness,
+            CareerMemoryTypes.SkillGap,
+            CareerMemoryTypes.EvidenceGap,
+            CareerMemoryTypes.Strength
+        };
+        var signals = events
+            .Where(e => e.MemoryKey != null && learningTypes.Contains(e.EventType))
+            .OrderByDescending(e => e.OccurrenceCount >= CareerMemoryThresholds.RecurrenceThreshold)
+            .ThenByDescending(e => e.OccurrenceCount)
+            .ThenByDescending(e => e.Confidence ?? 0)
+            .Select(e => new
+            {
+                e.Id,
+                e.EventType,
+                e.MemoryKey,
+                e.Title,
+                e.Confidence,
+                e.OccurrenceCount,
+                e.LastSeenAt,
+                sourceInterviewSessionId = e.RefId,
+                e.SourceAnswerId,
+                description = ReadPayloadDescription(e.PayloadJson),
+                e.CreatedAt
+            })
+            .ToList();
+
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new
+        {
+            events,
+            learningSignals = signals,
+            strengths = signals.Where(s => s.EventType == CareerMemoryTypes.Strength)
+                .Take(CareerMemoryThresholds.ContextStrengthLimit + 5),
+            weaknesses = signals.Where(s => s.EventType == CareerMemoryTypes.Weakness)
+                .Take(CareerMemoryThresholds.ContextWeaknessLimit + 3),
+            skillGaps = signals.Where(s => s.EventType == CareerMemoryTypes.SkillGap)
+                .Take(CareerMemoryThresholds.ContextSkillGapLimit + 4),
+            evidenceGaps = signals.Where(s => s.EventType == CareerMemoryTypes.EvidenceGap)
+                .Take(CareerMemoryThresholds.ContextEvidenceGapLimit + 4)
+        });
+    }
+
+    private static string? ReadPayloadDescription(string? payloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (doc.RootElement.TryGetProperty("description", out var d))
+                return d.GetString();
+        }
+        catch { /* ignore */ }
+        return null;
     }
 
     public async Task<IServiceResult> GetProfileHubAsync(Guid userId)

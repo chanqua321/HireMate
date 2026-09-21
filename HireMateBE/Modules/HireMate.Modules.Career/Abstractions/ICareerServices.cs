@@ -1,4 +1,5 @@
 using HireMate.BuildingBlocks;
+using Common.DTOs.JdDto;
 using Common.DTOs.PublicDto;
 using Microsoft.AspNetCore.Http;
 
@@ -8,6 +9,17 @@ public interface IMatchService
 {
     Task<IServiceResult> MatchAsync(Guid userId, MatchRequestDto dto);
     Task<IServiceResult> GetAsync(Guid userId, Guid id);
+    Task<IServiceResult> ListHistoryAsync(Guid userId);
+}
+
+public interface IJobDescriptionService
+{
+    Task<IServiceResult> CreateAsync(Guid userId, CreateJobDescriptionDto dto);
+    Task<IServiceResult> ListAsync(Guid userId, bool includeArchived = false);
+    Task<IServiceResult> GetAsync(Guid userId, Guid id);
+    Task<IServiceResult> UpdateAsync(Guid userId, Guid id, UpdateJobDescriptionDto dto);
+    Task<IServiceResult> ArchiveAsync(Guid userId, Guid id);
+    Task<IServiceResult> ListMatchesAsync(Guid userId, Guid jdId);
 }
 
 public interface IEmailGenService
@@ -26,4 +38,3 @@ public interface ICareerOsService
     Task<IServiceResult> GetResourcesAsync(string? category);
     Task<IServiceResult> GetResourceAsync(Guid id);
 }
-

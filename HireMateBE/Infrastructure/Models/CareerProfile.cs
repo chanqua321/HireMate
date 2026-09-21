@@ -44,6 +44,12 @@ public class CareerProfile
     /// <summary>JSON array of { title, org, period, description }.</summary>
     public string? ExperiencesJson { get; set; }
 
+    /// <summary>JSON array of { name, description, role, technologies, url, period }.</summary>
+    public string? ProjectsJson { get; set; }
+
+    /// <summary>JSON array of { name, issuer, issueDate, expiryDate, credentialId, credentialUrl }.</summary>
+    public string? CertificationsJson { get; set; }
+
     public DateTime? ConfirmedAt { get; set; }
 
     public Guid? ConfirmedCvDocumentId { get; set; }

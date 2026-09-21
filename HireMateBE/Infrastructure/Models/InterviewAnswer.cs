@@ -29,5 +29,35 @@ public class InterviewAnswer
     public bool Skipped { get; set; }
 
     public int DurationSec { get; set; }
-}
 
+    /// <summary>True if this row is an adaptive follow-up question (max 1 per main Q).</summary>
+    public bool IsFollowUp { get; set; }
+
+    [MaxLength(80)]
+    public string? QuestionCategory { get; set; }
+
+    public bool AnalysisAvailable { get; set; }
+
+    public int? RelevanceScore { get; set; }
+    public int? CompletenessScore { get; set; }
+    public int? TechnicalKnowledgeScore { get; set; }
+    public int? ProblemSolvingScore { get; set; }
+    public int? CommunicationScore { get; set; }
+    public int? StarScore { get; set; }
+    public int? CvConsistencyScore { get; set; }
+
+    public bool? StarHasSituation { get; set; }
+    public bool? StarHasTask { get; set; }
+    public bool? StarHasAction { get; set; }
+    public bool? StarHasResult { get; set; }
+
+    /// <summary>Verified | StrongEvidence | WeakEvidence | MissingEvidence | NeedsValidation | CvInconsistency</summary>
+    [MaxLength(40)]
+    public string? EvidenceStatus { get; set; }
+
+    public string? EvidenceJson { get; set; }
+    public string? AnalysisJson { get; set; }
+
+    [MaxLength(500)]
+    public string? FollowUpReason { get; set; }
+}

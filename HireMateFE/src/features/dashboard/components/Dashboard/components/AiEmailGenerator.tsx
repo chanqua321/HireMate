@@ -17,6 +17,8 @@ interface AiEmailGeneratorProps {
   copiedEmail: boolean;
   onGenerateEmail: (e: React.FormEvent) => void;
   onCopyEmail: () => void;
+  quotaRemaining?: number;
+  quotaLimit?: number;
 }
 
 export const AiEmailGenerator: React.FC<AiEmailGeneratorProps> = ({
@@ -33,7 +35,11 @@ export const AiEmailGenerator: React.FC<AiEmailGeneratorProps> = ({
   copiedEmail,
   onGenerateEmail,
   onCopyEmail,
+  quotaRemaining,
+  quotaLimit,
 }) => {
+  const blocked = typeof quotaRemaining === 'number' && quotaRemaining <= 0;
+
   return (
     <motion.div
       key="email-tab"
@@ -43,6 +49,17 @@ export const AiEmailGenerator: React.FC<AiEmailGeneratorProps> = ({
       transition={{ duration: 0.25 }}
       className="email-tab-content"
     >
+      {typeof quotaRemaining === 'number' && (
+        <p style={{ marginBottom: 12, fontSize: '0.88rem', color: blocked ? '#B91C1C' : '#475569' }}>
+          Hạn mức Email/CV AI: <strong>{quotaRemaining}</strong>
+          {typeof quotaLimit === 'number' ? ` / ${quotaLimit}` : ''} còn lại tháng này
+          {blocked
+            ? quotaLimit === 0
+              ? ' — Gói Free không hỗ trợ. Nâng cấp để mở khóa.'
+              : ' — Quota exceeded. Nâng cấp hoặc đợi chu kỳ mới.'
+            : ''}
+        </p>
+      )}
       <form onSubmit={onGenerateEmail} className="email-form">
         <div className="form-two-col">
           <div className="form-group">
@@ -113,7 +130,7 @@ export const AiEmailGenerator: React.FC<AiEmailGeneratorProps> = ({
           type="submit"
           className="save-profile-btn"
           style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}
-          disabled={isGeneratingEmail}
+          disabled={isGeneratingEmail || blocked}
         >
           {isGeneratingEmail ? (
             <>

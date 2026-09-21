@@ -134,6 +134,13 @@ public class PayOsClient(HttpClient http, Microsoft.Extensions.Options.IOptions<
 
     public async Task<string?> GetPaymentStatusAsync(long orderCode, CancellationToken ct = default)
     {
+        var detail = await GetPaymentLinkDetailAsync(orderCode, ct);
+        return detail?.Status;
+    }
+
+    /// <summary>Merchant API lookup — status + amount for settlement verification.</summary>
+    public async Task<PayOsLinkDetail?> GetPaymentLinkDetailAsync(long orderCode, CancellationToken ct = default)
+    {
         using var req = new HttpRequestMessage(HttpMethod.Get, $"v2/payment-requests/{orderCode}");
         req.Headers.TryAddWithoutValidation("x-client-id", _opts.ClientId);
         req.Headers.TryAddWithoutValidation("x-api-key", _opts.ApiKey);
@@ -143,8 +150,26 @@ public class PayOsClient(HttpClient http, Microsoft.Extensions.Options.IOptions<
         var root = doc.RootElement;
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
             return null;
-        return data.TryGetProperty("status", out var status) ? status.GetString() : null;
+        int? amount = null;
+        if (data.TryGetProperty("amount", out var a))
+        {
+            if (a.TryGetInt32(out var ai)) amount = ai;
+            else if (a.TryGetInt64(out var al)) amount = (int)al;
+        }
+        return new PayOsLinkDetail
+        {
+            Status = data.TryGetProperty("status", out var status) ? status.GetString() : null,
+            Amount = amount,
+            OrderCode = orderCode
+        };
     }
+}
+
+public sealed class PayOsLinkDetail
+{
+    public string? Status { get; set; }
+    public int? Amount { get; set; }
+    public long OrderCode { get; set; }
 }
 
 

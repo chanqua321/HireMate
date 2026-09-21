@@ -25,7 +25,9 @@ export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: 
     let cancelled = false;
 
     const run = async () => {
-      if (!sessionStorage.getItem('hm_access_token')) {
+      const token =
+        localStorage.getItem('hm_access_token') || sessionStorage.getItem('hm_access_token');
+      if (!token) {
         navigate(
           `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`
         );
@@ -44,7 +46,7 @@ export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: 
           window.location.pathname + window.location.search || '/interview-setup';
         const target = backTo.startsWith('/') ? backTo : '/interview-setup';
         sessionStorage.setItem(ONBOARDING_REDIRECT_KEY, target);
-        navigate(`/onboarding/profile?redirect=${encodeURIComponent(target)}`);
+        navigate(`/onboarding/summary?redirect=${encodeURIComponent(target)}`);
         return;
       }
 
@@ -60,7 +62,11 @@ export const RequirePremium: React.FC<{ children: React.ReactNode; redirectTo?: 
 
     run().catch(() => {
       if (!cancelled) {
-        setAllowed(Boolean(sessionStorage.getItem('hm_access_token')));
+        setAllowed(
+          Boolean(
+            localStorage.getItem('hm_access_token') || sessionStorage.getItem('hm_access_token')
+          )
+        );
         setChecking(false);
       }
     });

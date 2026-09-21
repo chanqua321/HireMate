@@ -31,8 +31,20 @@ public class ResetPasswordDto
 
 public class MatchRequestDto
 {
+    /// <summary>Saved JD id (owned). When set, Content is loaded server-side.</summary>
+    public Guid? JobDescriptionId { get; set; }
+
     public Guid? CvDocumentId { get; set; }
-    [Required] public string JdText { get; set; } = string.Empty;
+
+    /// <summary>Paste JD text. Required when JobDescriptionId is null.</summary>
+    [MaxLength(20000)]
+    public string? JdText { get; set; }
+
+    /// <summary>When true and JdText provided without JobDescriptionId, also save as new JD (optional convenience).</summary>
+    public bool SaveJd { get; set; }
+
+    [MaxLength(200)]
+    public string? JdTitle { get; set; }
 }
 
 public class EmailGenerateDto

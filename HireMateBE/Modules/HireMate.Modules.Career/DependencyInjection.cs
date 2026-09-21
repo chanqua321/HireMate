@@ -9,6 +9,7 @@ public static class DependencyInjection
     public static IServiceCollection AddCareerModule(this IServiceCollection services)
     {
         services.AddScoped<IMatchService, MatchService>();
+        services.AddScoped<IJobDescriptionService, JobDescriptionService>();
         services.AddScoped<IEmailGenService, EmailGenService>();
         services.AddScoped<ICareerOsService, CareerOsService>();
         return services;

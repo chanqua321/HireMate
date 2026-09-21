@@ -11,6 +11,7 @@ public static class DependencyInjection
         services.AddScoped<IOnboardingService, OnboardingService>();
         services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<ICvService, CvService>();
+        services.AddScoped<ICvTemplateService, CvTemplateService>();
         services.AddScoped<IDashboardService, DashboardService>();
         return services;
     }

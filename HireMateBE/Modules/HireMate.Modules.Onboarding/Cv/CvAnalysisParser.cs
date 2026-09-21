@@ -54,11 +54,57 @@ public static class CvAnalysisParser
         score = 0;
         if (!root.TryGetProperty(key, out var el))
             return false;
-        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out score))
-            return score is >= 0 and <= 100;
+        if (el.ValueKind == JsonValueKind.Number)
+        {
+            if (el.TryGetInt32(out score))
+                return score is >= 0 and <= 100;
+            if (el.TryGetDouble(out var d))
+            {
+                score = (int)Math.Round(Math.Clamp(d, 0, 100));
+                return true;
+            }
+        }
         if (el.ValueKind == JsonValueKind.String && int.TryParse(el.GetString(), out score))
             return score is >= 0 and <= 100;
         return false;
+    }
+
+    /// <summary>Đọc điểm; thiếu key → dùng default (không fail cả analyze).</summary>
+    public static int ReadScoreOr(JsonElement root, string key, int fallback)
+        => TryReadScore(root, key, out var s) ? s : fallback;
+
+    public static List<string> ReadSuggestions(JsonElement root)
+    {
+        if (!root.TryGetProperty("suggestions", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return [];
+        return arr.EnumerateArray()
+            .Select(x => x.ValueKind == JsonValueKind.String ? x.GetString()?.Trim() : null)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Cast<string>()
+            .Take(8)
+            .ToList();
+    }
+
+    public static List<string> BuildHeuristicSuggestions(CvExtractDraft d, string? source)
+    {
+        var list = new List<string>();
+        if (string.IsNullOrWhiteSpace(d.FullName))
+            list.Add("Bổ sung họ tên đầy đủ trên CV.");
+        if (string.IsNullOrWhiteSpace(d.University))
+            list.Add("Thêm trường học / học vấn cao nhất.");
+        if (string.IsNullOrWhiteSpace(d.DesiredPosition))
+            list.Add("Ghi rõ vị trí ứng tuyển mục tiêu.");
+        if (string.IsNullOrWhiteSpace(d.DesiredIndustry))
+            list.Add("Thêm ngành nghề / lĩnh vực mong muốn.");
+        if (d.Skills.Count < 3)
+            list.Add("Bổ sung ít nhất 3–5 kỹ năng chuyên môn liên quan vị trí.");
+        if (string.IsNullOrWhiteSpace(d.Bio) || (d.Bio?.Length ?? 0) < 40)
+            list.Add("Viết bio ngắn (2–3 câu) nêu định hướng và thế mạnh.");
+        if (d.Experiences.Count == 0 && source != "Wizard")
+            list.Add("Thêm ít nhất 1 trải nghiệm / dự án (theo khung STAR).");
+        if (list.Count == 0)
+            list.Add("CV đã đủ thông tin cơ bản. Có thể luyện phỏng vấn hoặc tối ưu từ khóa theo JD.");
+        return list;
     }
 
     public static CvExtractDraft ReadExtract(JsonElement root)

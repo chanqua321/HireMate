@@ -45,4 +45,54 @@ public static class PlanTier
     }
 
     public static bool IsFree(string? planCode) => Rank(planCode) == 0;
+
+    /// <summary>Voice Interview: paid entitlement only (premium / combo and aliases).</summary>
+    public static bool IsVoiceAllowed(string? planCode) => Rank(planCode) >= 1;
+
+    /// <summary>Maximum Voice Interview session duration.</summary>
+    public const int VoiceMaxMinutes = 15;
+    public static readonly TimeSpan VoiceMaxDuration = TimeSpan.FromMinutes(VoiceMaxMinutes);
+
+    /// <summary>
+    /// Quota theo bảng giá:
+    /// Free 0đ: 3 PV + 1 CV analyze / tháng; JD Match 0; CV/Email gen 0;
+    /// Tiêu chuẩn 79k: 15 PV + 20 CV + 15 JD + 10 CV/Email / tháng;
+    /// Cao cấp 149k: 50 PV + 70 CV + 50 JD + 30 CV/Email / tháng.
+    /// </summary>
+    public static int MonthlyInterviewSessions(string? planCode) => Rank(planCode) switch
+    {
+        0 => 3,
+        2 => 50,
+        _ => 15
+    };
+
+    public static int QuestionsPerSession(string? planCode) => Rank(planCode) switch
+    {
+        0 => 5,
+        2 => 10,
+        _ => 7
+    };
+
+    /// <summary>Số lần phân tích CV thành công / tháng. Mọi gói đều có trần (không unlimited).</summary>
+    public static int MonthlyCvAnalyzeLimit(string? planCode) => Rank(planCode) switch
+    {
+        0 => 1,
+        2 => 70,
+        _ => 20
+    };
+
+    public static int MonthlyJdMatchLimit(string? planCode) => Rank(planCode) switch
+    {
+        0 => 0,
+        2 => 50,
+        _ => 15
+    };
+
+    /// <summary>Quota chung cho Email AI + CV text assist generation / tháng.</summary>
+    public static int MonthlyCvEmailGenerationLimit(string? planCode) => Rank(planCode) switch
+    {
+        0 => 0,
+        2 => 30,
+        _ => 10
+    };
 }

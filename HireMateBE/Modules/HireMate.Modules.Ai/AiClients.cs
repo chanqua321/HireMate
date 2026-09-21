@@ -35,18 +35,45 @@ public class OpenAiCompatibleAiClient(
         {
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
 
-            var payload = new
+            var model = string.IsNullOrWhiteSpace(_options.Model) ? "gpt-5.6-luna" : _options.Model.Trim();
+            var maxOut = AiLength.ToMaxTokens(maxOutputChars);
+            var messages = new object[]
             {
-                model = string.IsNullOrWhiteSpace(_options.Model) ? "gpt-4o-mini" : _options.Model,
-                messages = new[]
-                {
-                    new { role = "system", content = systemPrompt },
-                    new { role = "user", content = userPrompt }
-                },
-                stream = false,
-                temperature = 0.4,
-                max_tokens = AiLength.ToMaxTokens(maxOutputChars)
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = userPrompt }
             };
+
+            // GPT-5.x / reasoning-family Chat Completions reject max_tokens and non-default temperature.
+            object payload;
+            if (UsesGpt5StyleChatParams(model))
+            {
+                payload = new Dictionary<string, object?>
+                {
+                    ["model"] = model,
+                    ["messages"] = messages,
+                    ["stream"] = false,
+                    ["max_completion_tokens"] = maxOut,
+                    // JSON extraction workloads — avoid default medium reasoning burning the completion budget.
+                    ["reasoning_effort"] = "none"
+                };
+                _logger.LogDebug(
+                    "OpenAI chat/completions model={Model} max_completion_tokens={Max} reasoning_effort=none messages={Count}",
+                    model, maxOut, messages.Length);
+            }
+            else
+            {
+                payload = new Dictionary<string, object?>
+                {
+                    ["model"] = model,
+                    ["messages"] = messages,
+                    ["stream"] = false,
+                    ["temperature"] = 0.4,
+                    ["max_tokens"] = maxOut
+                };
+                _logger.LogDebug(
+                    "OpenAI chat/completions model={Model} max_tokens={Max} temperature=0.4 messages={Count}",
+                    model, maxOut, messages.Length);
+            }
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
@@ -54,7 +81,9 @@ public class OpenAiCompatibleAiClient(
             var response = await _http.PostAsJsonAsync("chat/completions", payload, cts.Token);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("{Provider} returned {Status}", providerLabel, response.StatusCode);
+                var errBody = await response.Content.ReadAsStringAsync(cts.Token);
+                _logger.LogWarning("{Provider} returned {Status}: {Body}", providerLabel, response.StatusCode,
+                    errBody.Length > 400 ? errBody[..400] : errBody);
                 return AiCompletionResult.Fail(providerLabel, inputChars);
             }
 
@@ -64,7 +93,7 @@ public class OpenAiCompatibleAiClient(
                 return AiCompletionResult.Fail(providerLabel, inputChars);
 
             if (maxOutputChars is > 0 && content.Length > maxOutputChars.Value)
-                content = content[..maxOutputChars.Value];
+                content = TruncatePreservingJson(content, maxOutputChars.Value);
 
             return new AiCompletionResult
             {
@@ -80,6 +109,40 @@ public class OpenAiCompatibleAiClient(
             _logger.LogWarning(ex, "{Provider} unavailable", providerLabel);
             return AiCompletionResult.Fail(providerLabel, inputChars);
         }
+    }
+
+    /// <summary>GPT-5+ / o-series Chat Completions use max_completion_tokens and omit sampling params.</summary>
+    private static bool UsesGpt5StyleChatParams(string model)
+    {
+        var m = model.Trim().ToLowerInvariant();
+        return m.StartsWith("gpt-5", StringComparison.Ordinal)
+               || m.StartsWith("gpt-6", StringComparison.Ordinal)
+               || m.StartsWith("o1", StringComparison.Ordinal)
+               || m.StartsWith("o3", StringComparison.Ordinal)
+               || m.StartsWith("o4", StringComparison.Ordinal);
+    }
+
+    /// <summary>Avoid cutting mid-JSON when enforcing char budget (breaks JD Match / analysis parsers).</summary>
+    private static string TruncatePreservingJson(string content, int max)
+    {
+        if (content.Length <= max) return content;
+        var slice = content[..max];
+        var start = slice.IndexOf('{');
+        if (start < 0) return slice;
+        for (var end = slice.LastIndexOf('}'); end > start; end = slice.LastIndexOf('}', end - 1))
+        {
+            var candidate = slice[start..(end + 1)];
+            try
+            {
+                using var _ = JsonDocument.Parse(candidate);
+                return candidate;
+            }
+            catch
+            {
+                // try earlier closing brace
+            }
+        }
+        return slice;
     }
 
     private sealed class ChatResponse

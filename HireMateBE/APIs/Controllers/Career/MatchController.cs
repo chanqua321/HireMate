@@ -16,6 +16,10 @@ public class MatchController(IMatchService svc) : HireMateControllerBase
     public async Task<IActionResult> Match([FromBody] MatchRequestDto dto)
         => this.FromService(await svc.MatchAsync(UserId, dto), 201);
 
+    [HttpGet]
+    public async Task<IActionResult> History()
+        => this.FromService(await svc.ListHistoryAsync(UserId));
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id)
         => this.FromService(await svc.GetAsync(UserId, id));

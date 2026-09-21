@@ -130,12 +130,26 @@ const handleResponse = async <T>(response: Response): Promise<ApiResponse<T>> =>
 
   return {
     data: body.data !== undefined ? body.data : body,
-    message: body.message || response.statusText,
+    message: body.message || formatValidationMessage(body.errors) || response.statusText,
     errors: body.errors,
     status: response.status,
     ok: response.ok,
   };
 };
+
+/** Flatten ASP.NET ProblemDetails.errors into a short user-facing string. */
+function formatValidationMessage(errors: unknown): string | undefined {
+  if (!errors || typeof errors !== 'object') return undefined;
+  const parts: string[] = [];
+  for (const [key, val] of Object.entries(errors as Record<string, unknown>)) {
+    const msgs = Array.isArray(val) ? val.map(String) : [String(val)];
+    parts.push(...msgs);
+    if (key === 'QuestionCount') {
+      return 'Số câu hỏi phải từ 3 đến 15.';
+    }
+  }
+  return parts[0];
+}
 
 const requestWithRetry = async <T>(
   execute: () => Promise<Response>,
