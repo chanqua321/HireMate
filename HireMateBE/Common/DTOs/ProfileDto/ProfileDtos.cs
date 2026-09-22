@@ -22,6 +22,8 @@ public class ProfileDto
     public List<string> Hobbies { get; set; } = [];
     public List<string> Skills { get; set; } = [];
     public List<CvExperienceDto> Experiences { get; set; } = [];
+    public List<CvProjectDto> Projects { get; set; } = [];
+    public List<CvCertificationDto> Certifications { get; set; } = [];
     public DateTime? ConfirmedAt { get; set; }
     public Guid? ConfirmedCvDocumentId { get; set; }
     public bool HasSelectedPlan { get; set; }
@@ -56,5 +58,6 @@ public class UpdateProfileDto
     public List<string>? Hobbies { get; set; }
     public List<string>? Skills { get; set; }
     public List<CvExperienceDto>? Experiences { get; set; }
+    public List<CvProjectDto>? Projects { get; set; }
+    public List<CvCertificationDto>? Certifications { get; set; }
 }
-

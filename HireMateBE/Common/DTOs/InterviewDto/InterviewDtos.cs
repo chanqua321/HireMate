@@ -2,22 +2,51 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Common.DTOs.InterviewDto;
 
-public class CreateInterviewSessionDto
+public class BuildInterviewContextDto
 {
     [Required, MaxLength(150)]
+    public string Position { get; set; } = string.Empty;
+
+    [MaxLength(150)]
+    public string? Industry { get; set; }
+
+    [MaxLength(8000)]
+    public string? JobDescription { get; set; }
+
+    /// <summary>Saved JD id — server loads Content if owned by user.</summary>
+    public Guid? JobDescriptionId { get; set; }
+
+    public Guid? CvDocumentId { get; set; }
+}
+
+public class CreateInterviewSessionDto
+{
+    [MaxLength(150)]
     public string Industry { get; set; } = string.Empty;
 
     [Required, MaxLength(150)]
     public string Position { get; set; } = string.Empty;
 
+    /// <summary>Legacy — bỏ qua. Session luôn Personalized.</summary>
     [MaxLength(50)]
-    public string Difficulty { get; set; } = "Medium";
+    public string? Difficulty { get; set; }
 
     [MaxLength(20)]
     public string Mode { get; set; } = "Text";
 
-    [Range(3, 10)]
-    public int QuestionCount { get; set; } = 5;
+    /// <summary>Optional. If omitted, server uses plan default question count.</summary>
+    [Range(3, 15)]
+    public int? QuestionCount { get; set; }
+
+    [MaxLength(8000)]
+    public string? JobDescription { get; set; }
+
+    public Guid? JobDescriptionId { get; set; }
+
+    public Guid? CvDocumentId { get; set; }
+
+    /// <summary>Context từ build-context (optional). Server sẽ dựng lại nếu thiếu.</summary>
+    public string? ContextJson { get; set; }
 }
 
 public class SubmitAnswerDto
@@ -27,7 +56,7 @@ public class SubmitAnswerDto
 
     public Guid? QuestionId { get; set; }
 
-    [MaxLength(1000)]
+    [MaxLength(2000)]
     public string? QuestionText { get; set; }
 
     [MaxLength(4000)]
@@ -56,7 +85,9 @@ public class InterviewSessionSummaryDto
     public string Mode { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public int? OverallScore { get; set; }
+    public int QuestionCount { get; set; }
     public DateTime StartedAt { get; set; }
+    public DateTime? VoiceStartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
 }
 
@@ -68,16 +99,127 @@ public class InterviewSessionDetailDto : InterviewSessionSummaryDto
     public int? ScoreR { get; set; }
     public int? ClarityScore { get; set; }
     public string? FeedbackSummary { get; set; }
+    public StructuredFeedbackDto? StructuredFeedback { get; set; }
     public List<InterviewAnswerViewDto> Answers { get; set; } = [];
 }
 
 public class InterviewAnswerViewDto
 {
+    public Guid Id { get; set; }
     public int OrderIndex { get; set; }
     public Guid? QuestionId { get; set; }
     public string QuestionText { get; set; } = string.Empty;
     public string? AnswerText { get; set; }
     public bool Skipped { get; set; }
     public int DurationSec { get; set; }
+    public bool IsFollowUp { get; set; }
+    public string? QuestionCategory { get; set; }
+    public bool AnalysisAvailable { get; set; }
+    public int? RelevanceScore { get; set; }
+    public int? CompletenessScore { get; set; }
+    public int? TechnicalKnowledgeScore { get; set; }
+    public int? ProblemSolvingScore { get; set; }
+    public int? CommunicationScore { get; set; }
+    public int? StarScore { get; set; }
+    public int? CvConsistencyScore { get; set; }
+    public bool? StarHasSituation { get; set; }
+    public bool? StarHasTask { get; set; }
+    public bool? StarHasAction { get; set; }
+    public bool? StarHasResult { get; set; }
+    public string? EvidenceStatus { get; set; }
+    public string? EvidenceJson { get; set; }
+    public string? AnalysisJson { get; set; }
+    public string? FollowUpReason { get; set; }
+    /// <summary>Backward-compatible: true when MissingEvidence / WeakEvidence / NeedsValidation.</summary>
+    public bool EvidenceGap { get; set; }
+}
+
+public class AnswerAnalysisDto
+{
+    public bool AnalysisAvailable { get; set; }
+    public int? Relevance { get; set; }
+    public int? Completeness { get; set; }
+    public int? TechnicalKnowledge { get; set; }
+    public int? ProblemSolving { get; set; }
+    public int? Communication { get; set; }
+    public int? StarScore { get; set; }
+    public bool? StarSituation { get; set; }
+    public bool? StarTask { get; set; }
+    public bool? StarAction { get; set; }
+    public bool? StarResult { get; set; }
+    public int? CvConsistency { get; set; }
+    public string? EvidenceStatus { get; set; }
+    public string? EvidenceJson { get; set; }
+    public string? FollowUpReason { get; set; }
+    public bool EvidenceGap { get; set; }
+    public bool NeedsFollowUp { get; set; }
+}
+
+public class StructuredFeedbackDto
+{
+    public Guid SessionId { get; set; }
+    public int? OverallScore { get; set; }
+    public string? Summary { get; set; }
+    public bool AiSummaryAvailable { get; set; }
+    public CategoryScoresDto CategoryScores { get; set; } = new();
+    public string? CvConsistencySummary { get; set; }
+    public List<FeedbackItemDto> Strengths { get; set; } = [];
+    public List<FeedbackItemDto> Weaknesses { get; set; } = [];
+    public List<SkillGapDto> SkillGaps { get; set; } = [];
+    public List<EvidenceGapItemDto> EvidenceGaps { get; set; } = [];
+    public AnswerHighlightsDto AnswerHighlights { get; set; } = new();
+    public List<string> Improvements { get; set; } = [];
+}
+
+public class CategoryScoresDto
+{
+    public int? Communication { get; set; }
+    public int? Star { get; set; }
+    public int? Technical { get; set; }
+    public int? ProblemSolving { get; set; }
+    public int? Relevance { get; set; }
+    public int? Completeness { get; set; }
+    public int? CvConsistency { get; set; }
+}
+
+public class FeedbackItemDto
+{
+    public string Area { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string? Evidence { get; set; }
+    public List<Guid>? RelatedAnswerIds { get; set; }
+}
+
+public class SkillGapDto
+{
+    public string Area { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public int? Score { get; set; }
+}
+
+public class EvidenceGapItemDto
+{
+    public Guid AnswerId { get; set; }
+    public int OrderIndex { get; set; }
+    public string Question { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Gap { get; set; } = string.Empty;
+    public string? Suggestion { get; set; }
+}
+
+public class AnswerHighlightsDto
+{
+    public List<AnswerHighlightItemDto> Strong { get; set; } = [];
+    public List<AnswerHighlightItemDto> Weak { get; set; } = [];
+    public List<AnswerHighlightItemDto> NeedsImprovement { get; set; } = [];
+}
+
+public class AnswerHighlightItemDto
+{
+    public Guid AnswerId { get; set; }
+    public int OrderIndex { get; set; }
+    public string Question { get; set; } = string.Empty;
+    public int? CompositeScore { get; set; }
+    public string? Note { get; set; }
 }
 

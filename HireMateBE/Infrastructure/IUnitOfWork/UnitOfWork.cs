@@ -18,7 +18,9 @@ public interface IUnitOfWork : IDisposable
     IBlogPostRepository BlogPostRepository { get; }
     IFaqRepository FaqRepository { get; }
     ICvDocumentRepository CvDocumentRepository { get; }
+    ICvTemplateRepository CvTemplateRepository { get; }
     IJdMatchRepository JdMatchRepository { get; }
+    IJobDescriptionRepository JobDescriptionRepository { get; }
     IResourceRepository ResourceRepository { get; }
     IPlanRepository PlanRepository { get; }
     IInvoiceRepository InvoiceRepository { get; }
@@ -33,6 +35,7 @@ public interface IUnitOfWork : IDisposable
     IOrganizationMemberRepository OrganizationMemberRepository { get; }
     IRefreshTokenRepository RefreshTokenRepository { get; }
     ISystemSettingRepository SystemSettingRepository { get; }
+    IUserFeatureUsageRepository UserFeatureUsageRepository { get; }
     Task<int> SaveChangesAsync();
 }
 
@@ -52,7 +55,9 @@ public class UnitOfWork(HireMateContext context) : IUnitOfWork
     private IBlogPostRepository? _blog;
     private IFaqRepository? _faq;
     private ICvDocumentRepository? _cv;
+    private ICvTemplateRepository? _cvTemplate;
     private IJdMatchRepository? _jd;
+    private IJobDescriptionRepository? _jobDescription;
     private IResourceRepository? _resource;
     private IPlanRepository? _plan;
     private IInvoiceRepository? _invoice;
@@ -67,6 +72,7 @@ public class UnitOfWork(HireMateContext context) : IUnitOfWork
     private IOrganizationMemberRepository? _orgMember;
     private IRefreshTokenRepository? _refreshToken;
     private ISystemSettingRepository? _settings;
+    private IUserFeatureUsageRepository? _featureUsage;
 
     public IUserAccountRepository UserAccountRepository => _userAccountRepository ??= new UserAccountRepository(_context);
     public ICareerProfileRepository CareerProfileRepository => _careerProfileRepository ??= new CareerProfileRepository(_context);
@@ -80,7 +86,9 @@ public class UnitOfWork(HireMateContext context) : IUnitOfWork
     public IBlogPostRepository BlogPostRepository => _blog ??= new BlogPostRepository(_context);
     public IFaqRepository FaqRepository => _faq ??= new FaqRepository(_context);
     public ICvDocumentRepository CvDocumentRepository => _cv ??= new CvDocumentRepository(_context);
+    public ICvTemplateRepository CvTemplateRepository => _cvTemplate ??= new CvTemplateRepository(_context);
     public IJdMatchRepository JdMatchRepository => _jd ??= new JdMatchRepository(_context);
+    public IJobDescriptionRepository JobDescriptionRepository => _jobDescription ??= new JobDescriptionRepository(_context);
     public IResourceRepository ResourceRepository => _resource ??= new ResourceRepository(_context);
     public IPlanRepository PlanRepository => _plan ??= new PlanRepository(_context);
     public IInvoiceRepository InvoiceRepository => _invoice ??= new InvoiceRepository(_context);
@@ -95,6 +103,7 @@ public class UnitOfWork(HireMateContext context) : IUnitOfWork
     public IOrganizationMemberRepository OrganizationMemberRepository => _orgMember ??= new OrganizationMemberRepository(_context);
     public IRefreshTokenRepository RefreshTokenRepository => _refreshToken ??= new RefreshTokenRepository(_context);
     public ISystemSettingRepository SystemSettingRepository => _settings ??= new SystemSettingRepository(_context);
+    public IUserFeatureUsageRepository UserFeatureUsageRepository => _featureUsage ??= new UserFeatureUsageRepository(_context);
 
     public Task<int> SaveChangesAsync() => _context.SaveChangesAsync();
 

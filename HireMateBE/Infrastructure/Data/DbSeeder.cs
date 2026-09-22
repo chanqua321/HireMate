@@ -462,9 +462,9 @@ public static class DbSeeder
     {
         var desired = new (string Code, string Name, string Tagline, decimal Price, int Days, string Desc, int Order, bool Popular, int OutChars, int Budget)[]
         {
-            ("free", "Miễn phí", "Cho người mới bắt đầu", 0, 30, "Hoàn thiện hồ sơ CV (1 lần phân tích). Không phỏng vấn AI / match JD.", 1, false, 900, 80_000),
-            ("premium", "Tiêu chuẩn", "Cho người luyện tập đều đặn", 79_000, 30, "Phỏng vấn AI, match JD. Hạn mức ký tự AI theo tháng. Voice thuộc gói Cao cấp.", 2, true, 1400, 500_000),
-            ("combo", "Cao cấp", "Cho ứng viên nghiêm túc", 149_000, 30, "Toàn bộ tính năng, hạn mức AI cao hơn.", 3, false, 2000, 1_200_000)
+            ("free", "Miễn phí", "Cho người mới bắt đầu", 0, 30, "3 lượt phỏng vấn/tháng · Phân tích CV ATS 1 lần/tháng · Feedback STAR tóm tắt. Voice chỉ dành cho gói trả phí.", 1, false, 900, 80_000),
+            ("premium", "Tiêu chuẩn", "Cho người luyện tập đều đặn", 79_000, 30, "15 lượt phỏng vấn/tháng · Voice Interview (15 phút/phiên) · Phân tích CV ATS 20 lần/tháng · Feedback STAR chi tiết.", 2, true, 1400, 500_000),
+            ("combo", "Cao cấp", "Cho ứng viên nghiêm túc", 149_000, 30, "50 lượt phỏng vấn/tháng · Voice Interview · Phân tích CV ATS 70 lần/tháng · Cover Letter AI · So khớp CV & JD.", 3, false, 2000, 1_200_000)
         };
 
         foreach (var d in desired)
@@ -490,15 +490,12 @@ public static class DbSeeder
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(e.Tagline))
-                {
-                    e.Tagline = d.Tagline;
-                    e.SortOrder = d.Order;
-                    e.IsPopular = d.Popular;
-                    e.Description = d.Desc;
-                    e.MaxAiOutputChars = d.OutChars;
-                    e.MonthlyAiCharBudget = d.Budget;
-                }
+                e.Tagline = d.Tagline;
+                e.SortOrder = d.Order;
+                e.IsPopular = d.Popular;
+                e.Description = d.Desc;
+                e.MaxAiOutputChars = d.OutChars;
+                e.MonthlyAiCharBudget = d.Budget;
 
                 // Một lần: gói cũ "Combo 2 tháng" / tên Premium → bảng giá 0 / 79k / 149k mỗi tháng
                 if (d.Code == "free" && (e.Name == "Free" || e.DurationDays > 30))
@@ -530,7 +527,7 @@ public static class DbSeeder
         await UpsertSettingAsync(context, "payments.default_provider", "VNPay", "Cổng mặc định khi user không chọn: VNPay | PayOS");
         await UpsertSettingAsync(context, "ai.max_output_chars", "1400", "Trần ký tự câu trả lời AI toàn cục (plan có thể thấp hơn).");
         await UpsertSettingAsync(context, "ai.cv_analyze_max_output_chars", "1800", "Trần JSON phân tích CV (đủ extract + điểm, không văn dài).");
-        await UpsertSettingAsync(context, "ai.interview_max_output_chars", "1000", "Trần feedback một câu phỏng vấn.");
+        await UpsertSettingAsync(context, "ai.interview_max_output_chars", "1800", "Trần feedback một câu phỏng vấn.");
 
         await context.SaveChangesAsync();
     }

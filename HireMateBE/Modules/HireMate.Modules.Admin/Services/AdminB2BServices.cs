@@ -85,7 +85,19 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
         if (dto.Lock == false)
             user.LockoutEnd = null;
         if (dto.IsPremium.HasValue)
+        {
             user.IsPremium = dto.IsPremium.Value;
+            // Keep CurrentPlanCode consistent with IsPremium for admin toggles.
+            if (!dto.IsPremium.Value)
+            {
+                user.CurrentPlanCode = "free";
+            }
+            else if (PlanTier.Rank(user.CurrentPlanCode) == 0)
+            {
+                user.CurrentPlanCode = "premium";
+                user.PlanSelectedAt = DateTime.UtcNow;
+            }
+        }
         await users.UpdateAsync(user);
 
         if (!string.IsNullOrWhiteSpace(dto.Role))

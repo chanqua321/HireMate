@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
 import { authService, isSoleAdminSession } from '../../api/auth.service';
 import { isSoleAdminEmail } from '../../../../shared/config/constants';
@@ -14,9 +14,26 @@ interface LoginFormProps {
   onSwitchMode: () => void;
 }
 
+/** Chỉ cho phép redirect nội bộ tương đối — chống open redirect. */
+function safePostLoginPath(raw: string | null, isAdmin: boolean): string {
+  if (isAdmin) return '/admin';
+  if (!raw) return '/dashboard';
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return '/dashboard';
+  }
+  if (!decoded.startsWith('/') || decoded.startsWith('//') || decoded.includes('://')) {
+    return '/dashboard';
+  }
+  return decoded;
+}
+
 export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
   const { login, refreshProfile } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const { triggerConfetti } = useConfetti();
   
   const [form, setForm] = useState({ email: '', password: '' });
@@ -30,6 +47,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
   const [forgotSuccess, setForgotSuccess] = useState(false);
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
+
+  const redirectParam = new URLSearchParams(location.search).get('redirect');
+
+  const goAfterLogin = (data: any) => {
+    const admin = isSoleAdminSession(data);
+    navigate(safePostLoginPath(redirectParam, admin));
+  };
 
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +94,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         const fallbackName = resolveAuthDisplayName(res.data) || form.email.split('@')[0] || 'Người dùng';
         login(fallbackName);
         await refreshProfile();
-        navigate(isSoleAdminSession(res.data) ? '/admin' : '/dashboard');
+        goAfterLogin(res.data);
         return;
       }
 
@@ -81,7 +105,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         (payload?.requireOtp === true ||
           /otp|xác nhận email|chua duoc xac nhan|chưa được xác nhận/i.test(res.message || ''));
       if (needsOtp) {
-        navigate(`/verify-otp?email=${encodeURIComponent(form.email.trim())}`, { replace: true });
+        const otpQ = new URLSearchParams({ email: form.email.trim() });
+        if (redirectParam) otpQ.set('redirect', redirectParam);
+        navigate(`/verify-otp?${otpQ.toString()}`, { replace: true });
         return;
       }
 
@@ -116,7 +142,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchMode }) => {
         login(fallbackName);
         await refreshProfile();
         triggerConfetti();
-        navigate(isSoleAdminSession(res.data) ? '/admin' : '/dashboard');
+        goAfterLogin(res.data);
         return;
       }
       setError(res.message || 'Đăng nhập Google thất bại.');

@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
 import { interviewService } from '../../api/interview.service';
+import type {
+  InterviewAnswerDetail,
+  InterviewSessionDetail,
+  StructuredFeedback,
+} from '../../types';
 import {
   Award,
   RotateCcw,
@@ -10,19 +15,41 @@ import {
   CheckCircle2,
   AlertTriangle,
   Lightbulb,
-  Star,
-  TrendingUp,
   BookOpen,
-  Check,
   Target,
-  Zap,
   Loader2,
+  TrendingUp,
+  ListChecks,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AnimatedCounter } from '../../../../shared/components';
 import { useConfetti } from '../../../../shared/hooks';
 import { InterviewStepper } from '../InterviewStepper/InterviewStepper';
 import './css/Feedback.css';
+
+function scoreLabel(v: number | null | undefined): string {
+  return v == null ? '—' : `${v}/100`;
+}
+
+function evidenceStatusLabel(status: string | null | undefined): string | null {
+  if (!status) return null;
+  switch (status) {
+    case 'Verified':
+      return 'Verified';
+    case 'StrongEvidence':
+      return 'Strong Evidence';
+    case 'WeakEvidence':
+      return 'Weak Evidence';
+    case 'MissingEvidence':
+      return 'Missing Evidence';
+    case 'NeedsValidation':
+      return 'Needs Validation';
+    case 'CvInconsistency':
+      return 'CV Inconsistency';
+    default:
+      return status;
+  }
+}
 
 export const Feedback: React.FC = () => {
   const { lastResult } = useApp();
@@ -31,62 +58,123 @@ export const Feedback: React.FC = () => {
   const sessionId = searchParams.get('sessionId');
 
   const [loading, setLoading] = useState<boolean>(Boolean(sessionId));
-  const [sessionDetail, setSessionDetail] = useState<any>(null);
+  const [sessionDetail, setSessionDetail] = useState<InterviewSessionDetail | null>(null);
+  const [structured, setStructured] = useState<StructuredFeedback | null>(null);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     if (sessionId && localStorage.getItem('hm_access_token')) {
-      interviewService
-        .getDetail(sessionId)
-        .then((res) => {
-          if (res.ok && res.data) {
-            setSessionDetail(res.data);
+      setLoadError('');
+      Promise.all([
+        interviewService.getDetail(sessionId),
+        interviewService.getFeedback(sessionId),
+      ])
+        .then(([detailRes, feedbackRes]) => {
+          if (detailRes.ok && detailRes.data) {
+            setSessionDetail(detailRes.data);
+          } else {
+            setLoadError(detailRes.message || 'Không tải được báo cáo phiên phỏng vấn.');
+          }
+          if (feedbackRes.ok && feedbackRes.data) {
+            setStructured(feedbackRes.data);
+          } else if (detailRes.data?.structuredFeedback) {
+            setStructured(detailRes.data.structuredFeedback);
           }
         })
-        .catch(() => {})
+        .catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : 'Lỗi tải báo cáo.';
+          setLoadError(msg);
+        })
         .finally(() => {
           setLoading(false);
         });
+    } else if (!sessionId) {
+      setLoading(false);
     }
   }, [sessionId]);
 
-  const defaultResult = {
-    overall: 86,
-    role: 'Lập trình viên Frontend',
-    clarity: 88,
-    subs: { S: 90, T: 86, A: 80, R: 92 },
-    date: new Date().toLocaleDateString('vi-VN'),
-  };
+  const overall =
+    structured?.overallScore ??
+    sessionDetail?.overallScore ??
+    lastResult?.overall ??
+    null;
 
-  const r = sessionDetail
-    ? {
-        overall: sessionDetail.overallScore ?? (lastResult?.overall ?? 25),
-        role: sessionDetail.position || lastResult?.role || 'Lập trình viên',
-        clarity: sessionDetail.clarityScore ?? 30,
-        subs: {
-          S: sessionDetail.scoreS ?? 25,
-          T: sessionDetail.scoreT ?? 25,
-          A: sessionDetail.scoreA ?? 25,
-          R: sessionDetail.scoreR ?? 25,
-        },
-        date: sessionDetail.completedAt
-          ? new Date(sessionDetail.completedAt).toLocaleDateString('vi-VN')
-          : new Date().toLocaleDateString('vi-VN'),
-        feedbackSummary: sessionDetail.feedbackSummary,
-      }
-    : lastResult || defaultResult;
+  const role = sessionDetail?.position || lastResult?.role || 'Ứng viên';
+  const clarity = sessionDetail?.clarityScore ?? lastResult?.clarity ?? null;
+  const subs = {
+    S: sessionDetail?.scoreS ?? lastResult?.subs?.S ?? null,
+    T: sessionDetail?.scoreT ?? lastResult?.subs?.T ?? null,
+    A: sessionDetail?.scoreA ?? lastResult?.subs?.A ?? null,
+    R: sessionDetail?.scoreR ?? lastResult?.subs?.R ?? null,
+  };
+  const date = sessionDetail?.completedAt
+    ? new Date(sessionDetail.completedAt).toLocaleDateString('vi-VN')
+    : lastResult?.date || new Date().toLocaleDateString('vi-VN');
+  const feedbackSummary =
+    structured?.summary || sessionDetail?.feedbackSummary || '';
+  const answers: InterviewAnswerDetail[] = sessionDetail?.answers ?? [];
+  const aiUnavailable =
+    structured != null && structured.aiSummaryAvailable === false && Boolean(structured.overallScore != null || answers.length > 0);
+
+  const hasSession = Boolean(sessionDetail || lastResult || structured);
 
   useEffect(() => {
-    if (r.overall >= 75) {
+    if (overall != null && overall >= 75) {
       triggerConfetti();
     }
-  }, [r.overall, triggerConfetti]);
+  }, [overall, triggerConfetti]);
 
+  if (loading) {
+    return (
+      <div className="feedback-page-container" style={{ textAlign: 'center', padding: 48 }}>
+        <Loader2 className="animate-spin" size={28} />
+        <p style={{ marginTop: 12, color: '#64748B' }}>Đang tải báo cáo phỏng vấn…</p>
+      </div>
+    );
+  }
+
+  if (!hasSession) {
+    return (
+      <div className="feedback-page-container" style={{ maxWidth: 520, margin: '48px auto', textAlign: 'center' }}>
+        <AlertTriangle size={28} color="#B45309" style={{ marginBottom: 12 }} />
+        <h2>Chưa có báo cáo phỏng vấn</h2>
+        <p style={{ color: '#64748B' }}>
+          {loadError || 'Hoàn thành một buổi phỏng vấn để xem điểm STAR, điểm mạnh/yếu và gợi ý cải thiện.'}
+        </p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 20, flexWrap: 'wrap' }}>
+          <Link to="/interview-setup" className="btn-report-primary">
+            Luyện phỏng vấn
+          </Link>
+          <Link to="/dashboard" className="btn-report-ghost">
+            Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const displayOverall = overall ?? 0;
   const radius = 64;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (r.overall / 100) * circumference;
+  const strokeDashoffset =
+    overall == null ? circumference : circumference - (displayOverall / 100) * circumference;
 
-  // In-depth STAR breakdown with dynamic feedback adapting to user's real scores
-  const getAnalysis = (dim: 'S' | 'T' | 'A' | 'R', score: number) => {
+  const getAnalysis = (dim: 'S' | 'T' | 'A' | 'R', score: number | null) => {
+    if (score == null) {
+      return {
+        title:
+          dim === 'S'
+            ? 'Bối cảnh (Situation)'
+            : dim === 'T'
+              ? 'Nhiệm vụ (Task)'
+              : dim === 'A'
+                ? 'Hành động (Action)'
+                : 'Kết quả (Result)',
+        strength: 'Chưa đủ dữ liệu phân tích cho chiều này.',
+        mistake: 'Không có điểm STAR từ phân tích câu trả lời.',
+        advice: 'Hoàn thành thêm câu trả lời có analysis để xem chi tiết.',
+      };
+    }
     if (score < 50) {
       switch (dim) {
         case 'S':
@@ -119,52 +207,61 @@ export const Feedback: React.FC = () => {
           };
       }
     }
-    // Good scores >= 50
     switch (dim) {
       case 'S':
         return {
           title: 'Bối cảnh (Situation)',
-          strength: 'Nêu bật được quy mô hệ thống, thách thức về trải nghiệm người dùng và tính cấp bách của dự án.',
-          mistake: 'Có thể xác định rõ hơn mốc thời gian cụ thể diễn ra dự án và giới hạn tài nguyên ban đầu.',
-          advice: 'Mở đầu ngắn gọn bằng công thức: "Vào quý 3 năm ngoái, khi hệ thống của công ty đạt mốc..."',
+          strength: 'Nêu bật được quy mô hệ thống, thách thức và tính cấp bách của dự án.',
+          mistake: 'Có thể xác định rõ hơn mốc thời gian và giới hạn tài nguyên.',
+          advice: 'Mở đầu ngắn gọn bằng công thức: "Vào quý 3 năm ngoái, khi hệ thống..."',
         };
       case 'T':
         return {
           title: 'Nhiệm vụ (Task)',
-          strength: 'Xác định mục tiêu rõ ràng và phân định rành mạch trách nhiệm cá nhân.',
-          mistake: 'Đôi khi dùng đại từ chung "Nhóm chúng tôi" thay vì nhấn mạnh phần bạn độc lập phụ trách.',
-          advice: 'Nhấn mạnh vai trò độc lập: "Với tư cách là người chịu trách nhiệm chính, nhiệm vụ của tôi là..."',
+          strength: 'Xác định mục tiêu rõ ràng và phân định trách nhiệm cá nhân.',
+          mistake: 'Đôi khi dùng đại từ chung thay vì nhấn mạnh phần bạn phụ trách.',
+          advice: 'Nhấn mạnh vai trò: "Với tư cách người chịu trách nhiệm chính..."',
         };
       case 'A':
         return {
           title: 'Hành động (Action)',
-          strength: 'Trình bày logic các bước kỹ thuật và giải pháp xử lý vấn đề hiệu quả.',
-          mistake: 'Cần đào sâu thêm cách xử lý các trường hợp ngoại lệ (edge-cases).',
-          advice: 'Trình bày theo tiến trình 3 bước: Phân tích nguyên nhân → Thử nghiệm giải pháp → Triển khai an toàn.',
+          strength: 'Trình bày logic các bước và giải pháp xử lý vấn đề.',
+          mistake: 'Cần đào sâu thêm edge-cases.',
+          advice: 'Phân tích nguyên nhân → Thử nghiệm → Triển khai an toàn.',
         };
       case 'R':
         return {
           title: 'Kết quả (Result)',
-          strength: 'Đưa ra con số định lượng thuyết phục và minh chứng rõ ràng cho hiệu quả công việc.',
-          mistake: 'Có thể liên kết kết quả kỹ thuật chặt chẽ hơn với giá trị kinh doanh của tổ chức.',
-          advice: 'Bổ sung câu kết: "Nhờ giải pháp này, hiệu năng tăng 30% và cải thiện trực tiếp trải nghiệm người dùng."',
+          strength: 'Đưa ra số liệu định lượng thuyết phục.',
+          mistake: 'Có thể liên kết kết quả kỹ thuật với giá trị kinh doanh hơn.',
+          advice: 'Bổ sung câu kết với % cải thiện hoặc tác động người dùng.',
         };
     }
   };
 
   const starAnalysis = [
-    { letter: 'S', score: r.subs.S, ...getAnalysis('S', r.subs.S) },
-    { letter: 'T', score: r.subs.T, ...getAnalysis('T', r.subs.T) },
-    { letter: 'A', score: r.subs.A, ...getAnalysis('A', r.subs.A) },
-    { letter: 'R', score: r.subs.R, ...getAnalysis('R', r.subs.R) },
+    { letter: 'S', score: subs.S, ...getAnalysis('S', subs.S) },
+    { letter: 'T', score: subs.T, ...getAnalysis('T', subs.T) },
+    { letter: 'A', score: subs.A, ...getAnalysis('A', subs.A) },
+    { letter: 'R', score: subs.R, ...getAnalysis('R', subs.R) },
   ];
+
+  const strengths = structured?.strengths ?? [];
+  const weaknesses = structured?.weaknesses ?? [];
+  const skillGaps = structured?.skillGaps ?? [];
+  const evidenceGaps = structured?.evidenceGaps ?? [];
+  const improvements = structured?.improvements ?? [];
+  const highlights = structured?.answerHighlights;
+  const cat = structured?.categoryScores;
+  const insufficientData =
+    overall == null &&
+    answers.every((a) => !a.analysisAvailable) &&
+    strengths.length === 0;
 
   return (
     <div className="feedback-page-container">
-      {/* 3-Step Educational Progress Bar */}
       <InterviewStepper currentStep={3} />
 
-      {/* Top Hero Evaluation Card */}
       <motion.div
         className="feedback-hero-card"
         initial={{ opacity: 0, y: 15 }}
@@ -173,18 +270,27 @@ export const Feedback: React.FC = () => {
       >
         <div className="hero-left-content">
           <div className="feedback-eyebrow">
-            <Sparkles size={14} /> BÁO CÁO ĐÁNH GIÁ NĂNG LỰC STAR
+            <Sparkles size={14} /> INTERVIEW RESULT
           </div>
           <h1 className="feedback-hero-title">
-            Phản hồi phỏng vấn — <span>{r.role}</span>
+            Phản hồi phỏng vấn — <span>{role}</span>
           </h1>
           <p className="feedback-hero-desc">
-            {r.overall >= 80
-              ? 'Kết quả xuất sắc! Bạn thuộc Top 15% ứng viên thể hiện tốt nhất cấu trúc STAR chuẩn tuyển dụng quốc tế.'
-              : r.overall >= 60
-              ? 'Kết quả khá tốt! Bạn đã nắm được cấu trúc phỏng vấn, hãy bổ sung thêm các số liệu định lượng để đạt điểm cao hơn.'
-              : 'Điểm đánh giá còn thấp hoặc bạn chưa hoàn thành đầy đủ câu trả lời. Hãy luyện tập lại và nhập câu trả lời chi tiết theo phương pháp STAR!'}
+            {insufficientData
+              ? 'Chưa đủ dữ liệu để tạo feedback đầy đủ.'
+              : feedbackSummary ||
+                (overall != null && overall >= 80
+                  ? 'Kết quả xuất sắc theo thang đánh giá. Tiếp tục luyện các điểm yếu còn lại.'
+                  : overall != null && overall >= 60
+                    ? 'Kết quả khá tốt. Bổ sung số liệu và evidence cụ thể để nâng điểm.'
+                    : 'Điểm còn thấp hoặc câu trả lời chưa đủ sâu. Luyện lại theo STAR và bám sát CV + vị trí mục tiêu.')}
           </p>
+          {aiUnavailable && (
+            <p style={{ fontSize: '0.9rem', color: '#B45309', marginTop: -8, marginBottom: 16 }}>
+              Phần nhận xét chi tiết của AI hiện chưa khả dụng. Điểm số và phân tích deterministic vẫn hiển thị bên dưới.
+            </p>
+          )}
+          <p style={{ fontSize: '0.85rem', color: '#94A3B8', marginBottom: 16 }}>Ngày: {date}</p>
 
           <div className="feedback-hero-actions">
             <Link to="/interview-setup" className="btn-report-primary">
@@ -196,17 +302,9 @@ export const Feedback: React.FC = () => {
           </div>
         </div>
 
-        {/* Circular Donut Ring Gauge */}
         <div className="hero-gauge-wrapper">
           <svg width="170" height="170" viewBox="0 0 160 160" style={{ transform: 'rotate(-90deg)' }}>
-            <circle
-              cx="80"
-              cy="80"
-              r={radius}
-              stroke="#f1f5f9"
-              strokeWidth="12"
-              fill="none"
-            />
+            <circle cx="80" cy="80" r={radius} stroke="#f1f5f9" strokeWidth="12" fill="none" />
             <motion.circle
               cx="80"
               cy="80"
@@ -221,20 +319,240 @@ export const Feedback: React.FC = () => {
               transition={{ duration: 1.2, ease: 'easeOut' }}
             />
           </svg>
-
           <div className="gauge-center-content">
             <span className="gauge-score-val">
-              <AnimatedCounter value={r.overall} />
+              {overall == null ? '—' : <AnimatedCounter value={displayOverall} />}
             </span>
-            <span className="gauge-score-label">ĐIỂM STAR</span>
+            <span className="gauge-score-label">OVERALL</span>
           </div>
         </div>
       </motion.div>
 
-      {/* 1. In-depth STAR Mistakes & Breakdown */}
+      {cat && (
+        <motion.div
+          className="breakdown-bars-card"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginBottom: 24 }}
+        >
+          <div className="model-answer-header" style={{ marginBottom: 12 }}>
+            <TrendingUp size={18} />
+            <span>Category scores (từ phân tích câu trả lời)</span>
+          </div>
+          {[
+            { name: 'Communication', val: cat.communication },
+            { name: 'STAR', val: cat.star },
+            { name: 'Technical', val: cat.technical },
+            { name: 'Problem Solving', val: cat.problemSolving },
+            { name: 'Relevance', val: cat.relevance },
+            { name: 'Completeness', val: cat.completeness },
+          ].map((bar, idx) => (
+            <div key={bar.name} className="score-bar-row">
+              <span className="score-bar-label">{bar.name}</span>
+              <div className="score-bar-track">
+                {bar.val != null ? (
+                  <motion.div
+                    className="score-bar-fill"
+                    style={{ background: '#03bfff' }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${bar.val}%` }}
+                    transition={{ duration: 0.8, delay: idx * 0.05 }}
+                  />
+                ) : null}
+              </div>
+              <span className="score-bar-value">{scoreLabel(bar.val)}</span>
+            </div>
+          ))}
+        </motion.div>
+      )}
+
+      {(strengths.length > 0 || weaknesses.length > 0) && (
+        <>
+          <div className="report-section-heading">
+            <h3>Strengths & Areas to Improve</h3>
+            <span className="report-section-badge">Structured</span>
+          </div>
+          <div className="star-mistakes-grid">
+            <div className="star-analysis-card">
+              <div className="star-analysis-header">
+                <h4 className="star-component-title">
+                  <CheckCircle2 size={16} style={{ display: 'inline', marginRight: 6 }} />
+                  Strengths
+                </h4>
+              </div>
+              {strengths.length === 0 ? (
+                <p className="block-desc">Không đủ dữ liệu để xác định.</p>
+              ) : (
+                strengths.map((s, i) => (
+                  <div key={i} className="feedback-sub-block strength" style={{ marginBottom: 8 }}>
+                    <div className="block-title-row">
+                      <Award size={14} />
+                      <span>{s.area}</span>
+                    </div>
+                    <p className="block-desc">{s.description}</p>
+                    {s.evidence ? (
+                      <p className="block-desc" style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                        {s.evidence}
+                      </p>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="star-analysis-card">
+              <div className="star-analysis-header">
+                <h4 className="star-component-title">
+                  <AlertTriangle size={16} style={{ display: 'inline', marginRight: 6 }} />
+                  Areas to Improve
+                </h4>
+              </div>
+              {weaknesses.length === 0 ? (
+                <p className="block-desc">Chưa ghi nhận điểm yếu rõ từ dữ liệu phân tích.</p>
+              ) : (
+                weaknesses.map((w, i) => (
+                  <div key={i} className="feedback-sub-block mistake" style={{ marginBottom: 8 }}>
+                    <div className="block-title-row">
+                      <AlertTriangle size={14} />
+                      <span>{w.area}</span>
+                    </div>
+                    <p className="block-desc">{w.description}</p>
+                    {w.relatedAnswerIds && w.relatedAnswerIds.length > 0 ? (
+                      <p className="block-desc" style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                        Liên quan {w.relatedAnswerIds.length} câu trả lời
+                        {w.evidence ? ` · ${w.evidence}` : ''}
+                      </p>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {skillGaps.length > 0 && (
+        <motion.div className="model-answer-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="model-answer-header">
+            <Target size={20} />
+            <span>Skill Gaps</span>
+          </div>
+          <ul style={{ margin: '12px 0 0', paddingLeft: 18, color: '#334155', fontSize: '0.9rem' }}>
+            {skillGaps.map((g, i) => (
+              <li key={i} style={{ marginBottom: 8 }}>
+                <strong>{g.area}</strong>
+                {g.score != null ? ` (${g.score})` : ''}: {g.description}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
+      {evidenceGaps.length > 0 && (
+        <motion.div
+          className="model-answer-card"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginTop: 16 }}
+        >
+          <div className="model-answer-header">
+            <ListChecks size={20} />
+            <span>Evidence Gaps</span>
+          </div>
+          <ul style={{ margin: '12px 0 0', paddingLeft: 18, color: '#334155', fontSize: '0.9rem' }}>
+            {evidenceGaps.map((g) => (
+              <li key={g.answerId} style={{ marginBottom: 10 }}>
+                <strong>
+                  Câu {g.orderIndex + 1}: {g.question}
+                </strong>
+                <div>
+                  {evidenceStatusLabel(g.status)} — {g.gap}
+                </div>
+                {g.suggestion ? (
+                  <div style={{ color: '#64748B', fontSize: '0.85rem' }}>{g.suggestion}</div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
+      {structured?.cvConsistencySummary && (
+        <motion.div
+          className="model-answer-card"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginTop: 16 }}
+        >
+          <div className="model-answer-header">
+            <BookOpen size={20} />
+            <span>CV Consistency</span>
+          </div>
+          <p className="model-answer-quote" style={{ whiteSpace: 'pre-wrap' }}>
+            {structured.cvConsistencySummary}
+          </p>
+        </motion.div>
+      )}
+
+      {highlights &&
+        (highlights.strong.length > 0 ||
+          highlights.weak.length > 0 ||
+          highlights.needsImprovement.length > 0) && (
+          <motion.div
+            className="model-answer-card"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{ marginTop: 16 }}
+          >
+            <div className="model-answer-header">
+              <Award size={20} />
+              <span>Answer Highlights</span>
+            </div>
+            {[
+              { title: 'Strong', items: highlights.strong },
+              { title: 'Weak', items: highlights.weak },
+              { title: 'Needs improvement', items: highlights.needsImprovement },
+            ].map((group) =>
+              group.items.length === 0 ? null : (
+                <div key={group.title} style={{ marginTop: 10 }}>
+                  <strong>{group.title}</strong>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: '0.88rem', color: '#475569' }}>
+                    {group.items.map((h) => (
+                      <li key={h.answerId}>
+                        Câu {h.orderIndex + 1}
+                        {h.compositeScore != null ? ` (${h.compositeScore})` : ''}: {h.question}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            )}
+          </motion.div>
+        )}
+
+      {improvements.length > 0 && (
+        <motion.div
+          className="model-answer-card"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginTop: 16 }}
+        >
+          <div className="model-answer-header">
+            <Lightbulb size={20} />
+            <span>Next Steps</span>
+          </div>
+          <ul style={{ margin: '12px 0 0', paddingLeft: 18, color: '#334155', fontSize: '0.9rem' }}>
+            {improvements.map((t, i) => (
+              <li key={i} style={{ marginBottom: 6 }}>
+                {t}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
       <div className="report-section-heading">
-        <h3>1. Phân tích chi tiết Điểm mạnh & Lỗi mắc phải theo thang STAR</h3>
-        <span className="report-section-badge">Đánh giá chuyên sâu</span>
+        <h3>Phân tích STAR (S / T / A / R)</h3>
+        <span className="report-section-badge">Session scores</span>
       </div>
 
       <div className="star-mistakes-grid">
@@ -251,13 +569,11 @@ export const Feedback: React.FC = () => {
                 <div className="star-badge-icon">{item.letter}</div>
                 <h4 className="star-component-title">{item.title}</h4>
               </div>
-              <span className={`star-score-pill ${item.score >= 85 ? 'good' : 'warn'}`}>
-                {item.score}/100
+              <span className={`star-score-pill ${(item.score ?? 0) >= 85 ? 'good' : 'warn'}`}>
+                {scoreLabel(item.score)}
               </span>
             </div>
-
             <div className="star-feedback-blocks">
-              {/* Block 1: Strength */}
               <div className="feedback-sub-block strength">
                 <div className="block-title-row">
                   <CheckCircle2 size={16} />
@@ -265,8 +581,6 @@ export const Feedback: React.FC = () => {
                 </div>
                 <p className="block-desc">{item.strength}</p>
               </div>
-
-              {/* Block 2: Mistake */}
               <div className="feedback-sub-block mistake">
                 <div className="block-title-row">
                   <AlertTriangle size={16} />
@@ -274,8 +588,6 @@ export const Feedback: React.FC = () => {
                 </div>
                 <p className="block-desc">{item.mistake}</p>
               </div>
-
-              {/* Block 3: Actionable Advice */}
               <div className="feedback-sub-block advice">
                 <div className="block-title-row">
                   <Lightbulb size={16} />
@@ -288,29 +600,77 @@ export const Feedback: React.FC = () => {
         ))}
       </div>
 
-      {/* 2. Model High-Scoring STAR Answer Template */}
-      <motion.div
-        className="model-answer-card"
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.2 }}
-      >
-        <div className="model-answer-header">
-          <BookOpen size={20} />
-          <span>Mẫu câu trả lời STAR điểm 10/10 để tham khảo</span>
-        </div>
-        <p className="model-answer-quote">
-          "<strong>[Bối cảnh]</strong>: Trong quý 3/2025, ứng dụng thương mại điện tử của công ty đạt 150.000 DAU khiến thời gian tải trang tăng vọt lên 4.2s. 
-          <strong> [Nhiệm vụ]</strong>: Tôi trực tiếp phụ trách việc tối ưu hoá kiến trúc Frontend và giảm thời gian tải xuống dưới 1.5s trong 4 tuần. 
-          <strong> [Hành động]</strong>: Tôi đã cấu hình Vite code-splitting theo từng route, chuyển đổi tài sản sang định dạng WebP với lazy-loading, và thiết lập Service Worker caching chiến lược. 
-          <strong> [Kết quả]</strong>: Thời gian tải trang giảm còn 1.1s (tăng 73% tốc độ), tỷ lệ rớt giỏ hàng giảm 18% và điểm Google Lighthouse đạt 98/100."
-        </p>
-      </motion.div>
+      {answers.length > 0 && (
+        <motion.div
+          className="model-answer-card"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginTop: 16 }}
+        >
+          <div className="model-answer-header">
+            <Target size={20} />
+            <span>Answer Detail</span>
+          </div>
+          <ul style={{ margin: '12px 0 0', paddingLeft: 18, color: '#334155', fontSize: '0.9rem', lineHeight: 1.55 }}>
+            {answers.map((a, i) => {
+              const evidenceLabel = evidenceStatusLabel(a.evidenceStatus ?? null);
+              return (
+                <li key={a.id || i} style={{ marginBottom: 16 }}>
+                  <strong>
+                    Câu {(a.orderIndex ?? i) + 1}
+                    {a.isFollowUp ? ' (Follow-up)' : ''}: {a.questionText || '—'}
+                  </strong>
+                  <div style={{ marginTop: 4, color: '#64748B' }}>
+                    {a.skipped ? '(Đã bỏ qua)' : a.answerText || '—'}
+                  </div>
+                  {!a.skipped && (
+                    <div style={{ marginTop: 6, fontSize: '0.85rem', color: '#475569' }}>
+                      {!a.analysisAvailable ? (
+                        <em>Analysis unavailable</em>
+                      ) : (
+                        <>
+                          {a.relevanceScore != null && <span>Relevance: {a.relevanceScore} · </span>}
+                          {a.completenessScore != null && (
+                            <span>Completeness: {a.completenessScore} · </span>
+                          )}
+                          {a.communicationScore != null && (
+                            <span>Communication: {a.communicationScore}</span>
+                          )}
+                          {a.technicalKnowledgeScore != null && (
+                            <div>Technical: {a.technicalKnowledgeScore}</div>
+                          )}
+                          {a.problemSolvingScore != null && (
+                            <div>Problem solving: {a.problemSolvingScore}</div>
+                          )}
+                          {a.starScore != null && <div>STAR: {a.starScore}</div>}
+                          {evidenceLabel && (
+                            <div style={{ marginTop: 2 }}>
+                              Evidence: <strong>{evidenceLabel}</strong>
+                              {a.evidenceStatus === 'MissingEvidence' ||
+                              a.evidenceStatus === 'WeakEvidence'
+                                ? ' — thiếu bằng chứng cụ thể (không đồng nghĩa CV giả)'
+                                : ''}
+                            </div>
+                          )}
+                          {a.followUpReason ? (
+                            <div style={{ marginTop: 2, color: '#64748B' }}>
+                              Improvement: {a.followUpReason}
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </motion.div>
+      )}
 
-      {/* 3. Component Score Breakdown Bars */}
       <div className="report-section-heading">
-        <h3>3. Bảng điểm thành phần & Kỹ năng bổ trợ</h3>
-        <span className="report-section-badge">Phân bổ chi tiết</span>
+        <h3>Bảng điểm thành phần STAR & Clarity</h3>
+        <span className="report-section-badge">Session</span>
       </div>
 
       <motion.div
@@ -320,25 +680,26 @@ export const Feedback: React.FC = () => {
         transition={{ duration: 0.35, delay: 0.25 }}
       >
         {[
-          { name: 'Bối cảnh (Situation - S)', val: r.subs.S, color: '#03bfff' },
-          { name: 'Nhiệm vụ (Task - T)', val: r.subs.T, color: '#5b6bff' },
-          { name: 'Hành động (Action - A)', val: r.subs.A, color: '#10b981' },
-          { name: 'Kết quả (Result - R)', val: r.subs.R, color: '#f59e0b' },
-          { name: 'Sự rõ ràng & Mạch lạc (Clarity)', val: r.clarity, color: '#ec4899' },
-          { name: 'Độ sâu kỹ thuật & Số liệu định lượng', val: 92, color: '#06b6d4' },
+          { name: 'Bối cảnh (Situation - S)', val: subs.S, color: '#03bfff' },
+          { name: 'Nhiệm vụ (Task - T)', val: subs.T, color: '#5b6bff' },
+          { name: 'Hành động (Action - A)', val: subs.A, color: '#10b981' },
+          { name: 'Kết quả (Result - R)', val: subs.R, color: '#f59e0b' },
+          { name: 'Sự rõ ràng & Mạch lạc (Clarity)', val: clarity, color: '#ec4899' },
         ].map((bar, idx) => (
           <div key={idx} className="score-bar-row">
             <span className="score-bar-label">{bar.name}</span>
             <div className="score-bar-track">
-              <motion.div
-                className="score-bar-fill"
-                style={{ background: bar.color }}
-                initial={{ width: 0 }}
-                animate={{ width: `${bar.val}%` }}
-                transition={{ duration: 0.9, ease: 'easeOut', delay: idx * 0.08 }}
-              />
+              {bar.val != null ? (
+                <motion.div
+                  className="score-bar-fill"
+                  style={{ background: bar.color }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${bar.val}%` }}
+                  transition={{ duration: 0.9, ease: 'easeOut', delay: idx * 0.08 }}
+                />
+              ) : null}
             </div>
-            <span className="score-bar-value">{bar.val}/100</span>
+            <span className="score-bar-value">{scoreLabel(bar.val)}</span>
           </div>
         ))}
       </motion.div>

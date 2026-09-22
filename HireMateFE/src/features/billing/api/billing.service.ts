@@ -30,7 +30,12 @@ export const billingService = {
     cancel?: boolean;
     invoiceId?: string;
   }): Promise<ApiResponse<any>> {
-    return apiClient.post('/Billing/payos-confirm', payload, { skipAuth: true });
+    // Requires auth — backend verifies ownership; return URL alone never grants Premium.
+    return apiClient.post('/Billing/payos-confirm', payload);
+  },
+
+  async getPayments(): Promise<ApiResponse<any[]>> {
+    return apiClient.get('/Billing/payments');
   },
 };
 

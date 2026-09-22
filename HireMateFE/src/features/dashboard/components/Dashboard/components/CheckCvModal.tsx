@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CheckCircle2, Edit3, Video, ArrowRight } from 'lucide-react';
+import { X, CheckCircle2, Edit3, Video, ArrowRight, Loader2 } from 'lucide-react';
+import { ensureInterviewReady } from '../../../../onboarding/api/onboarding.service';
 import './CheckCvModal.css';
 
 interface CheckCvModalProps {
@@ -26,6 +27,36 @@ export const CheckCvModal: React.FC<CheckCvModalProps> = ({
   onEditProfile,
 }) => {
   const navigate = useNavigate();
+  const [confirming, setConfirming] = useState(false);
+  const [err, setErr] = useState('');
+
+  const goInterview = async () => {
+    setConfirming(true);
+    setErr('');
+    try {
+      const ready = await ensureInterviewReady();
+      if (!ready.ok) {
+        if (ready.reason === 'need_plan') {
+          onClose();
+          navigate('/pricing');
+          return;
+        }
+        if (ready.reason === 'need_cv') {
+          onClose();
+          navigate('/dashboard?tab=scan');
+          return;
+        }
+        setErr(ready.message);
+        return;
+      }
+      onClose();
+      navigate('/interview-setup');
+    } catch (e: any) {
+      setErr(e?.message || 'Không vào được phỏng vấn.');
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -73,7 +104,6 @@ export const CheckCvModal: React.FC<CheckCvModalProps> = ({
               </p>
             </div>
 
-            {/* Overview Card */}
             <div className="check-cv-preview-box">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div>
@@ -126,8 +156,10 @@ export const CheckCvModal: React.FC<CheckCvModalProps> = ({
               )}
             </div>
 
-            {/* Action Buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {err ? (
+                <p style={{ margin: 0, color: '#DC2626', fontSize: '0.85rem', textAlign: 'center' }}>{err}</p>
+              ) : null}
               <button
                 type="button"
                 onClick={onEditProfile}
@@ -155,10 +187,8 @@ export const CheckCvModal: React.FC<CheckCvModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => {
-                  onClose();
-                  navigate('/interview-setup');
-                }}
+                disabled={confirming}
+                onClick={goInterview}
                 style={{
                   width: '100%',
                   padding: '13px',
@@ -172,56 +202,15 @@ export const CheckCvModal: React.FC<CheckCvModalProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  cursor: 'pointer',
+                  cursor: confirming ? 'wait' : 'pointer',
                   boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
+                  opacity: confirming ? 0.85 : 1,
                 }}
               >
-                <Video size={18} />
-                <span>Tiến hành Phỏng vấn AI ngay</span>
-                <ArrowRight size={16} />
+                {confirming ? <Loader2 size={18} /> : <Video size={18} />}
+                <span>{confirming ? 'Đang xác nhận hồ sơ…' : 'Tiến hành Phỏng vấn AI ngay'}</span>
+                {!confirming && <ArrowRight size={16} />}
               </button>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    navigate('/pricing');
-                  }}
-                  style={{
-                    padding: '10px',
-                    borderRadius: '10px',
-                    border: '1px solid #BAE6FD',
-                    background: '#FFFFFF',
-                    color: '#0284C7',
-                    fontWeight: 650,
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                  }}
-                >
-                  💎 Xem gói dịch vụ
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    navigate('/');
-                  }}
-                  style={{
-                    padding: '10px',
-                    borderRadius: '10px',
-                    border: '1px solid #E2E8F0',
-                    background: '#FFFFFF',
-                    color: '#475569',
-                    fontWeight: 650,
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                  }}
-                >
-                  🏠 Về Trang chủ
-                </button>
-              </div>
             </div>
           </motion.div>
         </div>

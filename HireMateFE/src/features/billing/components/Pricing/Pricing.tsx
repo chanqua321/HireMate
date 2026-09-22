@@ -114,11 +114,8 @@ export const Pricing: React.FC = () => {
       setShowAuthModal(true);
       return;
     }
-    if (plan.monthlyPrice === 0 || plan.id === 'free') {
-      navigate('/dashboard');
-    } else {
-      navigate(`/checkout?plan=${plan.id}&cycle=${billingCycle}`);
-    }
+    // Free cũng phải qua checkout để BE set PlanSelectedAt (ActivateFree)
+    navigate(`/checkout?plan=${plan.id}&cycle=${billingCycle}`);
   };
 
   useEffect(() => {
@@ -143,7 +140,7 @@ export const Pricing: React.FC = () => {
               ? ['50 lượt phỏng vấn mỗi tháng', 'Phân tích CV 70 lần/tháng', 'Trợ lý Cover Letter AI', 'So khớp CV & JD']
               : ['15 lượt phỏng vấn mỗi tháng', 'Feedback chuẩn STAR chi tiết', 'Phân tích CV 20 lần/tháng', 'Luyện tập câu hỏi nâng cao'],
             cta: isFree ? 'Bắt đầu miễn phí' : 'Nâng cấp ngay',
-            ctaTo: isFree ? '/register' : `/checkout?plan=${code}`,
+            ctaTo: `/checkout?plan=${code}`,
             featured: isPremium && p.priceVnd === 79000,
             badge: isPremium && p.priceVnd === 79000 ? 'Phổ biến nhất 🔥' : null,
           };

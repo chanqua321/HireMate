@@ -20,3 +20,6 @@ public class InterviewAnswerRepository(HireMateContext context)
 public class CareerMemoryEventRepository(HireMateContext context)
     : GenericRepository<CareerMemoryEvent>(context), ICareerMemoryEventRepository { }
 
+public class UserFeatureUsageRepository(HireMateContext context)
+    : GenericRepository<UserFeatureUsage>(context), IUserFeatureUsageRepository { }
+

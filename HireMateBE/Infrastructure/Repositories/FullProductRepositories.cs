@@ -11,7 +11,9 @@ public class ContentPageRepository(HireMateContext c) : GenericRepository<Conten
 public class BlogPostRepository(HireMateContext c) : GenericRepository<BlogPost>(c), IBlogPostRepository { }
 public class FaqRepository(HireMateContext c) : GenericRepository<FaqItem>(c), IFaqRepository { }
 public class CvDocumentRepository(HireMateContext c) : GenericRepository<CvDocument>(c), ICvDocumentRepository { }
+public class CvTemplateRepository(HireMateContext c) : GenericRepository<CvTemplate>(c), ICvTemplateRepository { }
 public class JdMatchRepository(HireMateContext c) : GenericRepository<JdMatchResult>(c), IJdMatchRepository { }
+public class JobDescriptionRepository(HireMateContext c) : GenericRepository<JobDescription>(c), IJobDescriptionRepository { }
 public class ResourceRepository(HireMateContext c) : GenericRepository<ResourceItem>(c), IResourceRepository { }
 public class PlanRepository(HireMateContext c) : GenericRepository<SubscriptionPlan>(c), IPlanRepository { }
 public class InvoiceRepository(HireMateContext c) : GenericRepository<Invoice>(c), IInvoiceRepository { }

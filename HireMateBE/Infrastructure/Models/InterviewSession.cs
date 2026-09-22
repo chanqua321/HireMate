@@ -40,7 +40,16 @@ public class InterviewSession
     [MaxLength(2000)]
     public string? FeedbackSummary { get; set; }
 
+    /// <summary>Structured feedback JSON (strengths, weaknesses, skillGaps, evidenceGaps, …).</summary>
+    public string? StructuredFeedbackJson { get; set; }
+
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Set when Voice session actually starts (quota consumed). Null = prepared only, not counted.
+    /// </summary>
+    public DateTime? VoiceStartedAt { get; set; }
+
     public DateTime? CompletedAt { get; set; }
 
     public ICollection<InterviewAnswer> Answers { get; set; } = [];

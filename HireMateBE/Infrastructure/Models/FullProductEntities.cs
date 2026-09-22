@@ -65,7 +65,16 @@ public class CvDocument
     [MaxLength(20)]
     public string Source { get; set; } = "Upload";
 
+    /// <summary>Physical / original upload file name. Not the user-facing CV label.</summary>
     [MaxLength(255)] public string FileName { get; set; } = string.Empty;
+
+    /// <summary>User-facing CV label (e.g. "CV Backend Developer"). Independent of FileName.</summary>
+    [MaxLength(120)] public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Layout template used when rendering / generating this CV.</summary>
+    public Guid? TemplateId { get; set; }
+    [ForeignKey(nameof(TemplateId))] public CvTemplate? Template { get; set; }
+
     [MaxLength(500)] public string StoragePath { get; set; } = string.Empty;
     [MaxLength(100)] public string ContentType { get; set; } = string.Empty;
     public long FileSize { get; set; }
@@ -86,17 +95,88 @@ public class CvDocument
     public DateTime? AnalyzedAt { get; set; }
 }
 
+/// <summary>
+/// CV layout/design template. System templates (UserId=null) are shared;
+/// custom templates belong to one user. AI must not invent layouts — renderer uses this.
+/// </summary>
+public class CvTemplate
+{
+    [Key] public Guid Id { get; set; }
+
+    [MaxLength(100)] public string Name { get; set; } = string.Empty;
+    [MaxLength(500)] public string Description { get; set; } = string.Empty;
+    [MaxLength(500)] public string? PreviewUrl { get; set; }
+
+    /// <summary>Category label, e.g. Modern / Classic.</summary>
+    [MaxLength(40)] public string TemplateType { get; set; } = "Modern";
+
+    /// <summary>Stable renderer key, e.g. modern-01 / modern-02.</summary>
+    [MaxLength(40)] public string LayoutKey { get; set; } = "modern-01";
+
+    /// <summary>JSON: sections order, typography, spacing, style. Not PDF binary.</summary>
+    public string LayoutDefinitionJson { get; set; } = "{}";
+
+    public bool IsSystemTemplate { get; set; }
+
+    /// <summary>Null for system templates; owner for custom templates.</summary>
+    public Guid? UserId { get; set; }
+    [ForeignKey(nameof(UserId))] public UserAccount? User { get; set; }
+
+    /// <summary>Optional source CV when created via "Lưu làm mẫu". Does not clone PDF layout.</summary>
+    public Guid? SourceCvDocumentId { get; set; }
+
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<CvDocument> Documents { get; set; } = new List<CvDocument>();
+}
+
 public class JdMatchResult
 {
     [Key] public Guid Id { get; set; }
     public Guid UserId { get; set; }
     [ForeignKey(nameof(UserId))] public UserAccount? User { get; set; }
     public Guid? CvDocumentId { get; set; }
+    [ForeignKey(nameof(CvDocumentId))] public CvDocument? CvDocument { get; set; }
+    public Guid? JobDescriptionId { get; set; }
+    [ForeignKey(nameof(JobDescriptionId))] public JobDescription? JobDescription { get; set; }
+    /// <summary>Snapshot of JD text at match time (survives JD archive/edit).</summary>
     public string JdText { get; set; } = string.Empty;
     public int OverallScore { get; set; }
     public string? ResultJson { get; set; }
     public string? AiProvider { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>User-owned saved Job Description for match + interview context.</summary>
+public class JobDescription
+{
+    [Key] public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    [ForeignKey(nameof(UserId))] public UserAccount? User { get; set; }
+
+    [Required, MaxLength(200)]
+    public string Title { get; set; } = string.Empty;
+
+    [MaxLength(200)]
+    public string? CompanyName { get; set; }
+
+    [MaxLength(150)]
+    public string? Position { get; set; }
+
+    [Required]
+    public string Content { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? SourceUrl { get; set; }
+
+    public bool IsArchived { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<JdMatchResult> Matches { get; set; } = [];
 }
 
 public class ResourceItem

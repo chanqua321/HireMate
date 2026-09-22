@@ -1,5 +1,6 @@
 using HireMate.Modules.Ai;
 using HireMate.Modules.Onboarding.Abstractions;
+using HireMate.Modules.Onboarding.Cv;
 using System.Text.Json;
 using HireMate.BuildingBlocks;
 
@@ -69,14 +70,33 @@ public class OnboardingService(
             .FirstOrDefaultAsync();
         var usedOk = await _unitOfWork.CvDocumentRepository.GetQueryable().AsNoTracking()
             .CountAsync(c => c.UserId == userId && c.ParseSucceeded && c.AnalyzedAt != null);
+        var hasSuccessfulAnalyze = usedOk > 0
+            || (latest != null && latest.ParseSucceeded && latest.AnalyzedAt != null);
         var snap = await aiQuota.GetSnapshotAsync(user);
-        var premium = PlanTier.Rank(user.CurrentPlanCode) > 0;
-        var remaining = premium ? -1 : Math.Max(0, 1 - usedOk);
+        var cvLimit = PlanTier.MonthlyCvAnalyzeLimit(user.CurrentPlanCode);
+        var monthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var usedCvMonth = await _unitOfWork.CvDocumentRepository.GetQueryable().AsNoTracking()
+            .CountAsync(c => c.UserId == userId && c.ParseSucceeded && c.AnalyzedAt != null && c.AnalyzedAt >= monthStart);
+        var remaining = Math.Max(0, cvLimit - usedCvMonth);
 
-        var next = user.PlanSelectedAt == null ? "select_plan"
-            : latest == null ? "cv"
-            : !user.OnboardingCompleted ? "review_confirm"
-            : "dashboard";
+        string next;
+        if (latest == null)
+            next = "upload_cv";
+        else if (!hasSuccessfulAnalyze)
+            next = "analyze";
+        else if (user.PlanSelectedAt == null)
+            next = "select_plan";
+        else if (!user.OnboardingCompleted)
+            next = "review_confirm";
+        else
+            next = "done";
+
+        var usedSessions = await _unitOfWork.InterviewSessionRepository.GetQueryable().AsNoTracking()
+            .CountAsync(s => s.UserId == userId && s.StartedAt >= monthStart);
+        var interviewLimit = PlanTier.MonthlyInterviewSessions(user.CurrentPlanCode);
+
+        var jdQuota = await aiQuota.GetFeatureQuotaAsync(user, AiQuotaFeature.JdMatch);
+        var emailQuota = await aiQuota.GetFeatureQuotaAsync(user, AiQuotaFeature.CvEmailGeneration);
 
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new OnboardingStatusDto
         {
@@ -95,7 +115,17 @@ public class OnboardingService(
             RemainingAiChars = snap.MonthlyBudget <= 0 ? -1 : snap.RemainingChars,
             PlanExpiresAt = snap.PlanExpiresAt,
             PlanExpired = snap.IsExpired,
-            NextStep = next
+            NextStep = next,
+            MonthlyInterviewLimit = interviewLimit,
+            UsedInterviewSessions = usedSessions,
+            RemainingInterviewSessions = Math.Max(0, interviewLimit - usedSessions),
+            QuestionsPerSession = PlanTier.QuestionsPerSession(user.CurrentPlanCode),
+            MonthlyJdMatchLimit = jdQuota.Limit,
+            UsedJdMatches = jdQuota.Used,
+            RemainingJdMatches = jdQuota.Remaining,
+            MonthlyCvEmailGenerationLimit = emailQuota.Limit,
+            UsedCvEmailGenerations = emailQuota.Used,
+            RemainingCvEmailGenerations = emailQuota.Remaining
         });
     }
 
@@ -111,10 +141,35 @@ public class OnboardingService(
             await ApplyConfirmAsync(user, review);
 
         var profile = await GetOrCreateProfileAsync(userId);
-        var cv = await _unitOfWork.CvDocumentRepository.GetQueryable()
-            .Where(c => c.UserId == userId && c.ParseSucceeded)
-            .OrderByDescending(c => c.AnalyzedAt ?? c.UploadedAt)
-            .FirstOrDefaultAsync();
+
+        // Source of truth: keep existing ConfirmedCvDocumentId. Never replace with latest analyzed CV.
+        CvDocument? existingOwned = null;
+        if (profile.ConfirmedCvDocumentId is Guid existingId)
+        {
+            existingOwned = await _unitOfWork.CvDocumentRepository.GetQueryable()
+                .FirstOrDefaultAsync(c => c.Id == existingId && c.UserId == userId);
+        }
+
+        CvDocument? latestAnalyzed = null;
+        if (existingOwned == null)
+        {
+            latestAnalyzed = await _unitOfWork.CvDocumentRepository.GetQueryable()
+                .Where(c => c.UserId == userId && c.ParseSucceeded)
+                .OrderByDescending(c => c.AnalyzedAt ?? c.UploadedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        var targetId = ActiveCvConfirmPolicy.ResolveOnboardingTarget(
+            profile.ConfirmedCvDocumentId,
+            existingOwned != null,
+            latestAnalyzed?.Id);
+
+        var cv = existingOwned
+            ?? (targetId.HasValue
+                ? await _unitOfWork.CvDocumentRepository.GetQueryable()
+                    .FirstOrDefaultAsync(c => c.Id == targetId.Value && c.UserId == userId)
+                : null)
+            ?? latestAnalyzed;
 
         if (cv == null)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Cần CV đã phân tích thành công (upload hoặc wizard) trước khi xác nhận");
@@ -138,8 +193,8 @@ public class OnboardingService(
         }
 
         cv.IsConfirmed = true;
-        cv.ConfirmedAt = DateTime.UtcNow;
-        profile.ConfirmedAt = DateTime.UtcNow;
+        cv.ConfirmedAt ??= DateTime.UtcNow;
+        profile.ConfirmedAt ??= DateTime.UtcNow;
         profile.ConfirmedCvDocumentId = cv.Id;
         profile.UpdatedAt = DateTime.UtcNow;
         user.OnboardingCompleted = true;
@@ -174,7 +229,9 @@ public class OnboardingService(
         if (dto.Bio != null) profile.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
         if (dto.Hobbies != null) profile.HobbiesJson = SerializeHobbies(dto.Hobbies);
         if (dto.Skills != null) profile.SkillsJson = SerializeHobbies(dto.Skills);
-        if (dto.Experiences != null) profile.ExperiencesJson = JsonSerializer.Serialize(dto.Experiences);
+        if (dto.Experiences != null) profile.ExperiencesJson = SerializeExperiences(dto.Experiences);
+        if (dto.Projects != null) profile.ProjectsJson = SerializeProjects(dto.Projects);
+        if (dto.Certifications != null) profile.CertificationsJson = SerializeCertifications(dto.Certifications);
         profile.UpdatedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
     }
@@ -194,7 +251,9 @@ public class OnboardingService(
         if (dto.Bio != null) profile.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
         if (dto.Hobbies != null) profile.HobbiesJson = SerializeHobbies(dto.Hobbies);
         if (dto.Skills != null) profile.SkillsJson = SerializeHobbies(dto.Skills);
-        if (dto.Experiences != null) profile.ExperiencesJson = JsonSerializer.Serialize(dto.Experiences);
+        if (dto.Experiences != null) profile.ExperiencesJson = SerializeExperiences(dto.Experiences);
+        if (dto.Projects != null) profile.ProjectsJson = SerializeProjects(dto.Projects);
+        if (dto.Certifications != null) profile.CertificationsJson = SerializeCertifications(dto.Certifications);
         profile.UpdatedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
     }
@@ -236,6 +295,8 @@ public class OnboardingService(
         Hobbies = ParseHobbies(profile?.HobbiesJson),
         Skills = ParseHobbies(profile?.SkillsJson),
         Experiences = ParseExperiences(profile?.ExperiencesJson),
+        Projects = ParseProjects(profile?.ProjectsJson),
+        Certifications = ParseCertifications(profile?.CertificationsJson),
         ConfirmedAt = profile?.ConfirmedAt,
         ConfirmedCvDocumentId = profile?.ConfirmedCvDocumentId,
         HasSelectedPlan = user.PlanSelectedAt != null,
@@ -248,6 +309,32 @@ public class OnboardingService(
         try
         {
             return JsonSerializer.Deserialize<List<CvExperienceDto>>(json) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    internal static List<CvProjectDto> ParseProjects(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<CvProjectDto>>(json) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    internal static List<CvCertificationDto> ParseCertifications(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<CvCertificationDto>>(json) ?? [];
         }
         catch
         {
@@ -367,9 +454,77 @@ public class OnboardingService(
             .Where(h => !string.IsNullOrWhiteSpace(h))
             .Select(h => h.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(20)
+            .Take(40)
             .ToList();
         return cleaned.Count == 0 ? null : JsonSerializer.Serialize(cleaned);
+    }
+
+    internal static string? SerializeExperiences(List<CvExperienceDto>? items)
+    {
+        if (items == null) return null;
+        var cleaned = items
+            .Where(e => !string.IsNullOrWhiteSpace(e.Title) || !string.IsNullOrWhiteSpace(e.Org)
+                || !string.IsNullOrWhiteSpace(e.Description))
+            .Take(20)
+            .Select(e => new CvExperienceDto
+            {
+                Title = Trunc(e.Title, 150),
+                Org = Trunc(e.Org, 150),
+                Period = Trunc(e.Period, 80),
+                Description = Trunc(e.Description, 1000)
+            })
+            .ToList();
+        return cleaned.Count == 0 ? "[]" : JsonSerializer.Serialize(cleaned);
+    }
+
+    internal static string? SerializeProjects(List<CvProjectDto>? items)
+    {
+        if (items == null) return null;
+        var cleaned = items
+            .Where(p => !string.IsNullOrWhiteSpace(p.Name) || !string.IsNullOrWhiteSpace(p.Description))
+            .Take(20)
+            .Select(p => new CvProjectDto
+            {
+                Name = Trunc(p.Name, 150),
+                Description = Trunc(p.Description, 1000),
+                Role = Trunc(p.Role, 150),
+                Technologies = (p.Technologies ?? [])
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .Select(t => t.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(20)
+                    .ToList(),
+                Url = Trunc(p.Url, 500),
+                Period = Trunc(p.Period, 80)
+            })
+            .ToList();
+        return cleaned.Count == 0 ? "[]" : JsonSerializer.Serialize(cleaned);
+    }
+
+    internal static string? SerializeCertifications(List<CvCertificationDto>? items)
+    {
+        if (items == null) return null;
+        var cleaned = items
+            .Where(c => !string.IsNullOrWhiteSpace(c.Name))
+            .Take(20)
+            .Select(c => new CvCertificationDto
+            {
+                Name = Trunc(c.Name, 200),
+                Issuer = Trunc(c.Issuer, 150),
+                IssueDate = Trunc(c.IssueDate, 40),
+                ExpiryDate = Trunc(c.ExpiryDate, 40),
+                CredentialId = Trunc(c.CredentialId, 120),
+                CredentialUrl = Trunc(c.CredentialUrl, 500)
+            })
+            .ToList();
+        return cleaned.Count == 0 ? "[]" : JsonSerializer.Serialize(cleaned);
+    }
+
+    private static string? Trunc(string? value, int max)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var t = value.Trim();
+        return t.Length <= max ? t : t[..max];
     }
 }
 
@@ -444,7 +599,11 @@ public class ProfileService(
         if (dto.Skills != null)
             profile.SkillsJson = OnboardingService.SerializeHobbies(dto.Skills);
         if (dto.Experiences != null)
-            profile.ExperiencesJson = JsonSerializer.Serialize(dto.Experiences);
+            profile.ExperiencesJson = OnboardingService.SerializeExperiences(dto.Experiences);
+        if (dto.Projects != null)
+            profile.ProjectsJson = OnboardingService.SerializeProjects(dto.Projects);
+        if (dto.Certifications != null)
+            profile.CertificationsJson = OnboardingService.SerializeCertifications(dto.Certifications);
         profile.UpdatedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
 

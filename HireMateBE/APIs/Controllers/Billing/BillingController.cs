@@ -35,11 +35,15 @@ public class BillingController(IBillingService svc) : HireMateControllerBase
     public async Task<IActionResult> Invoice(Guid id)
         => this.FromService(await svc.GetInvoiceAsync(UserId, id));
 
-    /// <summary>FE gọi khi PayOS redirect về /billing-result để xác nhận giao dịch.</summary>
-    [HttpPost("payos-confirm")]
-    [AllowAnonymous]
-    [EnableRateLimiting("public")]
-    public async Task<IActionResult> PayOsConfirm([FromBody] ConfirmPayOsDto dto)
-        => this.FromService(await svc.ConfirmPayOsAsync(dto));
-}
+    [HttpGet("payments")]
+    public async Task<IActionResult> Payments()
+        => this.FromService(await svc.GetPaymentsAsync(UserId));
 
+    /// <summary>
+    /// FE gọi khi PayOS redirect về /billing-result.
+    /// Requires auth + ownership. Return URL alone never grants Premium.
+    /// </summary>
+    [HttpPost("payos-confirm")]
+    public async Task<IActionResult> PayOsConfirm([FromBody] ConfirmPayOsDto dto)
+        => this.FromService(await svc.ConfirmPayOsAsync(UserId, dto));
+}

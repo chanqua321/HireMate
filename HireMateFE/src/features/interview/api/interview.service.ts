@@ -6,16 +6,30 @@ import {
   InterviewQuestionItem,
   InterviewSessionSummary,
   InterviewSessionDetail,
+  StructuredFeedback,
 } from '../types';
 
 export const interviewService = {
+  async buildContext(payload: {
+    position: string;
+    industry?: string;
+    jobDescription?: string;
+    jobDescriptionId?: string;
+    cvDocumentId?: string;
+  }): Promise<ApiResponse<any>> {
+    return apiClient.post('/Interview/build-context', payload);
+  },
+
   async createSession(config: CreateSessionDto): Promise<ApiResponse<InterviewSessionSummary>> {
     const payload = {
       industry: config.industry || config.field || 'Công nghệ thông tin',
-      position: config.position || config.role || 'Lập trình viên Frontend',
-      difficulty: config.difficulty || 'Trung bình',
+      position: config.position || config.role || 'Ứng viên',
       mode: config.mode || 'Text',
-      questionCount: config.questionCount || 5,
+      questionCount: config.questionCount || undefined,
+      jobDescription: config.jobDescription || undefined,
+      jobDescriptionId: config.jobDescriptionId || undefined,
+      cvDocumentId: config.cvDocumentId || undefined,
+      contextJson: config.contextJson || undefined,
     };
     return apiClient.post<InterviewSessionSummary>('/Interview/sessions', payload);
   },
@@ -28,11 +42,15 @@ export const interviewService = {
     return apiClient.get<InterviewSessionDetail>(`/Interview/sessions/${sessionId}`);
   },
 
+  async getFeedback(sessionId: string): Promise<ApiResponse<StructuredFeedback>> {
+    return apiClient.get<StructuredFeedback>(`/Interview/sessions/${sessionId}/feedback`);
+  },
+
   async getQuestions(sessionId: string): Promise<ApiResponse<InterviewQuestionItem[]>> {
     return apiClient.get<InterviewQuestionItem[]>(`/Interview/sessions/${sessionId}/questions`);
   },
 
-  async submitAnswer(sessionId: string, dto: SubmitAnswerDto): Promise<ApiResponse<any>> {
+  async submitAnswer(sessionId: string, dto: SubmitAnswerDto): Promise<ApiResponse<import('../types').SubmitAnswerResult>> {
     return apiClient.post(`/Interview/sessions/${sessionId}/answers`, dto);
   },
 
@@ -40,9 +58,34 @@ export const interviewService = {
     return apiClient.post<InterviewSessionDetail>(`/Interview/sessions/${sessionId}/complete`);
   },
 
-  async uploadVoice(sessionId: string, audioBlob: Blob, filename = 'voice.webm'): Promise<ApiResponse<any>> {
+  /** Consume 1 Interview quota — call when user actually starts Voice. */
+  async startVoice(sessionId: string): Promise<ApiResponse<{
+    voiceStartedAt?: string;
+    voiceExpiresAt?: string;
+    maxMinutes?: number;
+    idempotent?: boolean;
+    errorCode?: string;
+  }>> {
+    return apiClient.post(`/Interview/sessions/${sessionId}/voice/start`);
+  },
+
+  async uploadVoice(
+    sessionId: string,
+    audioBlob: Blob,
+    meta: {
+      orderIndex: number;
+      questionId?: string;
+      questionText?: string;
+      durationSec?: number;
+      filename?: string;
+    }
+  ): Promise<ApiResponse<any>> {
     const formData = new FormData();
-    formData.append('file', audioBlob, filename);
+    formData.append('file', audioBlob, meta.filename || 'voice.webm');
+    formData.append('orderIndex', String(meta.orderIndex));
+    if (meta.questionId) formData.append('questionId', meta.questionId);
+    if (meta.questionText) formData.append('questionText', meta.questionText);
+    formData.append('durationSec', String(meta.durationSec ?? 0));
     return apiClient.upload(`/Interview/sessions/${sessionId}/voice`, formData);
   },
 
@@ -54,4 +97,3 @@ export const interviewService = {
     return apiClient.get('/Interview/question-bank', { skipAuth: true });
   },
 };
-

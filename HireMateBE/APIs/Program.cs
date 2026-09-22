@@ -212,7 +212,20 @@ if (builder.Configuration.GetValue("Swagger:Enabled", true))
     app.UseSwaggerUI();
 }
 
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        // CV uploads must not be anonymously downloadable via /uploads/...
+        var path = ctx.Context.Request.Path.Value ?? "";
+        if (path.StartsWith("/uploads", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.StatusCode = StatusCodes.Status404NotFound;
+            ctx.Context.Response.ContentLength = 0;
+            ctx.Context.Response.Body = Stream.Null;
+        }
+    }
+});
 app.UseHttpsRedirection();
 app.UseCors("AllowConfigured");
 app.UseRateLimiter();

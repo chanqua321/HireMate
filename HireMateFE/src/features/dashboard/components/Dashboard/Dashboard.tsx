@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
 import {
   profileService,
   cvService,
+  cvTemplateService,
   matchService,
   emailService,
+  aiService,
 } from '../../../../shared/services';
+import type { QuotaUsage } from '../../../../shared/services/ai.service';
+import type { CvTemplateDto } from '../../../../shared/services/cv.service';
 import { careerService } from '../../../../shared/services/career.service';
+import { onboardingService, ensureInterviewReady } from '../../../onboarding/api/onboarding.service';
 import { dashboardService } from '../../api/dashboard.service';
 import {
   Video,
@@ -16,28 +21,24 @@ import {
   Target,
   Mail,
   Eye,
-  Sparkles,
-  FileSearch,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { DashboardGuideModal } from '../DashboardGuideModal/DashboardGuideModal';
 import { DashboardHero } from './components/DashboardHero';
 import { CareerProfileForm } from './components/CareerProfileForm';
 import { MultiCvHub } from './components/MultiCvHub';
-import { AiCvAnalyzer } from './components/AiCvAnalyzer';
 import { JdMatcher } from './components/JdMatcher';
 import { AiEmailGenerator } from './components/AiEmailGenerator';
 import { DashboardSidebar } from './components/DashboardSidebar';
 import { CvDetailModal } from './components/CvDetailModal';
 import { CheckCvModal } from './components/CheckCvModal';
-import { CvWizardModal } from '../../../../shared/components/CvWizard/CvWizardModal';
 import './css/Dashboard.css';
-
 
 
 // Multi-CV Data Model
 export interface UserCvCard {
   id: string;
+  /** DisplayName (or fileName fallback) — primary label in UI. */
   title: string;
   filename: string;
   role: string;
@@ -51,29 +52,39 @@ export interface UserCvCard {
   formatScore?: number;
   keywordsScore?: number;
   readabilityScore?: number;
-  professionalismScore?: number;
-  fitT1Score?: number;
-  readinessScore?: number;
-  analysisJson?: string;
   isBackendDoc?: boolean;
+  parseSucceeded?: boolean;
+  analyzedAt?: string | null;
+  suggestions?: string[];
+  isActive?: boolean;
+  isConfirmed?: boolean;
+  templateId?: string | null;
+  templateName?: string | null;
+  templateLayoutKey?: string | null;
 }
 
 const parseCvDocumentFromBackend = (d: any): UserCvCard => {
   let parsedExtract: any = null;
+  let suggestions: string[] = [];
   if (d.analysis) {
     try {
       const raw = typeof d.analysis === 'string' ? JSON.parse(d.analysis) : d.analysis;
       parsedExtract = raw?.extract || raw?.parsedProfile || raw;
+      if (Array.isArray(raw?.suggestions)) suggestions = raw.suggestions;
     } catch {}
   } else if (d.parsedProfile) {
     parsedExtract = d.parsedProfile;
   }
+  if (Array.isArray(d.suggestions) && d.suggestions.length > 0) {
+    suggestions = d.suggestions;
+  }
 
+  const parseSucceeded = !!(d.parseSucceeded ?? d.ParseSucceeded ?? d.analyzedAt ?? d.AnalyzedAt);
   const role =
     parsedExtract?.desiredPosition ||
     d.parsedRole ||
     d.targetRole ||
-    (d.analyzedAt ? 'Chuyên viên' : 'Chưa phân tích');
+    (parseSucceeded ? 'Chuyên viên' : 'Chưa phân tích');
 
   const field =
     parsedExtract?.desiredIndustry ||
@@ -102,14 +113,19 @@ const parseCvDocumentFromBackend = (d: any): UserCvCard => {
 
   const atsScore =
     d.readinessScore ||
+    d.ReadinessScore ||
     d.overallScore ||
     d.formatScore ||
-    (parsedExtract ? 75 : 0);
+    (parsedExtract && parseSucceeded ? 75 : 0);
+
+  const fileName = d.fileName || d.filename || 'CV Document.pdf';
+  const displayName = (d.displayName || d.DisplayName || '').trim();
+  const title = displayName || fileName;
 
   return {
     id: d.id || d.cvId || `cv-${Date.now()}`,
-    title: d.fileName || d.filename || 'CV Document.pdf',
-    filename: d.fileName || d.filename || 'CV Document.pdf',
+    title,
+    filename: fileName,
     role,
     field,
     exp,
@@ -120,19 +136,18 @@ const parseCvDocumentFromBackend = (d: any): UserCvCard => {
       ? new Date(d.uploadedAt).toLocaleDateString('vi-VN')
       : new Date().toLocaleDateString('vi-VN'),
     atsScore,
-    formatScore: d.formatScore || 0,
-    keywordsScore: d.keywordsScore || 0,
-    readabilityScore: d.readabilityScore || 0,
-    professionalismScore: d.professionalismScore || 0,
-    fitT1Score: d.fitT1Score || 0,
-    readinessScore: d.readinessScore || 0,
-    analysisJson:
-      typeof d.analysisJson === 'string'
-        ? d.analysisJson
-        : typeof d.analysis === 'string'
-        ? d.analysis
-        : undefined,
+    formatScore: d.formatScore || d.FormatScore || 0,
+    keywordsScore: d.keywordsScore || d.KeywordsScore || 0,
+    readabilityScore: d.readabilityScore || d.ReadabilityScore || 0,
     isBackendDoc: true,
+    parseSucceeded,
+    analyzedAt: d.analyzedAt || d.AnalyzedAt || null,
+    suggestions,
+    isConfirmed: !!(d.isConfirmed ?? d.IsConfirmed),
+    isActive: !!(d.isActive ?? d.IsActive ?? d.isConfirmed ?? d.IsConfirmed),
+    templateId: d.templateId ?? d.TemplateId ?? null,
+    templateName: d.templateName ?? d.TemplateName ?? null,
+    templateLayoutKey: d.templateLayoutKey ?? d.TemplateLayoutKey ?? null,
   };
 };
 
@@ -143,19 +158,13 @@ export const Dashboard: React.FC = () => {
 
   const tabQuery = searchParams.get('tab');
   const initialTab =
-    tabQuery && ['manual', 'scan', 'analyze', 'match', 'email'].includes(tabQuery)
-      ? (tabQuery as 'manual' | 'scan' | 'analyze' | 'match' | 'email')
+    tabQuery && ['manual', 'scan', 'match', 'email'].includes(tabQuery)
+      ? (tabQuery as 'manual' | 'scan' | 'match' | 'email')
       : 'manual';
 
-  // Active Tab: 'manual' (Tạo CV) | 'scan' (Kho CV) | 'analyze' (AI Đánh giá CV) | 'match' | 'email'
-  const [activeTab, setActiveTab] = useState<'manual' | 'scan' | 'analyze' | 'match' | 'email'>(initialTab);
+  // Active Tab: 'manual' (Hồ sơ nghề nghiệp) | 'scan' (Kho CV cá nhân) | 'match' | 'email'
+  const [activeTab, setActiveTab] = useState<'manual' | 'scan' | 'match' | 'email'>(initialTab);
   const [checkCvModalOpen, setCheckCvModalOpen] = useState(false);
-  const [wizardModalOpen, setWizardModalOpen] = useState(false);
-  const [selectedCvForAnalyzeId, setSelectedCvForAnalyzeId] = useState<string>('');
-  const [isAnalyzingCv, setIsAnalyzingCv] = useState(false);
-  const [analyzeProgress, setAnalyzeProgress] = useState(0);
-  const [analyzeStatusText, setAnalyzeStatusText] = useState('');
-
 
   // Multi-CV Hub State
   const [userCvs, setUserCvs] = useState<UserCvCard[]>([]);
@@ -183,13 +192,21 @@ export const Dashboard: React.FC = () => {
   const [skills, setSkills] = useState<string[]>(
     profile.skills && profile.skills.length > 0 ? profile.skills : []
   );
+  const [experiences, setExperiences] = useState<any[]>(profile.experiences || []);
+  const [projects, setProjects] = useState<any[]>(profile.projects || []);
+  const [certifications, setCertifications] = useState<any[]>(profile.certifications || []);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [savingManual, setSavingManual] = useState(false);
+  const [creatingCv, setCreatingCv] = useState(false);
+  const [wizardDisplayName, setWizardDisplayName] = useState('');
+  const [wizardTemplateId, setWizardTemplateId] = useState('');
+  const [cvTemplates, setCvTemplates] = useState<CvTemplateDto[]>([]);
 
   // JD Matcher State
   const [jdText, setJdText] = useState('');
   const [isMatching, setIsMatching] = useState(false);
   const [matchResult, setMatchResult] = useState<any>(null);
+  const [quotaUsage, setQuotaUsage] = useState<QuotaUsage | null>(null);
 
   // AI Email Generator State
   const [emailType, setEmailType] = useState('CoverLetter');
@@ -203,105 +220,16 @@ export const Dashboard: React.FC = () => {
   // Stats & Guide
   const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
-  const [careerHubData, setCareerHubData] = useState<any>(null);
-  const [isLoadingProfileHub, setIsLoadingProfileHub] = useState(false);
-
-  // Load CV Collection from real API (GET /api/cv/list)
-  const loadCvs = useCallback(async () => {
-    try {
-      let loadedCvs: UserCvCard[] = [];
-
-      if (localStorage.getItem('hm_access_token')) {
-        try {
-          const res = await cvService.listCvs();
-          if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
-            loadedCvs = res.data.map(parseCvDocumentFromBackend);
-          }
-        } catch (e) {}
-      }
-
-      setUserCvs(loadedCvs);
-
-      if (loadedCvs.length > 0) {
-        const savedActiveId = localStorage.getItem('hm_active_cv_id');
-        const foundActive = loadedCvs.find((c) => c.id === savedActiveId);
-        const targetActive = foundActive || loadedCvs[0];
-        setActiveCvId(targetActive.id);
-        setSelectedMatchCvId(targetActive.id);
-        localStorage.setItem('hm_active_cv_id', targetActive.id);
-        localStorage.setItem('hm_active_cv', JSON.stringify(targetActive));
-
-        if (targetActive.role && targetActive.role !== 'Chưa phân tích') {
-          setRole((prev) => prev || targetActive.role);
-        }
-        if (targetActive.field && targetActive.field !== 'Chưa xác định') {
-          setField((prev) => prev || targetActive.field);
-        }
-        if (targetActive.skills && targetActive.skills.length > 0) {
-          setSkills((prev) => (prev && prev.length > 0 ? prev : targetActive.skills));
-        }
-      }
-    } catch (err) {
-      setUserCvs([]);
-    }
-  }, []);
-
-  // Load Career Profile from real API (GET /api/Career/profile)
-  const fetchCareerProfile = useCallback(async () => {
-    if (!localStorage.getItem('hm_access_token')) return;
-    setIsLoadingProfileHub(true);
-    try {
-      const res = await careerService.getProfileHub();
-      if (res.ok && res.data) {
-        const hub: any = res.data;
-        setCareerHubData(hub);
-        const cp = hub.profile;
-        if (cp) {
-          if (cp.desiredPosition) setRole(cp.desiredPosition);
-          if (cp.desiredIndustry || cp.major) setField(cp.desiredIndustry || cp.major);
-          if (cp.experienceLevel) setExp(cp.experienceLevel);
-          if (cp.university) {
-            const eduText = cp.major && !cp.university.includes(cp.major)
-              ? `${cp.university} - ${cp.major}`
-              : cp.university;
-            setEducation(eduText);
-          }
-          if (cp.bio) setBio(cp.bio);
-          // Parse skills from JSON string (supports skillsJson or hobbiesJson or skills)
-          try {
-            const rawSkills = cp.skillsJson || cp.hobbiesJson || cp.skills;
-            if (typeof rawSkills === 'string') {
-              const parsed = JSON.parse(rawSkills);
-              if (Array.isArray(parsed) && parsed.length > 0) setSkills(parsed);
-            } else if (Array.isArray(rawSkills) && rawSkills.length > 0) {
-              setSkills(rawSkills);
-            }
-          } catch {}
-          if (cp.graduationYear) setGraduationYear(cp.graduationYear);
-        }
-        if (hub.fullName) setName(hub.fullName);
-      }
-    } catch (err) {
-      console.error('Failed to fetch career profile hub:', err);
-    } finally {
-      setIsLoadingProfileHub(false);
-    }
-  }, []);
 
   useEffect(() => {
-    if (tabQuery && ['manual', 'scan', 'analyze', 'match', 'email'].includes(tabQuery)) {
-      setActiveTab(tabQuery as 'manual' | 'scan' | 'analyze' | 'match' | 'email');
+    if (tabQuery && ['manual', 'scan', 'match', 'email'].includes(tabQuery)) {
+      setActiveTab(tabQuery as 'manual' | 'scan' | 'match' | 'email');
     }
   }, [tabQuery]);
 
-  const handleTabChange = (tab: 'manual' | 'scan' | 'analyze' | 'match' | 'email') => {
+  const handleTabChange = (tab: 'manual' | 'scan' | 'match' | 'email') => {
     setActiveTab(tab);
     setSearchParams({ tab });
-    if (tab === 'manual') {
-      fetchCareerProfile();
-    } else if (tab === 'scan') {
-      loadCvs();
-    }
   };
 
   // Sync profile when AppContext updates
@@ -319,13 +247,66 @@ export const Dashboard: React.FC = () => {
     if (profile.skills && profile.skills.length > 0) setSkills(profile.skills);
   }, [profile]);
 
-  // Initial fetch on mount
+  // Load CV Collection from real API
   useEffect(() => {
-    loadCvs();
-    fetchCareerProfile();
-  }, [loadCvs, fetchCareerProfile]);
+    const loadCvs = async () => {
+      try {
+        let loadedCvs: UserCvCard[] = [];
 
-  // Fetch Dashboard Stats
+        if (localStorage.getItem('hm_access_token')) {
+          try {
+            const res = await cvService.listCvs();
+            if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+              loadedCvs = res.data.map(parseCvDocumentFromBackend);
+            }
+          } catch (e) {}
+        }
+
+        setUserCvs(loadedCvs);
+
+        if (loadedCvs.length > 0) {
+          // Server source of truth only. Stale localStorage / first CV must not become Active.
+          const backendActive = loadedCvs.find((c) => c.isActive || c.isConfirmed);
+          if (backendActive) {
+            setActiveCvId(backendActive.id);
+            setSelectedMatchCvId((prev) => prev || backendActive.id);
+            localStorage.setItem('hm_active_cv_id', backendActive.id);
+            localStorage.setItem('hm_active_cv', JSON.stringify(backendActive));
+          } else {
+            setActiveCvId('');
+            localStorage.removeItem('hm_active_cv_id');
+            localStorage.removeItem('hm_active_cv');
+          }
+
+          if (backendActive?.role && backendActive.role !== 'Chưa phân tích') {
+            setRole((prev) => prev || backendActive.role);
+          }
+          if (backendActive?.field && backendActive.field !== 'Chưa xác định') {
+            setField((prev) => prev || backendActive.field);
+          }
+          if (backendActive?.skills && backendActive.skills.length > 0) {
+            setSkills((prev) => (prev && prev.length > 0 ? prev : backendActive.skills));
+          }
+        } else {
+          setActiveCvId('');
+          localStorage.removeItem('hm_active_cv_id');
+          localStorage.removeItem('hm_active_cv');
+        }
+      } catch (err) {
+        setUserCvs([]);
+      }
+    };
+
+    loadCvs();
+
+    if (localStorage.getItem('hm_access_token')) {
+      cvTemplateService.listTemplates().then((res) => {
+        if (res.ok && Array.isArray(res.data)) setCvTemplates(res.data);
+      }).catch(() => {});
+    }
+  }, []);
+
+  // Fetch Dashboard Stats + AI quota usage (backend source of truth)
   useEffect(() => {
     if (localStorage.getItem('hm_access_token')) {
       dashboardService.getDashboardStats().then((res) => {
@@ -333,60 +314,314 @@ export const Dashboard: React.FC = () => {
           setDashboardStats(res.data);
         }
       }).catch(() => {});
+
+      aiService.getUsage().then((res) => {
+        if (res.ok && res.data) setQuotaUsage(res.data);
+      }).catch(() => {});
     }
   }, []);
 
-  // Set Active CV: Updates Career Profile context and storage
-  const handleSelectActiveCv = (cv: UserCvCard) => {
-    setActiveCvId(cv.id);
-    setSelectedMatchCvId(cv.id);
-    localStorage.setItem('hm_active_cv_id', cv.id);
-    localStorage.setItem('hm_active_cv', JSON.stringify(cv));
+  // Load Career Profile from real API (GET /api/Profile + hub fallback)
+  useEffect(() => {
+    if (!localStorage.getItem('hm_access_token')) return;
 
-    setName(cv.title.replace(/^CV_/, '').replace(/\.pdf$/, '').replace(/_/g, ' ') || name);
-    setRole(cv.role);
-    setField(cv.field);
-    setExp(cv.exp);
-    setEducation(cv.education);
-    setSkills(cv.skills);
-    setBio(cv.bio);
+    const applyProfileDto = (cp: any, fullName?: string) => {
+      if (!cp) return;
+      if (fullName) setName(fullName);
+      else if (cp.fullName) setName(cp.fullName);
+      if (cp.desiredPosition) setRole(cp.desiredPosition);
+      if (cp.desiredIndustry || cp.major) setField(cp.desiredIndustry || cp.major);
+      if (cp.experienceLevel) setExp(cp.experienceLevel);
+      if (cp.university) {
+        const eduText = cp.major && !cp.university.includes(cp.major)
+          ? `${cp.university} - ${cp.major}`
+          : cp.university;
+        setEducation(eduText);
+      }
+      if (cp.bio) setBio(cp.bio);
+      if (cp.graduationYear) setGraduationYear(cp.graduationYear);
+      if (Array.isArray(cp.skills) && cp.skills.length > 0) setSkills(cp.skills);
+      else {
+        try {
+          const rawSkills = cp.skillsJson || cp.hobbiesJson || cp.skills;
+          if (typeof rawSkills === 'string') {
+            const parsed = JSON.parse(rawSkills);
+            if (Array.isArray(parsed) && parsed.length > 0) setSkills(parsed);
+          }
+        } catch { /* ignore */ }
+      }
+      if (Array.isArray(cp.experiences)) setExperiences(cp.experiences);
+      else if (typeof cp.experiencesJson === 'string') {
+        try {
+          const parsed = JSON.parse(cp.experiencesJson);
+          if (Array.isArray(parsed)) setExperiences(parsed);
+        } catch { /* ignore */ }
+      }
+      if (Array.isArray(cp.projects)) setProjects(cp.projects);
+      else if (typeof cp.projectsJson === 'string') {
+        try {
+          const parsed = JSON.parse(cp.projectsJson);
+          if (Array.isArray(parsed)) setProjects(parsed);
+        } catch { /* ignore */ }
+      }
+      if (Array.isArray(cp.certifications)) setCertifications(cp.certifications);
+      else if (typeof cp.certificationsJson === 'string') {
+        try {
+          const parsed = JSON.parse(cp.certificationsJson);
+          if (Array.isArray(parsed)) setCertifications(parsed);
+        } catch { /* ignore */ }
+      }
+    };
 
-    updateProfile({
-      role: cv.role,
-      field: cv.field,
-      desiredPosition: cv.role,
-      desiredIndustry: cv.field,
-      exp: cv.exp,
-      education: cv.education,
-      skills: cv.skills,
-      bio: cv.bio,
-    });
+    profileService.getProfile().then((res) => {
+      if (res.ok && res.data) applyProfileDto(res.data);
+    }).catch(() => {});
 
-    updateInterviewConfig({
-      field: cv.field,
-      role: cv.role,
-    });
+    careerService.getProfileHub().then((res) => {
+      if (res.ok && res.data) {
+        const hub: any = res.data;
+        applyProfileDto(hub.profile, hub.fullName);
+      }
+    }).catch(() => {});
+  }, []);
 
-    setToastMsg(`Đã kích hoạt CV "${cv.title}" làm hồ sơ phỏng vấn chính!`);
-    setTimeout(() => setToastMsg(null), 3500);
+  // Set Active CV via Backend API — localStorage chỉ cache sau khi BE OK
+  const handleSelectActiveCv = async (cv: UserCvCard) => {
+    if (!localStorage.getItem('hm_access_token')) {
+      setToastMsg('⚠️ Đăng nhập để kích hoạt CV trên server.');
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!cv.parseSucceeded) {
+      setToastMsg('⚠️ CV chưa phân tích thành công — không thể kích hoạt.');
+      setTimeout(() => setToastMsg(null), 3500);
+      return;
+    }
+
+    setToastMsg('⏳ Đang kích hoạt CV…');
+    try {
+      const res = await cvService.activateCv(cv.id);
+      if (!res.ok) {
+        setToastMsg(res.message || 'Không kích hoạt được CV.');
+        setTimeout(() => setToastMsg(null), 4000);
+        return;
+      }
+
+      const activeId = (res.data as any)?.activeCvDocumentId || cv.id;
+      setUserCvs((prev) =>
+        prev.map((c) => ({
+          ...c,
+          isActive: c.id === activeId,
+          isConfirmed: c.id === activeId,
+        }))
+      );
+      setActiveCvId(activeId);
+      setSelectedMatchCvId(activeId);
+
+      const activated = {
+        ...cv,
+        id: activeId,
+        isActive: true,
+        isConfirmed: true,
+      };
+      localStorage.setItem('hm_active_cv_id', activeId);
+      localStorage.setItem('hm_active_cv', JSON.stringify(activated));
+
+      setName(cv.title.replace(/^CV_/, '').replace(/\.pdf$/, '').replace(/_/g, ' ') || name);
+      setRole(cv.role);
+      setField(cv.field);
+      setExp(cv.exp);
+      setEducation(cv.education);
+      setSkills(cv.skills);
+      setBio(cv.bio);
+
+      updateProfile({
+        role: cv.role,
+        field: cv.field,
+        desiredPosition: cv.role,
+        desiredIndustry: cv.field,
+        exp: cv.exp,
+        education: cv.education,
+        skills: cv.skills,
+        bio: cv.bio,
+      });
+
+      updateInterviewConfig({
+        field: cv.field,
+        role: cv.role,
+      });
+
+      setToastMsg(`🎯 Đã kích hoạt CV "${cv.title}" làm hồ sơ phỏng vấn chính!`);
+      setTimeout(() => setToastMsg(null), 3500);
+    } catch {
+      setToastMsg('Không kích hoạt được CV. Thử lại.');
+      setTimeout(() => setToastMsg(null), 3500);
+    }
   };
 
-  const handleDeleteCv = (id: string, title: string) => {
-    const remaining = userCvs.filter((c) => c.id !== id);
-    setUserCvs(remaining);
-    localStorage.setItem('hm_saved_user_cvs', JSON.stringify(remaining));
-
-    if (activeCvId === id && remaining.length > 0) {
-      handleSelectActiveCv(remaining[0]);
+  const applyActiveFromList = (list: UserCvCard[], preferredId?: string | null) => {
+    const backendActive = list.find((c) => c.isActive || c.isConfirmed);
+    const preferred = preferredId ? list.find((c) => c.id === preferredId) : undefined;
+    const next = backendActive || preferred || list[0];
+    if (next) {
+      setActiveCvId(next.id);
+      setSelectedMatchCvId(next.id);
+      localStorage.setItem('hm_active_cv_id', next.id);
+      localStorage.setItem('hm_active_cv', JSON.stringify(next));
+    } else {
+      setActiveCvId('');
+      localStorage.removeItem('hm_active_cv_id');
+      localStorage.removeItem('hm_active_cv');
     }
-    setToastMsg(`🗑️ Đã xóa CV "${title}" khỏi kho.`);
-    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleDeleteCv = async (id: string, title: string) => {
+    if (!localStorage.getItem('hm_access_token')) {
+      setToastMsg('⚠️ Đăng nhập để xóa CV trên server.');
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!window.confirm(`Xóa CV "${title}"? Hành động không hoàn tác.`)) return;
+
+    setToastMsg('⏳ Đang xóa CV…');
+    try {
+      const res = await cvService.deleteCv(id);
+      if (!res.ok) {
+        setToastMsg(res.message || 'Không xóa được CV.');
+        setTimeout(() => setToastMsg(null), 4000);
+        return;
+      }
+
+      const payload = res.data as any;
+      const newActiveId: string | null = payload?.activeCvDocumentId ?? null;
+
+      // Refresh list từ BE để đồng bộ isActive
+      let remaining: UserCvCard[] = [];
+      const listRes = await cvService.listCvs();
+      if (listRes.ok && Array.isArray(listRes.data)) {
+        remaining = listRes.data.map(parseCvDocumentFromBackend);
+      } else {
+        remaining = userCvs
+          .filter((c) => c.id !== id)
+          .map((c) => ({
+            ...c,
+            isActive: newActiveId ? c.id === newActiveId : false,
+            isConfirmed: newActiveId ? c.id === newActiveId : false,
+          }));
+      }
+
+      setUserCvs(remaining);
+      applyActiveFromList(remaining, newActiveId);
+
+      setToastMsg(`🗑️ Đã xóa CV "${title}" khỏi kho.`);
+      setTimeout(() => setToastMsg(null), 3000);
+    } catch {
+      setToastMsg('Không xóa được CV. Thử lại.');
+      setTimeout(() => setToastMsg(null), 3500);
+    }
+  };
+
+  /** Vào PV với CV cho operation — KHÔNG activate. Active giữ nguyên. */
+  const goInterviewFromDashboard = async (cv?: UserCvCard | null) => {
+    // Operation CV: explicit card, else Active. Never cvs[0] / localStorage.
+    const targetCv = cv || activeCv;
+    if (!targetCv) {
+      setToastMsg('⚠️ Hãy kích hoạt một CV trong Kho CV trước khi phỏng vấn.');
+      handleTabChange('scan');
+      setTimeout(() => setToastMsg(null), 4000);
+      return;
+    }
+    if (!localStorage.getItem('hm_access_token')) {
+      navigate('/login?redirect=/interview-setup');
+      return;
+    }
+
+    // Selecting B for interview must NOT call activate — Active stays A.
+    if (!activeCvId && !cv) {
+      setToastMsg('⚠️ Hãy bấm 「Chọn làm CV phỏng vấn」 trước khi vào phỏng vấn.');
+      handleTabChange('scan');
+      setTimeout(() => setToastMsg(null), 4000);
+      return;
+    }
+
+    if (!targetCv.parseSucceeded) {
+      setToastMsg('⚠️ CV chưa đạt phân tích. Xem gợi ý sửa bên dưới trước khi phỏng vấn.');
+      setSelectedCvForDetail(targetCv);
+      setCvDetailModalOpen(true);
+      handleTabChange('scan');
+      setTimeout(() => setToastMsg(null), 4500);
+      return;
+    }
+
+    setToastMsg('⏳ Đang mở buổi phỏng vấn…');
+    try {
+      const ready = await ensureInterviewReady(targetCv.id);
+      if (!ready.ok) {
+        setToastMsg(ready.message);
+        setTimeout(() => setToastMsg(null), 4500);
+        if (ready.reason === 'need_plan') {
+          setTimeout(() => navigate('/pricing'), 800);
+        } else if (ready.reason === 'need_cv') {
+          setSelectedCvForDetail(targetCv);
+          setCvDetailModalOpen(true);
+          handleTabChange('scan');
+        }
+        return;
+      }
+      setToastMsg(null);
+      navigate('/interview-setup', { state: { fromCv: targetCv } });
+    } catch (err: any) {
+      setToastMsg(err?.message || '❌ Không vào được phòng phỏng vấn.');
+      setTimeout(() => setToastMsg(null), 4000);
+    }
+  };
+
+  const showCvReviewAfterSave = (card: UserCvCard, msg: string) => {
+    setSelectedCvForDetail(card);
+    setCvDetailModalOpen(true);
+    handleTabChange('scan');
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 5000);
+  };
+
+  const reAnalyzeCv = async (cv: UserCvCard) => {
+    setToastMsg('⏳ Đang phân tích lại CV…');
+    try {
+      const res = await cvService.analyzeCv(cv.id);
+      if (!res.ok) {
+        setToastMsg(res.message || '❌ Phân tích lại thất bại.');
+        setTimeout(() => setToastMsg(null), 4000);
+        return;
+      }
+      const card = parseCvDocumentFromBackend({ ...cv, ...(res.data || {}), id: cv.id });
+      setUserCvs((prev) => {
+        const next = [card, ...prev.filter((c) => c.id !== cv.id)];
+        localStorage.setItem('hm_saved_user_cvs', JSON.stringify(next));
+        return next;
+      });
+      showCvReviewAfterSave(
+        card,
+        card.parseSucceeded
+          ? '✅ Đã phân tích. Xem gợi ý — đạt rồi có thể luyện phỏng vấn.'
+          : '⚠️ Chưa đủ điều kiện. Sửa theo gợi ý rồi phân tích lại.'
+      );
+    } catch (err: any) {
+      setToastMsg(err?.message || '❌ Lỗi phân tích CV.');
+      setTimeout(() => setToastMsg(null), 4000);
+    }
   };
 
   // Upload New CV into user's collection (real API only)
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    displayName?: string
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Allow re-selecting the same file later
+    e.target.value = '';
 
     if (!localStorage.getItem('hm_access_token')) {
       setToastMsg('⚠️ Vui lòng đăng nhập để tải lên CV.');
@@ -394,33 +629,56 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
+    const nameLabel = displayName?.trim() || file.name;
     setIsScanning(true);
     setScanProgress(15);
-    setScanStatusText(`📤 Đang tải lên file "${file.name}"...`);
+    setScanStatusText(`📤 Đang tải lên "${nameLabel}"...`);
 
     try {
-      const uploadRes = await cvService.uploadCv(file);
+      const uploadRes = await cvService.uploadCv(file, displayName?.trim() || undefined);
       if (uploadRes.ok && uploadRes.data?.id) {
-        setScanProgress(55);
-        const analyzeRes = await cvService.analyzeCv(uploadRes.data.id);
-        const ai = analyzeRes.ok && analyzeRes.data ? analyzeRes.data : null;
+        // Upload BE đã auto-analyze — lấy kết quả (điểm + gợi ý) từ response
+        setScanProgress(85);
+        setScanStatusText('🤖 Đang chấm ATS & tạo gợi ý sửa…');
+        let aiPayload: any = uploadRes.data;
+        // Nếu upload trả về chưa có điểm, gọi analyze thêm lần
+        if (!(uploadRes.data as any).readinessScore && !(uploadRes.data as any).parseSucceeded) {
+          const analyzeRes = await cvService.analyzeCv(uploadRes.data.id);
+          if (analyzeRes.ok && analyzeRes.data) aiPayload = { ...uploadRes.data, ...analyzeRes.data };
+        }
 
         const newCvCard = parseCvDocumentFromBackend({
-          ...(uploadRes.data || {}),
-          ...(ai || {}),
+          ...aiPayload,
           id: uploadRes.data.id,
-          fileName: file.name,
+          fileName: (uploadRes.data as any).fileName || file.name,
+          displayName: (uploadRes.data as any).displayName || displayName?.trim() || undefined,
         });
 
         setScanProgress(100);
-        setScanStatusText('✅ Đã lưu CV mới vào kho CV của bạn!');
+        setScanStatusText('✅ Đã lưu & chấm CV — xem gợi ý trước khi phỏng vấn.');
         setIsScanning(false);
 
         const updatedList = [newCvCard, ...userCvs];
         setUserCvs(updatedList);
         setShowAddCvForm(false);
-        setToastMsg(`🎉 Đã thêm thành công CV "${file.name}" vào kho!`);
-        setTimeout(() => setToastMsg(null), 3500);
+        // Upload does NOT activate. Active CV stays ConfirmedCvDocumentId until user clicks Activate.
+        showCvReviewAfterSave(
+          newCvCard,
+          newCvCard.parseSucceeded
+            ? `✅ CV "${newCvCard.title}" đã chấm ATS. Xem gợi ý rồi mới luyện phỏng vấn.`
+            : `⚠️ CV "${newCvCard.title}" cần sửa theo gợi ý rồi phân tích lại.`
+        );
+
+        try {
+          const statusRes = await onboardingService.getStatus();
+          const next = statusRes.data?.nextStep || statusRes.data?.NextStep;
+          if (next === 'select_plan') {
+            setTimeout(() => navigate('/pricing'), 1800);
+          } else if (newCvCard.parseSucceeded) {
+            const confirmRes = await onboardingService.confirm();
+            if (confirmRes.ok) sessionStorage.setItem('hm_onboarding_done', '1');
+          }
+        } catch { /* giữ modal gợi ý */ }
       } else {
         setIsScanning(false);
         setToastMsg(uploadRes.message || '❌ Không tải được CV. Vui lòng thử lại.');
@@ -433,197 +691,349 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // AI Analyze Handler for existing CV
-  const handleAnalyzeCv = async (cvId: string) => {
-    setIsAnalyzingCv(true);
-    setAnalyzeProgress(20);
-    setAnalyzeStatusText('🤖 AI đang trích xuất và đọc nội dung văn bản CV...');
+  const handleRenameCv = async (cv: UserCvCard, displayName: string) => {
+    const trimmed = displayName.trim();
+    if (!trimmed) {
+      setToastMsg('⚠️ Tên CV không được để trống.');
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
     try {
-      setAnalyzeProgress(50);
-      setAnalyzeStatusText('🔍 Đang phân tích cấu trúc ATS, mật độ từ khóa và độ dễ đọc...');
-      const analyzeRes = await cvService.analyzeCv(cvId);
-      setAnalyzeProgress(85);
-      setAnalyzeStatusText('📊 Đang tổng hợp các thang điểm chuẩn quốc tế...');
-
-      if (analyzeRes.ok && analyzeRes.data) {
-        const ai: any = analyzeRes.data;
-        setUserCvs((prev) =>
-          prev.map((c) => {
-            if (c.id === cvId) {
-              const updatedAts = ai.atsScore || ai.overallScore || c.atsScore || 85;
-              return {
-                ...c,
-                atsScore: updatedAts,
-                formatScore: ai.formatScore || 90,
-                keywordsScore: ai.keywordsScore || 85,
-                readabilityScore: ai.readabilityScore || 88,
-                professionalismScore: ai.professionalismScore || 92,
-                fitT1Score: ai.fitT1Score || updatedAts,
-                readinessScore: ai.readinessScore || updatedAts,
-                skills: ai.parsedSkills && ai.parsedSkills.length > 0 ? ai.parsedSkills : c.skills,
-                role: ai.parsedRole || c.role,
-                analysisJson: typeof ai.analysisJson === 'string' ? ai.analysisJson : JSON.stringify(ai),
-              };
-            }
-            return c;
-          })
-        );
-        setAnalyzeProgress(100);
-        setAnalyzeStatusText('✅ Phân tích CV hoàn tất!');
-        setToastMsg('🎉 Đã hoàn tất phân tích và đánh giá ATS cho CV!');
+      const res = await cvService.renameCv(cv.id, trimmed);
+      if (!res.ok) {
+        setToastMsg(res.message || '❌ Không đổi được tên CV.');
         setTimeout(() => setToastMsg(null), 3500);
-      } else {
-        setToastMsg(analyzeRes.message || '⚠️ Không thể phân tích CV. Vui lòng thử lại.');
-        setTimeout(() => setToastMsg(null), 3500);
+        return;
       }
+      const card = parseCvDocumentFromBackend({ ...cv, ...(res.data || {}), id: cv.id, displayName: trimmed });
+      setUserCvs((prev) => {
+        const next = prev.map((c) => (c.id === cv.id ? { ...c, ...card, title: trimmed } : c));
+        localStorage.setItem('hm_saved_user_cvs', JSON.stringify(next));
+        return next;
+      });
+      setSelectedCvForDetail((prev) =>
+        prev && prev.id === cv.id ? { ...prev, title: trimmed } : prev
+      );
+      if (activeCvId === cv.id) {
+        const updated = { ...cv, title: trimmed };
+        localStorage.setItem('hm_active_cv', JSON.stringify(updated));
+      }
+      setToastMsg(`✅ Đã đổi tên thành «${trimmed}».`);
+      setTimeout(() => setToastMsg(null), 3000);
     } catch (err: any) {
-      setToastMsg('❌ Lỗi khi phân tích CV bằng AI. Vui lòng thử lại.');
+      setToastMsg(err?.message || '❌ Không đổi được tên CV.');
       setTimeout(() => setToastMsg(null), 3500);
-    } finally {
-      setIsAnalyzingCv(false);
     }
   };
 
-  // Upload and analyze immediately in AI Analyze tab
-  const handleUploadAndAnalyze = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsAnalyzingCv(true);
-    setAnalyzeProgress(15);
-    setAnalyzeStatusText(`📤 Đang tải lên file "${file.name}"...`);
-
+  const handleChangeCvTemplate = async (cv: UserCvCard, templateId: string) => {
+    if (!templateId) return;
     try {
-      const uploadRes = await cvService.uploadCv(file);
-      if (uploadRes.ok && uploadRes.data?.id) {
-        setAnalyzeProgress(50);
-        setAnalyzeStatusText('🤖 AI đang phân tích ATS và trích xuất dữ liệu...');
-        const analyzeRes = await cvService.analyzeCv(uploadRes.data.id);
-        const ai = analyzeRes.ok && analyzeRes.data ? analyzeRes.data : null;
-
-        const newCvCard = parseCvDocumentFromBackend({
-          ...(uploadRes.data || {}),
-          ...(ai || {}),
-          id: uploadRes.data.id,
-          fileName: file.name,
-        });
-
-        setAnalyzeProgress(100);
-        setAnalyzeStatusText('✅ Đã phân tích và lưu CV vào kho!');
-        setIsAnalyzingCv(false);
-
-        setUserCvs((prev) => [newCvCard, ...prev]);
-        setSelectedCvForAnalyzeId(newCvCard.id);
-        setActiveCvId(newCvCard.id);
-        setToastMsg(`🎉 Đã tải lên và hoàn tất phân tích CV "${file.name}"!`);
+      const res = await cvService.changeCvTemplate(cv.id, templateId);
+      if (!res.ok) {
+        setToastMsg(res.message || '❌ Không đổi được mẫu CV.');
         setTimeout(() => setToastMsg(null), 3500);
-      } else {
-        setIsAnalyzingCv(false);
-        setToastMsg(uploadRes.message || '❌ Không tải được CV.');
-        setTimeout(() => setToastMsg(null), 3500);
+        return;
       }
-    } catch {
-      setIsAnalyzingCv(false);
-      setToastMsg('❌ Lỗi khi tải và phân tích CV.');
+      const card = parseCvDocumentFromBackend({ ...cv, ...(res.data || {}), id: cv.id });
+      setUserCvs((prev) => {
+        const next = prev.map((c) => (c.id === cv.id ? card : c));
+        localStorage.setItem('hm_saved_user_cvs', JSON.stringify(next));
+        return next;
+      });
+      setSelectedCvForDetail((prev) => (prev && prev.id === cv.id ? card : prev));
+      setToastMsg(`✅ Đã đổi mẫu: ${card.templateName || 'OK'}.`);
+      setTimeout(() => setToastMsg(null), 3000);
+    } catch (err: any) {
+      setToastMsg(err?.message || '❌ Không đổi được mẫu CV.');
+      setTimeout(() => setToastMsg(null), 3500);
+    }
+  };
+
+  const handleSaveAsTemplate = async (cv: UserCvCard) => {
+    try {
+      const defaultName = `Mẫu từ ${cv.title}`;
+      const name = window.prompt('Tên mẫu CV tùy chỉnh:', defaultName);
+      if (name === null) return;
+      const res = await cvTemplateService.createFromCv(cv.id, {
+        name: name.trim() || undefined,
+      });
+      if (!res.ok) {
+        setToastMsg(res.message || '❌ Không lưu được mẫu.');
+        setTimeout(() => setToastMsg(null), 3500);
+        return;
+      }
+      const listRes = await cvTemplateService.listTemplates();
+      if (listRes.ok && Array.isArray(listRes.data)) setCvTemplates(listRes.data);
+      setToastMsg(`✅ Đã lưu mẫu «${(res.data as any)?.name || name}».`);
+      setTimeout(() => setToastMsg(null), 3500);
+    } catch (err: any) {
+      setToastMsg(err?.message || '❌ Không lưu được mẫu.');
       setTimeout(() => setToastMsg(null), 3500);
     }
   };
 
 
 
-  // Save Career Profile (writes to dbo.CareerProfiles)
+  // Save Career Profile ONLY — never creates CvDocument (Phase 1 business rule).
   const handleSaveManual = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!localStorage.getItem('hm_access_token')) {
+      setToastMsg('⚠️ Vui lòng đăng nhập để lưu hồ sơ.');
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
     setSavingManual(true);
     const parsedGradYear =
       typeof graduationYear === 'number'
         ? graduationYear
-        : parseInt(String(graduationYear), 10) || 2026;
+        : parseInt(String(graduationYear), 10) || new Date().getFullYear();
+
+    const fullName = name.trim();
+    const desiredPosition = role.trim() || 'Ứng viên';
+    const desiredIndustry = field.trim() || 'Công nghệ thông tin';
+    const experienceLevel = exp.trim() || 'Chưa có KN (Intern / Fresher)';
+    const educationRaw = education.trim();
+    let university = educationRaw;
+    let major = 'Công nghệ thông tin';
+    if (educationRaw.includes(' - ')) {
+      const parts = educationRaw.split(' - ');
+      university = parts[0]?.trim() || educationRaw;
+      major = parts.slice(1).join(' - ').trim() || major;
+    } else if (educationRaw.includes('–')) {
+      const parts = educationRaw.split('–');
+      university = parts[0]?.trim() || educationRaw;
+      major = parts.slice(1).join('–').trim() || major;
+    }
 
     const updated = {
-      name: name.trim(),
-      fullName: name.trim(),
-      role: role.trim() || 'Lập trình viên Backend',
-      desiredPosition: role.trim() || 'Lập trình viên Backend',
-      field: field.trim(),
-      desiredIndustry: field.trim(),
-      exp: exp.trim(),
-      experienceLevel: exp.trim(),
-      experienceYears: exp.trim(),
-      education: education.trim(),
-      university: education.trim(),
-      major: 'Công nghệ thông tin',
+      name: fullName,
+      fullName,
+      role: desiredPosition,
+      desiredPosition,
+      field: desiredIndustry,
+      desiredIndustry,
+      exp: experienceLevel,
+      experienceLevel,
+      experienceYears: experienceLevel,
+      education: educationRaw,
+      university,
+      major,
       graduationYear: parsedGradYear,
-      skills: skills,
+      skills,
       hobbies: skills,
       bio: bio.trim(),
+      experiences,
+      projects,
+      certifications,
     };
 
     updateProfile(updated);
 
     try {
-      await profileService.updateProfile(updated);
-      await fetchCareerProfile();
-    } catch (err) {}
+      const res = await profileService.updateProfile(updated);
+      if (!res.ok) {
+        setToastMsg(res.message || '❌ Không lưu được hồ sơ. Vui lòng thử lại.');
+        setTimeout(() => setToastMsg(null), 3500);
+        return;
+      }
 
-    setSavingManual(false);
-    setSavedSuccess(true);
-    setCheckCvModalOpen(true);
-    setTimeout(() => setSavedSuccess(false), 2800);
+      setSavedSuccess(true);
+      setToastMsg('✅ Đã lưu hồ sơ nghề nghiệp (không tạo CV mới).');
+      setTimeout(() => {
+        setSavedSuccess(false);
+        setToastMsg(null);
+      }, 2800);
+    } catch (err: any) {
+      setToastMsg(err?.message || '❌ Không lưu được hồ sơ. Vui lòng thử lại.');
+      setTimeout(() => setToastMsg(null), 3500);
+    } finally {
+      setSavingManual(false);
+    }
+  };
+
+  /** Explicit "Tạo CV" action — only place profile tab creates a CvDocument via wizard. */
+  const handleCreateCvFromProfile = async () => {
+    if (!localStorage.getItem('hm_access_token')) {
+      setToastMsg('⚠️ Vui lòng đăng nhập để tạo CV.');
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    setCreatingCv(true);
+    const parsedGradYear =
+      typeof graduationYear === 'number'
+        ? graduationYear
+        : parseInt(String(graduationYear), 10) || new Date().getFullYear();
+
+    const fullName = name.trim();
+    const desiredPosition = role.trim() || 'Ứng viên';
+    const desiredIndustry = field.trim() || 'Công nghệ thông tin';
+    const experienceLevel = exp.trim() || 'Chưa có KN (Intern / Fresher)';
+    const educationRaw = education.trim();
+    let university = educationRaw;
+    let major = 'Công nghệ thông tin';
+    if (educationRaw.includes(' - ')) {
+      const parts = educationRaw.split(' - ');
+      university = parts[0]?.trim() || educationRaw;
+      major = parts.slice(1).join(' - ').trim() || major;
+    } else if (educationRaw.includes('–')) {
+      const parts = educationRaw.split('–');
+      university = parts[0]?.trim() || educationRaw;
+      major = parts.slice(1).join('–').trim() || major;
+    }
+
+    try {
+      // Persist profile first so CareerProfile stays source of truth, then create CV.
+      await profileService.updateProfile({
+        fullName,
+        desiredPosition,
+        desiredIndustry,
+        experienceLevel,
+        university,
+        major,
+        graduationYear: parsedGradYear,
+        bio: bio.trim(),
+        skills,
+        hobbies: skills,
+        experiences,
+        projects,
+        certifications,
+      });
+
+      const wizardRes = await cvService.createFromWizard({
+        fullName: fullName || 'Ứng viên',
+        university: university || 'Chưa cập nhật',
+        major,
+        graduationYear: parsedGradYear,
+        desiredIndustry,
+        desiredPosition,
+        experienceLevel,
+        bio: bio.trim(),
+        skills,
+        experiences,
+        displayName: wizardDisplayName.trim() || undefined,
+        templateId: wizardTemplateId || undefined,
+      });
+
+      if (!wizardRes.ok) {
+        setToastMsg(
+          wizardRes.message ||
+            '⚠️ Chưa tạo được CV. Kiểm tra gói/hạn mức hoặc thử tải lên CV.'
+        );
+        setTimeout(() => setToastMsg(null), 4500);
+        return;
+      }
+
+      const wizardCard = parseCvDocumentFromBackend({
+        ...(wizardRes.data || {}),
+        fileName: (wizardRes.data as any)?.fileName || `HireMate-CV-${fullName || 'UngVien'}.pdf`,
+      });
+
+      try {
+        const listRes = await cvService.listCvs();
+        if (listRes.ok && Array.isArray(listRes.data) && listRes.data.length > 0) {
+          const loadedCvs = listRes.data.map(parseCvDocumentFromBackend);
+          setUserCvs(loadedCvs);
+          const newest = loadedCvs.find((c) => c.id === wizardCard.id) || loadedCvs[0];
+          showCvReviewAfterSave(
+            newest,
+            newest.parseSucceeded
+              ? '✅ Đã tạo CV mới & chấm ATS. Xem gợi ý trong Kho CV.'
+              : '⚠️ CV cần chỉnh theo gợi ý rồi phân tích lại trước khi phỏng vấn.'
+          );
+        } else {
+          setUserCvs([wizardCard, ...userCvs]);
+          showCvReviewAfterSave(wizardCard, '✅ Đã tạo CV mới. Xem điểm ATS & gợi ý sửa.');
+        }
+      } catch {
+        setUserCvs([wizardCard, ...userCvs]);
+        showCvReviewAfterSave(wizardCard, '✅ Đã tạo CV mới. Xem điểm ATS & gợi ý sửa.');
+      }
+
+      setToastMsg('✅ Đã tạo CV mới trong Kho CV.');
+      setTimeout(() => setToastMsg(null), 3500);
+    } catch (err: any) {
+      setToastMsg(err?.message || '❌ Không tạo được CV. Vui lòng thử lại.');
+      setTimeout(() => setToastMsg(null), 3500);
+    } finally {
+      setCreatingCv(false);
+    }
+  };
+
+  const refreshQuota = async () => {
+    try {
+      const res = await aiService.getUsage();
+      if (res.ok && res.data) setQuotaUsage(res.data);
+    } catch { /* ignore */ }
   };
 
   // JD Matcher Handler
-  const handleMatchJd = async (e: React.FormEvent) => {
+  const handleMatchJd = async (
+    e: React.FormEvent,
+    opts: { jobDescriptionId?: string; saveJd: boolean; jdTitle: string }
+  ) => {
     e.preventDefault();
-    if (!jdText.trim()) return;
+    if (!opts.jobDescriptionId && !jdText.trim()) return;
+    const jdRemaining = quotaUsage?.jdMatch?.remaining;
+    if (typeof jdRemaining === 'number' && jdRemaining <= 0) {
+      alert(quotaUsage?.jdMatch?.limit === 0
+        ? 'Gói Miễn phí không hỗ trợ so khớp JD. Nâng cấp Tiêu chuẩn/Cao cấp.'
+        : 'Đã hết hạn mức so khớp JD tháng này. Nâng cấp gói hoặc đợi chu kỳ mới.');
+      return;
+    }
     setIsMatching(true);
     setMatchResult(null);
 
-    const targetCv =
-      userCvs.find((c) => c.id === selectedMatchCvId) ||
-      userCvs.find((c) => c.id === activeCvId);
-    const targetSkills =
-      targetCv?.skills && targetCv.skills.length > 0 ? targetCv.skills : skills;
+    const selected =
+      selectedMatchCvId && userCvs.find((c) => c.id === selectedMatchCvId && c.isBackendDoc);
+    // Explicit non-Active → send id. Active / empty → null so backend resolves Confirmed.
+    // Never cvs[0], never localStorage, never activate for match.
+    let cvDocumentId: string | undefined;
+    if (selected && selected.id !== activeCvId) {
+      cvDocumentId = selected.id;
+    } else if (activeCvId) {
+      cvDocumentId = undefined;
+    } else {
+      alert('ACTIVE_CV_REQUIRED: Hãy kích hoạt một CV trước khi so khớp JD.');
+      setIsMatching(false);
+      return;
+    }
 
     try {
       const res = await matchService.match({
-        jdText: jdText.trim(),
-        cvDocumentId: targetCv?.isBackendDoc ? targetCv.id : undefined,
+        jobDescriptionId: opts.jobDescriptionId,
+        jdText: opts.jobDescriptionId ? undefined : jdText.trim(),
+        cvDocumentId,
+        saveJd: opts.jobDescriptionId ? false : opts.saveJd,
+        jdTitle: opts.jdTitle,
       });
 
       if (res.ok && res.data) {
-        let parsedJson: any = null;
-        if (typeof res.data.resultJson === 'string') {
-          try {
-            parsedJson = JSON.parse(res.data.resultJson);
-          } catch {}
-        } else if (typeof res.data.resultJson === 'object') {
-          parsedJson = res.data.resultJson;
-        }
-
-        const score = res.data.overallScore || parsedJson?.overall || 85;
-        const matching = parsedJson?.skills || parsedJson?.matchingSkills || targetSkills.slice(0, 4);
-        const gaps = parsedJson?.gaps || parsedJson?.missingSkills || ['CI/CD Pipeline', 'Microservices'];
-        const suggestions = parsedJson?.suggestions || parsedJson?.recommendations || [
-          'Chuẩn bị kỹ câu trả lời STAR cho các kỹ năng cốt lõi.',
-          'Nêu bật các dự án thực tế bạn trực tiếp chịu trách nhiệm.',
-        ];
-
         setMatchResult({
-          matchScore: score,
-          overallScore: score,
-          matchingSkills: Array.isArray(matching) ? matching : [String(matching)],
-          missingSkills: Array.isArray(gaps) ? gaps : [String(gaps)],
-          recommendations: Array.isArray(suggestions) ? suggestions : [String(suggestions)],
+          matchScore: res.data.overallScore,
+          overallScore: res.data.overallScore,
+          matchingSkills: res.data.matchedSkills || res.data.matchingSkills || [],
+          matchedSkills: res.data.matchedSkills || [],
+          missingSkills: res.data.missingSkills || [],
+          experienceGaps: res.data.experienceGaps || [],
+          keywordGaps: res.data.keywordGaps || [],
+          strengths: res.data.strengths || [],
+          recommendations: res.data.recommendations || [],
           aiProvider: res.data.aiProvider,
+          jdTitle: res.data.jdTitle,
+          cvFileName: res.data.cvFileName,
+          createdAt: res.data.createdAt,
         });
+        await refreshQuota();
       } else {
         setMatchResult(null);
         alert(res.message || 'So khớp CV–JD thất bại. Kiểm tra gói/hạn mức AI rồi thử lại.');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMatchResult(null);
-      alert(err?.message || 'So khớp CV–JD thất bại. Vui lòng thử lại hoặc nâng cấp gói.');
+      alert(err instanceof Error ? err.message : 'So khớp CV–JD thất bại. Vui lòng thử lại hoặc nâng cấp gói.');
     } finally {
       setIsMatching(false);
     }
@@ -632,6 +1042,13 @@ export const Dashboard: React.FC = () => {
   // AI Email Generator Handler
   const handleGenerateEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+    const emailRemaining = quotaUsage?.cvEmailGeneration?.remaining;
+    if (typeof emailRemaining === 'number' && emailRemaining <= 0) {
+      alert(quotaUsage?.cvEmailGeneration?.limit === 0
+        ? 'Gói Miễn phí không hỗ trợ tạo Email/CV bằng AI. Nâng cấp gói để sử dụng.'
+        : 'Đã hết hạn mức tạo Email/CV AI tháng này. Nâng cấp hoặc đợi chu kỳ mới.');
+      return;
+    }
     setIsGeneratingEmail(true);
     setGeneratedEmail(null);
     setCopiedEmail(false);
@@ -670,6 +1087,7 @@ export const Dashboard: React.FC = () => {
             'Đính kèm file CV định dạng PDF có tên chuẩn hóa: CV_HoTen_ViTri.pdf',
           ],
         });
+        await refreshQuota();
       } else {
         setGeneratedEmail(null);
         alert(res.message || 'Không tạo được email/Cover Letter. Kiểm tra gói AI rồi thử lại.');
@@ -716,7 +1134,10 @@ export const Dashboard: React.FC = () => {
     .toLowerCase()
     .replace(/\s+/g, '_');
 
-  const activeCv = userCvs.find((c) => c.id === activeCvId) || userCvs[0];
+  const activeCv =
+    userCvs.find((c) => c.isActive || c.isConfirmed) ||
+    userCvs.find((c) => c.id === activeCvId) ||
+    undefined;
   const otherCvs = userCvs.filter((c) => c.id !== activeCv?.id);
 
   const readinessScore =
@@ -761,7 +1182,12 @@ export const Dashboard: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.08 }}
       >
-        <Link to="/interview-setup" className="quick-action-card card-teal">
+        <button
+          type="button"
+          className="quick-action-card card-teal"
+          onClick={() => goInterviewFromDashboard()}
+          style={{ border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+        >
           <div className="card-content-left">
             <span className="card-tag">Interactive</span>
             <h3 className="card-title">Phỏng vấn AI</h3>
@@ -769,7 +1195,7 @@ export const Dashboard: React.FC = () => {
           <div className="card-icon-right">
             <Video size={22} />
           </div>
-        </Link>
+        </button>
 
         <div
           onClick={() => {
@@ -819,8 +1245,7 @@ export const Dashboard: React.FC = () => {
                 className={`segmented-tab-btn ${activeTab === 'manual' ? 'active' : ''}`}
                 onClick={() => handleTabChange('manual')}
               >
-                <Sparkles size={13} />
-                <span>Tạo CV bằng AI Wizard</span>
+                <span>Hồ sơ nghề nghiệp</span>
               </button>
 
               <button
@@ -830,15 +1255,6 @@ export const Dashboard: React.FC = () => {
               >
                 <FolderOpen size={13} />
                 <span>Kho CV ({userCvs.length})</span>
-              </button>
-
-              <button
-                type="button"
-                className={`segmented-tab-btn ${activeTab === 'analyze' ? 'active' : ''}`}
-                onClick={() => handleTabChange('analyze')}
-              >
-                <FileSearch size={13} />
-                <span>AI Đánh giá CV</span>
               </button>
 
               <button
@@ -877,10 +1293,49 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* TAB 1: Studio Tạo CV bằng AI Wizard */}
+          {/* TAB 1: Hồ sơ nghề nghiệp (Career Profile View & Edit) */}
           {activeTab === 'manual' && (
             <CareerProfileForm
-              onOpenWizardModal={() => setWizardModalOpen(true)}
+              name={name}
+              setName={setName}
+              role={role}
+              setRole={setRole}
+              field={field}
+              setField={setField}
+              exp={exp}
+              setExp={setExp}
+              education={education}
+              setEducation={setEducation}
+              graduationYear={graduationYear}
+              setGraduationYear={setGraduationYear}
+              bio={bio}
+              setBio={setBio}
+              skills={skills}
+              setSkills={setSkills}
+              experiences={experiences}
+              setExperiences={setExperiences}
+              projects={projects}
+              setProjects={setProjects}
+              certifications={certifications}
+              setCertifications={setCertifications}
+              saving={savingManual}
+              creatingCv={creatingCv}
+              savedSuccess={savedSuccess}
+              onSave={handleSaveManual}
+              onCreateCv={handleCreateCvFromProfile}
+              onOpenCheckCvModal={() => setCheckCvModalOpen(true)}
+              activeCv={activeCv}
+              onOpenCvDetail={(cv) => {
+                setSelectedCvForDetail(cv);
+                setCvDetailModalOpen(true);
+              }}
+              onSwitchToCvTab={() => handleTabChange('scan')}
+              onNavigateInterview={() => goInterviewFromDashboard()}
+              wizardDisplayName={wizardDisplayName}
+              setWizardDisplayName={setWizardDisplayName}
+              wizardTemplateId={wizardTemplateId}
+              setWizardTemplateId={setWizardTemplateId}
+              cvTemplates={cvTemplates}
             />
           )}
 
@@ -904,54 +1359,28 @@ export const Dashboard: React.FC = () => {
                 setSelectedCvForDetail(cv);
                 setCvDetailModalOpen(true);
               }}
-              onNavigateInterview={() => {
-                const targetCv = activeCv || userCvs[0];
-                if (targetCv) {
-                  handleSelectActiveCv(targetCv);
-                  navigate('/interview-setup', { state: { fromCv: targetCv } });
-                } else {
-                  navigate('/interview-setup');
-                }
-              }}
+              onNavigateInterview={() => goInterviewFromDashboard()}
               onSwitchToMatch={(cvId) => {
                 setSelectedMatchCvId(cvId);
                 handleTabChange('match');
               }}
-              onSwitchToAnalyze={(cvId) => {
-                setSelectedCvForAnalyzeId(cvId);
-                handleTabChange('analyze');
+              onDownloadCv={async (cv) => {
+                try {
+                  await cvService.downloadCv(cv.id, cv.filename || 'HireMate-CV.pdf');
+                  setToastMsg('✅ Đã tải CV về máy.');
+                } catch (err: any) {
+                  setToastMsg(err?.message || '❌ Không tải được CV.');
+                }
+                setTimeout(() => setToastMsg(null), 3000);
               }}
-              onOpenWizardModal={() => setWizardModalOpen(true)}
-              isFreeTier={!isProUser}
+              templates={cvTemplates}
+              onRenameCv={handleRenameCv}
+              onChangeCvTemplate={handleChangeCvTemplate}
+              onSaveAsTemplate={handleSaveAsTemplate}
             />
           )}
 
-          {/* TAB 3: AI Analyze (Đánh giá & Phân tích CV chuẩn ATS) */}
-          {activeTab === 'analyze' && (
-            <AiCvAnalyzer
-              userCvs={userCvs}
-              activeCv={activeCv}
-              selectedCvId={selectedCvForAnalyzeId}
-              onSelectCvId={(id) => setSelectedCvForAnalyzeId(id)}
-              isFreeTier={!isProUser}
-              isAnalyzing={isAnalyzingCv}
-              analyzeProgress={analyzeProgress}
-              analyzeStatusText={analyzeStatusText}
-              onAnalyzeCv={handleAnalyzeCv}
-              onFileUploadAndAnalyze={handleUploadAndAnalyze}
-              onNavigateInterview={(cv) => {
-                handleSelectActiveCv(cv);
-                navigate('/interview-setup', { state: { fromCv: cv } });
-              }}
-              onNavigateMatch={(cvId) => {
-                setSelectedMatchCvId(cvId);
-                handleTabChange('match');
-              }}
-              onOpenWizard={() => setWizardModalOpen(true)}
-            />
-          )}
-
-          {/* TAB 4: JD Matcher */}
+          {/* TAB 3: JD Matcher */}
           {activeTab === 'match' && (
             <JdMatcher
               userCvs={userCvs}
@@ -963,6 +1392,8 @@ export const Dashboard: React.FC = () => {
               isMatching={isMatching}
               matchResult={matchResult}
               onMatch={handleMatchJd}
+              quotaRemaining={quotaUsage?.jdMatch?.remaining}
+              quotaLimit={quotaUsage?.jdMatch?.limit}
             />
           )}
 
@@ -982,6 +1413,8 @@ export const Dashboard: React.FC = () => {
               copiedEmail={copiedEmail}
               onGenerateEmail={handleGenerateEmail}
               onCopyEmail={handleCopyEmail}
+              quotaRemaining={quotaUsage?.cvEmailGeneration?.remaining}
+              quotaLimit={quotaUsage?.cvEmailGeneration?.limit}
             />
           )}
         </motion.div>
@@ -991,6 +1424,7 @@ export const Dashboard: React.FC = () => {
           readinessScore={readinessScore}
           totalInterviews={totalInterviews}
           skillsCount={skillsCount}
+          onNavigateInterview={() => goInterviewFromDashboard()}
         />
       </div>
 
@@ -1016,7 +1450,24 @@ export const Dashboard: React.FC = () => {
         activeCvId={activeCvId}
         onClose={() => setCvDetailModalOpen(false)}
         onSelectActiveCv={handleSelectActiveCv}
-        onNavigateInterview={() => navigate('/interview-setup')}
+        onNavigateInterview={() => {
+          setCvDetailModalOpen(false);
+          goInterviewFromDashboard(selectedCvForDetail);
+        }}
+        onReAnalyze={async (cv) => {
+          await reAnalyzeCv(cv);
+        }}
+        onSaveBio={async (cvId, nextBio) => {
+          setBio(nextBio);
+          updateProfile({ bio: nextBio } as any);
+          await profileService.updateProfile({ bio: nextBio });
+          setUserCvs((prev) => {
+            const next = prev.map((c) => (c.id === cvId ? { ...c, bio: nextBio } : c));
+            localStorage.setItem('hm_saved_user_cvs', JSON.stringify(next));
+            return next;
+          });
+          setSelectedCvForDetail((prev) => (prev && prev.id === cvId ? { ...prev, bio: nextBio } : prev));
+        }}
       />
 
       {/* User Tutorial Walkthrough Modal */}
@@ -1028,19 +1479,6 @@ export const Dashboard: React.FC = () => {
         }}
         accountKey={accountKey}
       />
-
-      {/* CV Wizard Modal (10 câu hỏi chuẩn BR09) */}
-      <CvWizardModal
-        isOpen={wizardModalOpen}
-        onClose={() => setWizardModalOpen(false)}
-        defaultIndustry={field || 'Công nghệ thông tin'}
-        defaultRole={role}
-        onSuccess={(newCv) => {
-          loadCvs();
-          handleSelectActiveCv(newCv);
-        }}
-      />
     </div>
   );
 };
-

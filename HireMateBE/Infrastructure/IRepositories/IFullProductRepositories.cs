@@ -9,7 +9,9 @@ public interface IContentPageRepository : IGenericRepository<ContentPage> { }
 public interface IBlogPostRepository : IGenericRepository<BlogPost> { }
 public interface IFaqRepository : IGenericRepository<FaqItem> { }
 public interface ICvDocumentRepository : IGenericRepository<CvDocument> { }
+public interface ICvTemplateRepository : IGenericRepository<CvTemplate> { }
 public interface IJdMatchRepository : IGenericRepository<JdMatchResult> { }
+public interface IJobDescriptionRepository : IGenericRepository<JobDescription> { }
 public interface IResourceRepository : IGenericRepository<ResourceItem> { }
 public interface IPlanRepository : IGenericRepository<SubscriptionPlan> { }
 public interface IInvoiceRepository : IGenericRepository<Invoice> { }

@@ -200,29 +200,9 @@ public class AuthService(
                 Audience = audiences
             });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            string? tokenAud = null;
-            try
-            {
-                var parts = idToken.Split('.');
-                if (parts.Length >= 2)
-                {
-                    var json = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
-                    using var doc = System.Text.Json.JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("aud", out var audEl))
-                        tokenAud = audEl.ValueKind == System.Text.Json.JsonValueKind.Array
-                            ? string.Join(",", audEl.EnumerateArray().Select(x => x.GetString()))
-                            : audEl.GetString();
-                }
-            }
-            catch { /* ignore decode errors */ }
-
-            var expected = string.Join(" | ", audiences);
-            var detail = string.IsNullOrWhiteSpace(tokenAud)
-                ? $"Mã Google idToken không hợp lệ ({ex.Message})"
-                : $"Mã Google idToken không hợp lệ ({ex.Message}). Token aud={tokenAud}; BE expect={expected}";
-            return new ServiceResult(Const.FAIL_READ_CODE, detail);
+            return new ServiceResult(Const.FAIL_READ_CODE, "Mã Google idToken không hợp lệ");
         }
 
         var email = payload.Email;
