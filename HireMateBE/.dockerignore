@@ -5,3 +5,14 @@
 **/docs
 **/*.user
 **/wwwroot/uploads
+**/.env
+**/.env.*
+!**/.env.example
+**/appsettings*.json
+tests/
+docs/
+deploy/
+artifacts/
+**/*.log
+_qa_*
+tmp_*.py

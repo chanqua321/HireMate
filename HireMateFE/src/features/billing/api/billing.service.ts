@@ -18,11 +18,6 @@ export const billingService = {
     return apiClient.get<InvoiceDto>(`/Billing/invoices/${id}`);
   },
 
-  async handleVnPayReturn(queryString: string): Promise<ApiResponse<any>> {
-    const cleanQuery = queryString.startsWith('?') ? queryString.substring(1) : queryString;
-    return apiClient.get(`/Billing/vnpay-return?${cleanQuery}`, { skipAuth: true });
-  },
-
   async confirmPayOs(payload: {
     orderCode?: string;
     status?: string;

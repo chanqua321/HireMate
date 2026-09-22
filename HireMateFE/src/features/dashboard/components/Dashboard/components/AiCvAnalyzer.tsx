@@ -56,31 +56,15 @@ export const AiCvAnalyzer: React.FC<AiCvAnalyzerProps> = ({
   // Determine which CV is currently selected for analysis
   const currentCv =
     userCvs.find((c) => c.id === selectedCvId) ||
-    activeCv ||
-    (userCvs.length > 0 ? userCvs[0] : null);
+    activeCv;
 
   const isAnalyzed = currentCv && currentCv.atsScore > 0;
   const atsScore = currentCv?.atsScore || 0;
 
-  // 4 pillars scores with sensible defaults if already evaluated
-  const formatScore = currentCv?.formatScore || (isAnalyzed ? 90 : 0);
-  const keywordsScore = currentCv?.keywordsScore || (isAnalyzed ? 85 : 0);
-  const readabilityScore = currentCv?.readabilityScore || (isAnalyzed ? 88 : 0);
-  const professionalismScore =
-    currentCv?.professionalismScore || (isAnalyzed ? 92 : 0);
-  const fitT1Score = currentCv?.fitT1Score || atsScore;
-  const readinessScore = currentCv?.readinessScore || atsScore;
-
-  // Extract intelligent suggestions or strengths from CV analysis
-  let parsedSuggestions: string[] = [];
-  if (currentCv?.analysisJson) {
-    try {
-      const parsed = JSON.parse(currentCv.analysisJson);
-      if (Array.isArray(parsed.suggestions)) {
-        parsedSuggestions = parsed.suggestions;
-      }
-    } catch {}
-  }
+  const formatScore = currentCv?.formatScore ?? 0;
+  const keywordsScore = currentCv?.keywordsScore ?? 0;
+  const readabilityScore = currentCv?.readabilityScore ?? 0;
+  const parsedSuggestions = currentCv?.suggestions ?? [];
 
   const scoreLevelClass =
     atsScore >= 80 ? 'high' : atsScore >= 60 ? 'medium' : 'low';
@@ -264,12 +248,6 @@ export const AiCvAnalyzer: React.FC<AiCvAnalyzerProps> = ({
                     {atsScore >= 80 ? 'Chuẩn ATS Xuất Sắc' : atsScore >= 60 ? 'Đạt chuẩn cơ bản' : 'Cần tối ưu thêm'}
                   </span>
                   <span className="analyzer-hero-tag">
-                    Fit T1: <strong>{fitT1Score}/100</strong>
-                  </span>
-                  <span className="analyzer-hero-tag">
-                    Readiness: <strong>{readinessScore}/100</strong>
-                  </span>
-                  <span className="analyzer-hero-tag">
                     Kinh nghiệm: {currentCv.exp}
                   </span>
                 </div>
@@ -365,27 +343,6 @@ export const AiCvAnalyzer: React.FC<AiCvAnalyzerProps> = ({
               </p>
             </div>
 
-            {/* Pillar 4 */}
-            <div className="analyzer-pillar-card">
-              <div className="pillar-header">
-                <span className="pillar-title">Tính chuyên nghiệp</span>
-                <span className="pillar-score" style={{ color: '#7c3aed' }}>
-                  {professionalismScore}/100
-                </span>
-              </div>
-              <div className="pillar-bar-track">
-                <div
-                  className="pillar-bar-fill"
-                  style={{
-                    width: `${professionalismScore}%`,
-                    background: '#7c3aed',
-                  }}
-                />
-              </div>
-              <p className="pillar-desc">
-                Văn phong chỉn chu, đúng thuật ngữ kỹ thuật, thông tin liên hệ và quá trình đào tạo mạch lạc.
-              </p>
-            </div>
           </div>
 
           {/* Strengths & Weaknesses / Suggestions */}

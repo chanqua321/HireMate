@@ -13,6 +13,11 @@ export interface Profile {
   onboardingCompleted?: boolean;
   email?: string;
   phone?: string;
+  address?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  linkedIn?: string;
+  gitHub?: string;
   desiredPosition?: string;
   desiredIndustry?: string;
   isPremium?: boolean;

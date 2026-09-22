@@ -4,6 +4,7 @@ using Common.DTOs.PublicDto;
 using Infrastructure.Data;
 using Infrastructure.IUnitOfWork;
 using Infrastructure.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -160,38 +161,62 @@ public class BillingService(
         if (!_payOs.Enabled)
             return new ServiceResult(Const.FAIL_CREATE_CODE, "PayOS chưa được cấu hình. Thiết lập PayOS:Enabled + ClientId + ApiKey + ChecksumKey.");
 
-        long orderCode;
-        try
+        const int maxPersistenceAttempts = 6;
+        Invoice? invoice = null;
+        Payment? payment = null;
+        long orderCode = 0;
+
+        // The unique DB index is the final authority. A pre-check can still race another checkout,
+        // so retry only a confirmed Provider + TransactionRef unique-constraint collision.
+        for (var attempt = 1; attempt <= maxPersistenceAttempts; attempt++)
         {
-            orderCode = await AllocateUniquePayOsOrderCodeAsync();
-        }
-        catch
-        {
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "Không tạo được mã đơn PayOS duy nhất. Thử lại.");
+            try
+            {
+                orderCode = await AllocateUniquePayOsOrderCodeAsync();
+            }
+            catch
+            {
+                return new ServiceResult(Const.FAIL_CREATE_CODE, "Không tạo được mã đơn PayOS duy nhất. Thử lại.");
+            }
+
+            invoice = new Invoice
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                PlanId = plan.Id,
+                InvoiceNumber = await AllocateInvoiceNumberAsync(),
+                AmountVnd = amount,
+                Status = InvoiceStatuses.Pending,
+                PaymentMethod = "PayOS"
+            };
+            payment = new Payment
+            {
+                Id = Guid.NewGuid(),
+                InvoiceId = invoice.Id,
+                AmountVnd = amount,
+                Provider = "PayOS",
+                Status = PaymentStatuses.Pending,
+                TransactionRef = orderCode.ToString()
+            };
+
+            try
+            {
+                await uow.InvoiceRepository.CreateAsync(invoice);
+                await uow.PaymentRepository.CreateAsync(payment);
+                await uow.SaveChangesAsync();
+                break;
+            }
+            catch (DbUpdateException ex) when (IsPaymentTransactionRefCollision(ex))
+            {
+                db.ChangeTracker.Clear();
+                invoice = null;
+                payment = null;
+            }
         }
 
-        var invoice = new Invoice
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            PlanId = plan.Id,
-            InvoiceNumber = await AllocateInvoiceNumberAsync(),
-            AmountVnd = amount,
-            Status = InvoiceStatuses.Pending,
-            PaymentMethod = "PayOS"
-        };
-        var payment = new Payment
-        {
-            Id = Guid.NewGuid(),
-            InvoiceId = invoice.Id,
-            AmountVnd = amount,
-            Provider = "PayOS",
-            Status = PaymentStatuses.Pending,
-            TransactionRef = orderCode.ToString()
-        };
-        await uow.InvoiceRepository.CreateAsync(invoice);
-        await uow.PaymentRepository.CreateAsync(payment);
-        await uow.SaveChangesAsync();
+        if (invoice == null || payment == null)
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "Không tạo được mã đơn PayOS duy nhất sau nhiều lần thử. Vui lòng thử lại.");
 
         var created = await _payOsClient.CreatePaymentLinkAsync(orderCode, (int)amount, "HireMate");
         if (!created.Ok || string.IsNullOrWhiteSpace(created.CheckoutUrl))
@@ -325,8 +350,6 @@ public class BillingService(
         var orderCode = data.TryGetProperty("orderCode", out var oc)
             ? (oc.ValueKind == JsonValueKind.Number ? oc.GetInt64().ToString() : oc.GetString())
             : null;
-        var code = data.TryGetProperty("code", out var dc) ? dc.GetString() : root.TryGetProperty("code", out var rc) ? rc.GetString() : null;
-
         decimal? webhookAmount = null;
         if (data.TryGetProperty("amount", out var amtEl))
         {
@@ -344,7 +367,8 @@ public class BillingService(
         if (IsAlreadySettled(payment))
             return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đơn hàng đã được thanh toán", new { success = true, idempotent = true });
 
-        if (code == "00" || (root.TryGetProperty("success", out var ok) && ok.ValueKind == JsonValueKind.True))
+        // Only the signed data.code determines success. Root-level fields are unsigned.
+        if (PayOsHelper.IsSuccessfulWebhookData(data))
         {
             var settle = await TrySettlePaymentAsync(payment.Id, webhookAmount, source: "payos_webhook");
             return settle.Ok
@@ -669,6 +693,10 @@ public class BillingService(
         => payment.Status == PaymentStatuses.Success
            && payment.Invoice != null
            && payment.Invoice.Status == InvoiceStatuses.Paid;
+
+    private static bool IsPaymentTransactionRefCollision(DbUpdateException ex)
+        => ex.InnerException is SqlException { Number: 2601 or 2627 }
+            && ex.InnerException.Message.Contains("IX_Payments_Provider_TransactionRef", StringComparison.OrdinalIgnoreCase);
 
     private async Task<long> AllocateUniquePayOsOrderCodeAsync()
     {

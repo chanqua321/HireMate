@@ -94,24 +94,25 @@ export const Feedback: React.FC = () => {
   }, [sessionId]);
 
   const overall =
+    structured?.coachReport?.summary.overallScore ??
     structured?.overallScore ??
     sessionDetail?.overallScore ??
     lastResult?.overall ??
     null;
 
   const role = sessionDetail?.position || lastResult?.role || 'Ứng viên';
-  const clarity = sessionDetail?.clarityScore ?? lastResult?.clarity ?? null;
+  const clarity = structured?.coachReport?.scores.clarity ?? sessionDetail?.clarityScore ?? lastResult?.clarity ?? null;
   const subs = {
-    S: sessionDetail?.scoreS ?? lastResult?.subs?.S ?? null,
-    T: sessionDetail?.scoreT ?? lastResult?.subs?.T ?? null,
-    A: sessionDetail?.scoreA ?? lastResult?.subs?.A ?? null,
-    R: sessionDetail?.scoreR ?? lastResult?.subs?.R ?? null,
+    S: structured?.coachReport?.scores.situation ?? sessionDetail?.scoreS ?? lastResult?.subs?.S ?? null,
+    T: structured?.coachReport?.scores.task ?? sessionDetail?.scoreT ?? lastResult?.subs?.T ?? null,
+    A: structured?.coachReport?.scores.action ?? sessionDetail?.scoreA ?? lastResult?.subs?.A ?? null,
+    R: structured?.coachReport?.scores.result ?? sessionDetail?.scoreR ?? lastResult?.subs?.R ?? null,
   };
-  const date = sessionDetail?.completedAt
+  const date = structured?.coachReport?.summary.date || (sessionDetail?.completedAt
     ? new Date(sessionDetail.completedAt).toLocaleDateString('vi-VN')
-    : lastResult?.date || new Date().toLocaleDateString('vi-VN');
+    : lastResult?.date || new Date().toLocaleDateString('vi-VN'));
   const feedbackSummary =
-    structured?.summary || sessionDetail?.feedbackSummary || '';
+    structured?.coachReport?.summary.headline || structured?.summary || sessionDetail?.feedbackSummary || '';
   const answers: InterviewAnswerDetail[] = sessionDetail?.answers ?? [];
   const aiUnavailable =
     structured != null && structured.aiSummaryAvailable === false && Boolean(structured.overallScore != null || answers.length > 0);
@@ -239,12 +240,16 @@ export const Feedback: React.FC = () => {
     }
   };
 
-  const starAnalysis = [
-    { letter: 'S', score: subs.S, ...getAnalysis('S', subs.S) },
-    { letter: 'T', score: subs.T, ...getAnalysis('T', subs.T) },
-    { letter: 'A', score: subs.A, ...getAnalysis('A', subs.A) },
-    { letter: 'R', score: subs.R, ...getAnalysis('R', subs.R) },
-  ];
+  const coachStar = structured?.coachReport?.starAnalysis;
+  const starAnalysis = ([
+    { letter: 'S', key: 'situation', score: subs.S, ...getAnalysis('S', subs.S) },
+    { letter: 'T', key: 'task', score: subs.T, ...getAnalysis('T', subs.T) },
+    { letter: 'A', key: 'action', score: subs.A, ...getAnalysis('A', subs.A) },
+    { letter: 'R', key: 'result', score: subs.R, ...getAnalysis('R', subs.R) },
+  ] as const).map((item) => {
+    const ai = coachStar?.[item.key];
+    return { ...item, score: ai?.score ?? item.score, issue: ai?.issue ?? item.mistake, advice: ai?.advice ?? item.advice };
+  });
 
   const strengths = structured?.strengths ?? [];
   const weaknesses = structured?.weaknesses ?? [];
@@ -328,7 +333,7 @@ export const Feedback: React.FC = () => {
         </div>
       </motion.div>
 
-      {cat && (
+      {!structured?.coachReport && cat && (
         <motion.div
           className="breakdown-bars-card"
           initial={{ opacity: 0, y: 12 }}
@@ -366,7 +371,7 @@ export const Feedback: React.FC = () => {
         </motion.div>
       )}
 
-      {(strengths.length > 0 || weaknesses.length > 0) && (
+      {!structured?.coachReport && (strengths.length > 0 || weaknesses.length > 0) && (
         <>
           <div className="report-section-heading">
             <h3>Strengths & Areas to Improve</h3>
@@ -430,7 +435,7 @@ export const Feedback: React.FC = () => {
         </>
       )}
 
-      {skillGaps.length > 0 && (
+      {!structured?.coachReport && skillGaps.length > 0 && (
         <motion.div className="model-answer-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           <div className="model-answer-header">
             <Target size={20} />
@@ -447,7 +452,7 @@ export const Feedback: React.FC = () => {
         </motion.div>
       )}
 
-      {evidenceGaps.length > 0 && (
+      {!structured?.coachReport && evidenceGaps.length > 0 && (
         <motion.div
           className="model-answer-card"
           initial={{ opacity: 0, y: 12 }}
@@ -476,7 +481,7 @@ export const Feedback: React.FC = () => {
         </motion.div>
       )}
 
-      {structured?.cvConsistencySummary && (
+      {!structured?.coachReport && structured?.cvConsistencySummary && (
         <motion.div
           className="model-answer-card"
           initial={{ opacity: 0, y: 12 }}
@@ -493,7 +498,7 @@ export const Feedback: React.FC = () => {
         </motion.div>
       )}
 
-      {highlights &&
+      {!structured?.coachReport && highlights &&
         (highlights.strong.length > 0 ||
           highlights.weak.length > 0 ||
           highlights.needsImprovement.length > 0) && (
@@ -529,7 +534,7 @@ export const Feedback: React.FC = () => {
           </motion.div>
         )}
 
-      {improvements.length > 0 && (
+      {!structured?.coachReport && improvements.length > 0 && (
         <motion.div
           className="model-answer-card"
           initial={{ opacity: 0, y: 12 }}
@@ -550,9 +555,27 @@ export const Feedback: React.FC = () => {
         </motion.div>
       )}
 
+      {structured?.coachReport && (
+        <div className="breakdown-bars-card" style={{ marginBottom: 20 }}>
+          <div className="model-answer-header"><TrendingUp size={18} /><span>Điểm phỏng vấn</span></div>
+          {[
+            { name: 'Bối cảnh', val: subs.S },
+            { name: 'Nhiệm vụ', val: subs.T },
+            { name: 'Hành động', val: subs.A },
+            { name: 'Kết quả', val: subs.R },
+            { name: 'Rõ ràng & mạch lạc', val: clarity },
+          ].map((bar) => (
+            <div key={bar.name} className="score-bar-row">
+              <span className="score-bar-label">{bar.name}</span>
+              <div className="score-bar-track"><div className="score-bar-fill" style={{ width: `${bar.val ?? 0}%`, background: '#03bfff' }} /></div>
+              <span className="score-bar-value">{scoreLabel(bar.val)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="report-section-heading">
         <h3>Phân tích STAR (S / T / A / R)</h3>
-        <span className="report-section-badge">Session scores</span>
       </div>
 
       <div className="star-mistakes-grid">
@@ -574,33 +597,26 @@ export const Feedback: React.FC = () => {
               </span>
             </div>
             <div className="star-feedback-blocks">
-              <div className="feedback-sub-block strength">
+              <div className={`feedback-sub-block ${(item.score ?? 0) > 70 ? 'strength' : 'mistake'}`}>
                 <div className="block-title-row">
-                  <CheckCircle2 size={16} />
-                  <span>Điểm mạnh ghi nhận</span>
+                  {(item.score ?? 0) > 70 ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                  <span>{(item.score ?? 0) > 70 ? 'Bạn làm tốt' : 'Điểm cần cải thiện'}</span>
                 </div>
-                <p className="block-desc">{item.strength}</p>
+                <p className="block-desc">{item.issue}</p>
               </div>
-              <div className="feedback-sub-block mistake">
-                <div className="block-title-row">
-                  <AlertTriangle size={16} />
-                  <span>Lỗi / Điểm hạn chế</span>
-                </div>
-                <p className="block-desc">{item.mistake}</p>
-              </div>
-              <div className="feedback-sub-block advice">
+              {(item.score ?? 0) <= 70 && item.advice && <div className="feedback-sub-block advice">
                 <div className="block-title-row">
                   <Lightbulb size={16} />
-                  <span>Cách khắc phục chuẩn STAR</span>
+                  <span>Cách cải thiện</span>
                 </div>
                 <p className="block-desc">{item.advice}</p>
-              </div>
+              </div>}
             </div>
           </motion.div>
         ))}
       </div>
 
-      {answers.length > 0 && (
+      {!structured?.coachReport && answers.length > 0 && (
         <motion.div
           className="model-answer-card"
           initial={{ opacity: 0, y: 15 }}
@@ -668,7 +684,7 @@ export const Feedback: React.FC = () => {
         </motion.div>
       )}
 
-      <div className="report-section-heading">
+      {!structured?.coachReport && <><div className="report-section-heading">
         <h3>Bảng điểm thành phần STAR & Clarity</h3>
         <span className="report-section-badge">Session</span>
       </div>
@@ -702,7 +718,7 @@ export const Feedback: React.FC = () => {
             <span className="score-bar-value">{scoreLabel(bar.val)}</span>
           </div>
         ))}
-      </motion.div>
+      </motion.div></>}
     </div>
   );
 };

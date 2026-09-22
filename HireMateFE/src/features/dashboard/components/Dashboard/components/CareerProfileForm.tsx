@@ -76,6 +76,22 @@ interface CareerProfileFormProps {
   setWizardTemplateId?: (v: string) => void;
   cvTemplates?: CvTemplateDto[];
   creatingCv?: boolean;
+  email: string;
+  setEmail: (v: string) => void;
+  phone: string;
+  setPhone: (v: string) => void;
+  address: string;
+  setAddress: (v: string) => void;
+  dateOfBirth: string;
+  setDateOfBirth: (v: string) => void;
+  gender: string;
+  setGender: (v: string) => void;
+  linkedIn: string;
+  setLinkedIn: (v: string) => void;
+  gitHub: string;
+  setGitHub: (v: string) => void;
+  avatarUrl: string;
+  setAvatarUrl: (v: string) => void;
 }
 const EXP_OPTIONS = [
   'Chưa có KN (Intern / Fresher)',
@@ -124,6 +140,22 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
   setWizardTemplateId,
   cvTemplates = [],
   creatingCv = false,
+  email,
+  setEmail,
+  phone,
+  setPhone,
+  address,
+  setAddress,
+  dateOfBirth,
+  setDateOfBirth,
+  gender,
+  setGender,
+  linkedIn,
+  setLinkedIn,
+  gitHub,
+  setGitHub,
+  avatarUrl,
+  setAvatarUrl,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [newSkillInput, setNewSkillInput] = useState('');
@@ -131,6 +163,8 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
   const [expDropdownOpen, setExpDropdownOpen] = useState(false);
   const [roleModeCustom, setRoleModeCustom] = useState(false);
   const [autoStartAiPolish, setAutoStartAiPolish] = useState(false);
+  const [showCvPreview, setShowCvPreview] = useState(false);
+  const [personalInfoError, setPersonalInfoError] = useState('');
 
   const fieldWrapperRef = useRef<HTMLDivElement>(null);
   const expWrapperRef = useRef<HTMLDivElement>(null);
@@ -141,7 +175,9 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
   const roleInCatalog = isRoleSuggestedForField(role, field);
   const showRoleMismatchWarning =
     !!role.trim() && !!resolveCatalogField(field) && !roleInCatalog && !roleModeCustom;
-  const sortedTemplates = sortTemplatesForField(cvTemplates, field);
+  // Empty template id already means the default ATS template; avoid showing it twice.
+  const sortedTemplates = sortTemplatesForField(cvTemplates, field)
+    .filter((template) => !(template.isSystemTemplate && template.layoutKey === 'modern-01'));
 
   useEffect(() => {
     // Init custom mode if existing role is outside catalog (preserve data).
@@ -190,6 +226,23 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
   };
   const updateCertification = (index: number, patch: Partial<CvCertificationItem>) => {
     setCertifications(certifications.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  };
+
+  const handleAvatarFile = (file?: File) => {
+    setPersonalInfoError('');
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return setPersonalInfoError('Vui lòng chọn đúng định dạng ảnh.');
+    if (file.size > 1_500_000) return setPersonalInfoError('Ảnh đại diện tối đa 1,5 MB.');
+    const reader = new FileReader();
+    reader.onload = () => setAvatarUrl(String(reader.result || ''));
+    reader.onerror = () => setPersonalInfoError('Không đọc được ảnh đại diện.');
+    reader.readAsDataURL(file);
+  };
+
+  const todayInputValue = () => {
+    const date = new Date();
+    const offset = date.getTimezoneOffset() * 60_000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 10);
   };
 
   // 1. VIEW MODE (Default: Hiển thị thông tin tổng quan Career Profile & CV đã kết nối)
@@ -570,6 +623,29 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
         </button>
       </div>
 
+      <div className="form-group">
+        <label className="form-label">
+          <Layers size={15} />
+          <span>1. Ngành nghề / Lĩnh vực</span>
+          <span className="required-dot">*</span>
+        </label>
+        <select
+          className="custom-form-input"
+          value={resolveCatalogField(field) || field}
+          onChange={(e) => {
+            const nextField = e.target.value;
+            setField(nextField);
+            if (role.trim() && !isRoleSuggestedForField(role, nextField)) setRoleModeCustom(true);
+            else setRoleModeCustom(false);
+          }}
+          required
+        >
+          {!resolveCatalogField(field) && field.trim() && <option value={field}>{field} (đã lưu)</option>}
+          <option value="" disabled>Chọn ngành nghề trước…</option>
+          {CAREER_FIELD_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      </div>
+
       {/* Row 1: Full Name & Target Role */}
       <div className="form-two-col">
         <div className="form-group">
@@ -592,7 +668,7 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
         <div className="form-group">
           <label className="form-label">
             <Briefcase size={15} />
-            <span>Vị trí ứng tuyển mục tiêu</span>
+            <span>2. Vị trí ứng tuyển</span>
             <span className="required-dot">*</span>
           </label>
           {suggestedRoles.length > 0 && !roleModeCustom ? (
@@ -662,6 +738,56 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
         </div>
       </div>
 
+      <section className="cv-personal-info-card" aria-labelledby="cv-personal-info-title">
+        <div className="cv-personal-info-header">
+          <div>
+            <h4 id="cv-personal-info-title">👤 Thông tin cá nhân trên CV</h4>
+            <p>Dữ liệu này chỉ dùng cho CV đang tạo và không tự động ghi đè Hồ sơ nghề nghiệp.</p>
+          </div>
+          {avatarUrl && <img className="cv-personal-avatar-preview" src={avatarUrl} alt="Ảnh đại diện CV" />}
+        </div>
+        <div className="form-two-col">
+          <div className="form-group">
+            <label className="form-label"><span>Số điện thoại</span><span className="required-dot">*</span></label>
+            <input type="tel" className="custom-form-input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="VD: +84 901 234 567" />
+          </div>
+          <div className="form-group">
+            <label className="form-label"><span>Email</span><span className="required-dot">*</span></label>
+            <input type="email" className="custom-form-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="VD: ten@example.com" />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label"><span>Địa chỉ</span></label>
+          <input className="custom-form-input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Tỉnh / Thành phố" />
+        </div>
+        <div className="form-two-col">
+          <div className="form-group">
+            <label className="form-label"><span>Ngày sinh</span></label>
+            <input type="date" max={todayInputValue()} className="custom-form-input" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label"><span>Giới tính</span></label>
+            <select className="custom-form-input" value={gender} onChange={(e) => setGender(e.target.value)}><option value="">Để trống</option><option>Nam</option><option>Nữ</option><option>Khác</option></select>
+          </div>
+        </div>
+        <div className="form-two-col">
+          <div className="form-group">
+            <label className="form-label"><span>LinkedIn</span></label>
+            <input type="url" className="custom-form-input" value={linkedIn} onChange={(e) => setLinkedIn(e.target.value)} placeholder="https://linkedin.com/in/..." />
+          </div>
+          <div className="form-group">
+            <label className="form-label"><span>GitHub</span></label>
+            <input type="url" className="custom-form-input" value={gitHub} onChange={(e) => setGitHub(e.target.value)} placeholder="https://github.com/..." />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label"><span>Ảnh đại diện</span></label>
+          <input type="file" accept="image/*" className="custom-form-input" onChange={(e) => handleAvatarFile(e.target.files?.[0])} />
+          {avatarUrl && <button type="button" className="cv-personal-remove-avatar" onClick={() => setAvatarUrl('')}>Xóa ảnh</button>}
+          {personalInfoError && <p className="cv-personal-error">{personalInfoError}</p>}
+        </div>
+      </section>
+
       {(setWizardDisplayName || setWizardTemplateId) && (
         <div className="form-two-col" style={{ marginTop: 12 }}>
           {setWizardDisplayName && (
@@ -694,7 +820,7 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
                 value={wizardTemplateId}
                 onChange={(e) => setWizardTemplateId(e.target.value)}
               >
-                <option value="">Modern 01 (mặc định)</option>
+                <option value="">CV Tiêu chuẩn HireMate</option>
                 {sortedTemplates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
@@ -705,14 +831,55 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
               <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>
                 Gợi ý mẫu theo ngành (layout không bị AI đổi). Bạn vẫn chọn bất kỳ mẫu nào.
               </p>
+              <div className="template-choice-summary">
+                {sortedTemplates.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={wizardTemplateId === t.id ? 'template-choice-card selected' : 'template-choice-card'}
+                    onClick={() => setWizardTemplateId(t.id)}
+                  >
+                    {t.previewUrl && <img src={t.previewUrl} alt={`Xem trước ${t.name}`} />}
+                    <strong>{t.name}</strong>
+                    <span>{t.description || 'Bố cục CV rõ ràng, phù hợp để ứng tuyển.'}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
       )}
 
+      <button type="button" className="preview-cv-btn" onClick={() => setShowCvPreview((v) => !v)}>
+        <Eye size={15} />
+        <span>{showCvPreview ? 'Ẩn bản xem trước' : 'Xem trước CV với dữ liệu hiện tại'}</span>
+      </button>
+      {showCvPreview && (
+        <section className="cv-draft-preview" aria-label="Bản xem trước CV">
+          <header>
+            <h2>{name.trim() || 'Chưa có họ tên'}</h2>
+            <strong>{role.trim() || 'Chưa chọn vị trí'}</strong>
+            <p>{[phone, email].filter(Boolean).join(' · ') || 'Chưa có thông tin liên hệ'}</p>
+            {address && <p>{address}</p>}
+            {(dateOfBirth || gender) && <p>{[dateOfBirth, gender].filter(Boolean).join(' · ')}</p>}
+            {(linkedIn || gitHub) && <p>{[linkedIn, gitHub].filter(Boolean).join(' · ')}</p>}
+          </header>
+          <h3>Tóm tắt</h3><p>{bio.trim() || 'Chưa có thông tin'}</p>
+          <h3>Kỹ năng</h3><p>{skills.length ? skills.join(', ') : 'Chưa có thông tin'}</p>
+          <h3>Kinh nghiệm</h3>
+          {experiences.length ? experiences.map((x, i) => <p key={i}><strong>{x.title}</strong>{x.org ? ` — ${x.org}` : ''}{x.description ? `: ${x.description}` : ''}</p>) : <p>Chưa có thông tin</p>}
+          <h3>Dự án</h3>
+          {projects.length ? projects.map((x, i) => <p key={i}><strong>{x.name}</strong>{x.role ? ` — ${x.role}` : ''}{x.description ? `: ${x.description}` : ''}</p>) : <p>Chưa có thông tin</p>}
+          <h3>Học vấn</h3><p>{education.trim() || 'Chưa có thông tin'}{graduationYear ? ` · ${graduationYear}` : ''}</p>
+          <h3>Chứng chỉ</h3>
+          {certifications.length ? certifications.map((x, i) => <p key={i}><strong>{x.name}</strong>{x.issuer ? ` — ${x.issuer}` : ''}</p>) : <p>Chưa có thông tin</p>}
+          <small>Bản xem trước dùng chính dữ liệu sẽ gửi khi bấm “Tạo CV”; hệ thống không thêm nội dung giả.</small>
+        </section>
+      )}
+
       {/* Row 2: Field & Experience */}
       <div className="form-two-col">
-        <div className="form-group" ref={fieldWrapperRef} style={{ position: 'relative' }}>
+        <div className="form-group" ref={fieldWrapperRef} style={{ display: 'none' }} aria-hidden="true">
           <label className="form-label">
             <Layers size={15} />
             <span>Ngành nghề / Lĩnh vực (Career Field)</span>
@@ -730,7 +897,6 @@ export const CareerProfileForm: React.FC<CareerProfileFormProps> = ({
               }}
               onFocus={() => setFieldDropdownOpen(true)}
               autoComplete="off"
-              required
               style={{ paddingRight: '2.2rem' }}
             />
             <button

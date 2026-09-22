@@ -9,6 +9,7 @@ public interface ICvService
 {
     Task<IServiceResult> UploadAsync(Guid userId, IFormFile file, string webRoot, string? displayName = null, Guid? templateId = null);
     Task<IServiceResult> CreateFromWizardAsync(Guid userId, CvWizardDto dto, string webRoot);
+    Task<IServiceResult> PreviewDraftAsync(Guid userId, CvWizardDto dto);
     Task<IServiceResult> ListAsync(Guid userId);
     Task<IServiceResult> GetAsync(Guid userId, Guid id);
     Task<IServiceResult> AnalyzeAsync(Guid userId, Guid id);

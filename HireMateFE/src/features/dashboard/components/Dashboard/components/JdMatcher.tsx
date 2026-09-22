@@ -430,7 +430,7 @@ export const JdMatcher: React.FC<JdMatcherProps> = ({
                 {' · '}
                 {h.jdTitle || 'JD paste'}
                 {' · '}
-                {h.cvFileName || 'CV'}
+                {h.cvFileName || 'CV đã bị xóa'}
                 {h.createdAt ? ` · ${new Date(h.createdAt).toLocaleDateString('vi-VN')}` : ''}
               </li>
             ))}

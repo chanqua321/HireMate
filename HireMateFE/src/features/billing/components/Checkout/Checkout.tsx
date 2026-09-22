@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   CreditCard,
   QrCode,
@@ -32,7 +32,7 @@ const planFeaturesFallback = (priceVnd: number, code: string): string[] => {
       'Phân tích CV ATS 1 lần / tháng',
     ];
   }
-  if (c.includes('combo') || c.includes('pro') || priceVnd >= 100000) {
+  if (c === 'combo' || priceVnd >= 100000) {
     return [
       '50 lượt phỏng vấn AI / tháng',
       'Phân tích CV ATS 70 lần / tháng',
@@ -150,7 +150,7 @@ export const Checkout: React.FC = () => {
       if (selectedPlan.priceVnd <= 0 || res.data.status === 'Paid') {
         if (refreshProfile) await refreshProfile();
         navigate(
-          `/payment-success?plan=${encodeURIComponent(selectedPlan.code)}&invoice=${encodeURIComponent(res.data.invoiceNumber || '')}`
+          `/payment-success?invoice=${encodeURIComponent(res.data.invoiceId || '')}`
         );
         return;
       }
@@ -168,6 +168,10 @@ export const Checkout: React.FC = () => {
 
   const paidPlans = plans.filter((p) => p.priceVnd > 0).sort((a, b) => a.priceVnd - b.priceVnd);
   const freePlan = plans.find((p) => p.priceVnd <= 0);
+
+  if (rawPlanKey === 'free' || selectedPlan?.priceVnd === 0) {
+    return <Navigate to="/activate-free" replace />;
+  }
 
   return (
     <div className="checkout-page">

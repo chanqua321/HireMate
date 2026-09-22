@@ -6,6 +6,7 @@ using Common.DTOs.AiDto;
 using Infrastructure.Data;
 using Infrastructure.IUnitOfWork;
 using Infrastructure.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -298,8 +299,8 @@ WHERE UserId = {user.Id} AND Feature = {feature} AND Period = {period} AND Used 
         var now = DateTime.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync($@"
 UPDATE UserFeatureUsages
-SET Used = CASE WHEN Used > 0 THEN Used - 1 ELSE 0 END, UpdatedAt = {now}
-WHERE UserId = {user.Id} AND Feature = {feature} AND Period = {period}");
+SET Used = Used - 1, UpdatedAt = {now}
+WHERE UserId = {user.Id} AND Feature = {feature} AND Period = {period} AND Used > 0");
     }
 
     private async Task EnsureUsageRowAsync(Guid userId, string feature, string period)
@@ -323,12 +324,16 @@ WHERE UserId = {user.Id} AND Feature = {feature} AND Period = {period}");
             });
             await db.SaveChangesAsync();
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (IsUniqueUsageRowViolation(ex))
         {
             // Race: unique index — another request created the row
             db.ChangeTracker.Clear();
         }
     }
+
+    private static bool IsUniqueUsageRowViolation(DbUpdateException ex)
+        => ex.InnerException is SqlException { Number: 2601 or 2627 }
+            || ex.InnerException?.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true;
 
     private async Task<int> SeedUsedFromDomainAsync(Guid userId, string feature, string period)
     {
@@ -348,7 +353,7 @@ WHERE UserId = {user.Id} AND Feature = {feature} AND Period = {period}");
 
     private async Task<int> GetUsedCountAsync(UserAccount user, string feature)
     {
-        // Interview + CvAnalysis: keep existing domain counters as source of truth (no double table write yet)
+        // Interview sessions are counted from their domain records.
         var start = PeriodStartUtc(CurrentPeriodKey());
         if (feature == AiQuotaFeature.Interview)
         {
@@ -359,8 +364,14 @@ WHERE UserId = {user.Id} AND Feature = {feature} AND Period = {period}");
 
         if (feature == AiQuotaFeature.CvAnalysis)
         {
-            return await uow.CvDocumentRepository.GetQueryable().AsNoTracking()
-                .CountAsync(c => c.UserId == user.Id && c.ParseSucceeded && c.AnalyzedAt != null && c.AnalyzedAt >= start);
+            // A successful analysis still counts after its CV is deleted. Use the same
+            // persisted counter that TryConsumeFeatureAsync enforces, so UI and API agree.
+            var cvPeriod = CurrentPeriodKey();
+            await EnsureUsageRowAsync(user.Id, feature, cvPeriod);
+            return await db.UserFeatureUsages.AsNoTracking()
+                .Where(x => x.UserId == user.Id && x.Feature == feature && x.Period == cvPeriod)
+                .Select(x => x.Used)
+                .FirstOrDefaultAsync();
         }
 
         var period = CurrentPeriodKey();

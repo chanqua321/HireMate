@@ -77,7 +77,7 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
                 >
                   {ready
                     ? 'Đã phân tích — có thể luyện phỏng vấn sau khi xem gợi ý.'
-                    : 'Chưa đạt — sửa theo gợi ý rồi phân tích lại trước khi phỏng vấn.'}
+                    : 'CV chưa được chấm điểm. Bạn có thể thử phân tích lại.'}
                 </p>
               </div>
             </div>
@@ -85,23 +85,23 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
             <div className="cv-detail-scores-grid">
               <div className="ats-score-box">
                 <span>Điểm ATS</span>
-                <strong style={{ color: cv.atsScore < 50 ? '#B45309' : '#0284C7' }}>{cv.atsScore}/100</strong>
+                <strong style={{ color: cv.atsScore < 50 ? '#B45309' : '#0284C7' }}>{ready ? `${cv.atsScore}/100` : 'Chưa chấm'}</strong>
               </div>
               <div className="ats-score-box">
                 <span>Định dạng</span>
-                <strong style={{ color: '#16A34A' }}>{cv.formatScore || 0}/100</strong>
+                <strong style={{ color: '#16A34A' }}>{ready ? `${cv.formatScore || 0}/100` : '—'}</strong>
               </div>
               <div className="ats-score-box">
                 <span>Từ khóa</span>
-                <strong style={{ color: '#D97706' }}>{cv.keywordsScore || 0}/100</strong>
+                <strong style={{ color: '#D97706' }}>{ready ? `${cv.keywordsScore || 0}/100` : '—'}</strong>
               </div>
               <div className="ats-score-box">
                 <span>Độ dễ đọc</span>
-                <strong style={{ color: '#7C3AED' }}>{cv.readabilityScore || 0}/100</strong>
+                <strong style={{ color: '#7C3AED' }}>{ready ? `${cv.readabilityScore || 0}/100` : '—'}</strong>
               </div>
             </div>
 
-            {cv.atsScore < 50 ? (
+            {ready && cv.atsScore < 50 ? (
               <div
                 style={{
                   marginTop: 14,
@@ -119,11 +119,11 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
                   Điểm CV: {cv.atsScore}/100. Hệ thống không tự sửa database — dùng AI diễn đạt bên dưới để xem preview, rồi chọn Giữ bản cũ / Dùng bản AI.
                 </p>
               </div>
-            ) : (
+            ) : ready ? (
               <p style={{ margin: '12px 0 0', fontSize: '0.84rem', color: '#15803D', fontWeight: 650 }}>
                 ✓ CV có thể sử dụng
               </p>
-            )}
+            ) : null}
 
             {tips.length > 0 && (
               <div
@@ -268,7 +268,7 @@ export const CvDetailModal: React.FC<CvDetailModalProps> = ({
                   style={{ background: '#F1F5F9', color: '#0F172A' }}
                 >
                   <RefreshCw size={16} className={reAnalyzing ? 'animate-spin' : undefined} />
-                  <span>{reAnalyzing ? 'Đang phân tích…' : 'Phân tích lại sau khi sửa'}</span>
+                  <span>{reAnalyzing ? 'Đang phân tích…' : ready ? 'Phân tích lại sau khi sửa' : 'Chấm điểm CV'}</span>
                 </button>
               )}
 

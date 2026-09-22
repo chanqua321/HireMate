@@ -30,7 +30,7 @@ interface CareerProgressState {
   readinessScore: number;
   breakdown: {
     interviewScore: number;
-    cvScore: number;
+    cvScore: number | null;
     roleMatchScore: number;
   };
   targetRole: string;
@@ -111,7 +111,7 @@ export const CareerOS: React.FC = () => {
     readinessScore: 0,
     breakdown: {
       interviewScore: 0,
-      cvScore: 0,
+      cvScore: null,
       roleMatchScore: 0,
     },
     targetRole: profile.role || 'Chuyên viên',
@@ -183,11 +183,11 @@ export const CareerOS: React.FC = () => {
       // 1. Tính toán chỉ số Readiness & Breakdown thực tế từ Backend
       const currentRole = hub?.profile?.desiredPosition || profile.role || 'Lập trình viên';
       const realInterview = Math.round(dev?.interviewScore ?? (hub?.averageScore ? hub.averageScore : 0));
-      const realCv = Math.round(dev?.cvScore ?? (profile.skills && profile.skills.length >= 3 ? 70 : 40));
+      const realCv = typeof dev?.cvScore === 'number' ? Math.round(dev.cvScore) : null;
       const realMatch = Math.round(dev?.matchScore ?? 0);
       const calculatedCareerScore = dev?.careerScore 
         ? Math.round(dev.careerScore)
-        : Math.round((realInterview * 0.5) + (realCv * 0.25) + (realMatch * 0.25));
+        : Math.round((realInterview * 0.5) + ((realCv ?? 0) * 0.25) + (realMatch * 0.25));
 
       const sessionsCount = hub?.sessionsCount ?? 0;
       const milestonesList = prog?.milestones ?? [];
@@ -288,10 +288,10 @@ export const CareerOS: React.FC = () => {
       const dynamicPhases: RoadmapPhase[] = [
         {
           phase: `Chặng 1: Nền tảng & Tối ưu hồ sơ ${currentRole}`,
-          status: sessionsCount >= 1 && realCv >= 60 ? 'completed' : 'in_progress',
+          status: sessionsCount >= 1 && (realCv ?? 0) >= 60 ? 'completed' : 'in_progress',
           items: [
             { title: `Hoàn thiện thông tin mục tiêu nghề nghiệp: ${currentRole}`, done: Boolean(profile.name && currentRole) },
-            { title: 'Tối ưu CV đạt điểm ATS chuẩn tuyển dụng (>= 60)', done: realCv >= 60 },
+            { title: 'Tối ưu CV đạt điểm ATS chuẩn tuyển dụng (>= 60)', done: (realCv ?? 0) >= 60 },
             { title: 'Thực hiện buổi phỏng vấn AI khởi động đầu tiên', done: sessionsCount >= 1 },
           ],
         },
@@ -492,9 +492,9 @@ export const CareerOS: React.FC = () => {
               <div className="submetric-item">
                 <span className="submetric-label">Hồ sơ & CV ATS (25%)</span>
                 <div className="submetric-bar-wrap">
-                  <div className="submetric-bar cyan" style={{ width: `${progress.breakdown.cvScore}%` }} />
+                <div className="submetric-bar cyan" style={{ width: `${progress.breakdown.cvScore ?? 0}%` }} />
                 </div>
-                <span className="submetric-val">{progress.breakdown.cvScore}%</span>
+                <span className="submetric-val">{progress.breakdown.cvScore === null ? 'Chưa có dữ liệu' : `${progress.breakdown.cvScore}%`}</span>
               </div>
               <div className="submetric-item">
                 <span className="submetric-label">Độ tương thích JD (25%)</span>

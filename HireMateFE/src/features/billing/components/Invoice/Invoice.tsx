@@ -22,23 +22,16 @@ const PLAN_INVOICE_MAP: Record<
     discount: '0đ',
     finalPrice: '0đ',
   },
-  basic: {
-    name: 'Gói Cơ Bản - 1 Tháng',
+  premium: {
+    name: 'Gói Tiêu chuẩn - 1 Tháng',
     desc: 'Luyện phỏng vấn AI, 15 lượt/tháng, feedback STAR chi tiết',
-    origPrice: '99.000đ',
-    discount: '-20.000đ',
+    origPrice: '79.000đ',
+    discount: '0đ',
     finalPrice: '79.000đ',
   },
-  pro: {
-    name: 'Gói Nâng Cao - 1 Tháng',
+  combo: {
+    name: 'Gói Cao cấp - 1 Tháng',
     desc: 'Luyện phỏng vấn AI, 50 lượt/tháng, tối ưu CV ATS chuyên sâu, tính năng Beta',
-    origPrice: '189.000đ',
-    discount: '-40.000đ',
-    finalPrice: '149.000đ',
-  },
-  premium: {
-    name: 'Gói Cao Cấp - 1 Tháng',
-    desc: 'Luyện phỏng vấn AI, 50 lượt/tháng, tối ưu CV ATS chuyên sâu, cố vấn 1-1',
     origPrice: '189.000đ',
     discount: '-40.000đ',
     finalPrice: '149.000đ',
@@ -48,13 +41,13 @@ const PLAN_INVOICE_MAP: Record<
 export const Invoice: React.FC = () => {
   const { profile } = useApp();
   const [searchParams] = useSearchParams();
-  const planKey = (searchParams.get('plan') || 'pro').toLowerCase();
+  const planKey = (searchParams.get('plan') || 'free').toLowerCase();
   const invoiceParam = searchParams.get('invoice');
-  const planInvoice = PLAN_INVOICE_MAP[planKey] || PLAN_INVOICE_MAP.pro;
+  const planInvoice = PLAN_INVOICE_MAP[planKey] || PLAN_INVOICE_MAP.free;
 
-  const [invoiceNumber, setInvoiceNumber] = useState(invoiceParam || 'HM-20260726-3362');
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toLocaleDateString('vi-VN'));
-  const [amountDisplay, setAmountDisplay] = useState(planInvoice.finalPrice);
+  const [invoiceNumber, setInvoiceNumber] = useState(invoiceParam || '—');
+  const [invoiceDate, setInvoiceDate] = useState('—');
+  const [amountDisplay, setAmountDisplay] = useState('—');
 
   useEffect(() => {
     billingService.getInvoices().then((res) => {

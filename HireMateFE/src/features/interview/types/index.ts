@@ -44,6 +44,9 @@ export type EvidenceStatusType =
 
 export interface AnswerAnalysis {
   analysisAvailable: boolean;
+  feedbackStatus?: 'good' | 'needs_improvement' | 'invalid' | null;
+  feedbackComment?: string | null;
+  starTip?: string | null;
   relevance?: number | null;
   completeness?: number | null;
   technicalKnowledge?: number | null;
@@ -75,6 +78,7 @@ export interface SubmitAnswerResult {
     detail?: string | null;
   } | null;
   followUp?: InterviewQuestionItem | null;
+  nextQuestion?: InterviewQuestionItem | null;
 }
 
 export interface InterviewSessionSummary {
@@ -177,6 +181,7 @@ export interface AnswerHighlights {
 }
 
 export interface StructuredFeedback {
+  coachReport?: CoachReport | null;
   sessionId: string;
   overallScore?: number | null;
   summary?: string | null;
@@ -189,4 +194,21 @@ export interface StructuredFeedback {
   evidenceGaps: EvidenceGapItem[];
   answerHighlights?: AnswerHighlights;
   improvements: string[];
+}
+
+export interface CoachReport {
+  summary: { overallScore: number; headline: string; date: string };
+  scores: { situation: number; task: number; action: number; result: number; clarity: number };
+  starAnalysis: {
+    situation: CoachStarItem;
+    task: CoachStarItem;
+    action: CoachStarItem;
+    result: CoachStarItem;
+  };
+}
+
+export interface CoachStarItem {
+  score: number;
+  issue: string;
+  advice: string;
 }

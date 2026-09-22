@@ -39,6 +39,7 @@ public class AuthService(
     private readonly IAiQuotaService _aiQuota = aiQuota;
 
     private bool ExposeDevTokens =>
+        _env.IsDevelopment() &&
         string.Equals(_configuration["EmailSettings:ExposeDevTokens"], "true", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Demo: false = bỏ bước xác nhận email khi đăng ký/đăng nhập.</summary>

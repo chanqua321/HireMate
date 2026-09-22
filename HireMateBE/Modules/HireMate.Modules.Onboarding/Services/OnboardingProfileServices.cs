@@ -150,37 +150,46 @@ public class OnboardingService(
                 .FirstOrDefaultAsync(c => c.Id == existingId && c.UserId == userId);
         }
 
-        CvDocument? latestAnalyzed = null;
-        if (existingOwned == null)
-        {
-            latestAnalyzed = await _unitOfWork.CvDocumentRepository.GetQueryable()
-                .Where(c => c.UserId == userId && c.ParseSucceeded)
-                .OrderByDescending(c => c.AnalyzedAt ?? c.UploadedAt)
-                .FirstOrDefaultAsync();
-        }
-
         var targetId = ActiveCvConfirmPolicy.ResolveOnboardingTarget(
             profile.ConfirmedCvDocumentId,
             existingOwned != null,
-            latestAnalyzed?.Id);
+            latestAnalyzedId: null);
 
-        var cv = existingOwned
-            ?? (targetId.HasValue
-                ? await _unitOfWork.CvDocumentRepository.GetQueryable()
-                    .FirstOrDefaultAsync(c => c.Id == targetId.Value && c.UserId == userId)
-                : null)
-            ?? latestAnalyzed;
+        var cv = targetId.HasValue ? existingOwned : null;
 
         if (cv == null)
-            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Cần CV đã phân tích thành công (upload hoặc wizard) trước khi xác nhận");
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Hãy bấm “Chọn làm CV phỏng vấn” trong Kho CV trước khi xác nhận");
 
-        if (string.IsNullOrWhiteSpace(user.FullName)
-            || string.IsNullOrWhiteSpace(profile.University)
-            || string.IsNullOrWhiteSpace(profile.DesiredIndustry)
-            || string.IsNullOrWhiteSpace(profile.DesiredPosition))
+        // Older wizard CVs may have been activated before the one-form CV flow synced
+        // their fields to CareerProfile. Recover only values the user actually entered.
+        if (string.Equals(cv.Source, "Wizard", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(cv.WizardAnswersJson))
+        {
+            try
+            {
+                var answers = JsonSerializer.Deserialize<CvWizardAnswers>(cv.WizardAnswersJson);
+                if (answers != null)
+                {
+                    if (string.IsNullOrWhiteSpace(user.FullName)) user.FullName = answers.FullName;
+                    if (string.IsNullOrWhiteSpace(profile.University))
+                        profile.University = answers.Educations?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Institution))?.Institution
+                            ?? answers.University;
+                    if (string.IsNullOrWhiteSpace(profile.DesiredIndustry)) profile.DesiredIndustry = answers.DesiredIndustry;
+                    if (string.IsNullOrWhiteSpace(profile.DesiredPosition)) profile.DesiredPosition = answers.DesiredPosition;
+                }
+            }
+            catch (JsonException) { /* Keep the stored profile when an old draft is unreadable. */ }
+        }
+
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(user.FullName)) missing.Add("Họ tên");
+        if (string.IsNullOrWhiteSpace(profile.University)) missing.Add("Trường / Tổ chức trong Học vấn");
+        if (string.IsNullOrWhiteSpace(profile.DesiredIndustry)) missing.Add("Ngành nghề");
+        if (string.IsNullOrWhiteSpace(profile.DesiredPosition)) missing.Add("Vị trí ứng tuyển");
+        if (missing.Count > 0)
         {
             return new ServiceResult(Const.FAIL_UPDATE_CODE,
-                "Thiếu họ tên, trường, ngành hoặc vị trí mục tiêu. Hãy review hồ sơ rồi Confirm.");
+                $"CV đang kích hoạt thiếu {string.Join(", ", missing)}. Hãy vào Tạo CV, điền đủ thông tin, tạo CV mới rồi kích hoạt.");
         }
 
         var others = await _unitOfWork.CvDocumentRepository.GetQueryable()
@@ -282,6 +291,8 @@ public class OnboardingService(
     {
         UserId = user.Id,
         Email = user.Email ?? string.Empty,
+        Phone = user.PhoneNumber,
+        AvatarUrl = user.AvatarUrl,
         FullName = user.FullName,
         OnboardingCompleted = user.OnboardingCompleted,
         IsPremium = user.IsPremium,

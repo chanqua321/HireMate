@@ -45,7 +45,7 @@ export const BillingResult: React.FC = () => {
           await refreshProfile?.();
           window.setTimeout(() => {
             navigate(
-              `/payment-success?plan=${encodeURIComponent(plan)}&invoice=${encodeURIComponent(res.data?.invoiceNumber || invoiceId || '')}`,
+              `/payment-success?invoice=${encodeURIComponent(res.data?.invoiceId || invoiceId || '')}`,
               { replace: true }
             );
           }, 900);
