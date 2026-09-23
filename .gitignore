@@ -33,3 +33,6 @@ HireMateBE/**/appsettings.*.json
 HireMateBE/**/appsettings*.json
 !HireMateBE/**/appsettings.Example.json
 
+
+# Local Cursor settings
+.cursor/
