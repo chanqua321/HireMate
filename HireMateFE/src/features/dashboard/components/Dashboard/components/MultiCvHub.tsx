@@ -171,7 +171,7 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
       )}
       <button
         type="button"
-        className={compact ? 'icon-delete-btn' : 'action-btn-detail icon-delete-btn'}
+        className={compact ? 'icon-delete-btn' : 'action-btn-detail action-btn-delete'}
         onClick={() => onDeleteCv(cv.id, cv.title)}
         title="Xóa CV"
       >

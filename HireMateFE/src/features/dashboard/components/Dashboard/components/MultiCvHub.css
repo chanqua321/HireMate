@@ -780,7 +780,8 @@
   color: #94a3b8;
 }
 
-.icon-delete-btn:hover {
+.icon-delete-btn:hover,
+.action-btn-delete:hover {
   color: #ef4444;
   border-color: #fecaca;
   background: #fef2f2;

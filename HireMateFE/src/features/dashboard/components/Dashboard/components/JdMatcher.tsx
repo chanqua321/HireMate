@@ -294,7 +294,7 @@ export const JdMatcher: React.FC<JdMatcherProps> = ({
 
         <button
           type="submit"
-          className="save-profile-btn"
+          className="match-submit-btn"
           style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}
           disabled={!canSubmit}
         >

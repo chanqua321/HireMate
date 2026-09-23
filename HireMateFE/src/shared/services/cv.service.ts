@@ -166,7 +166,6 @@ export const cvService = {
       projects: dto.projects ?? [],
       certifications: dto.certifications ?? [],
       activities: dto.activities ?? [],
-      hobbies: dto.hobbies ?? [],
       references: dto.references ?? [],
       educations: dto.educations ?? [],
       clientRequestId: dto.clientRequestId,

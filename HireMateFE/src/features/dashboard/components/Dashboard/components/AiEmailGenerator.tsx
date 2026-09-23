@@ -131,7 +131,7 @@ export const AiEmailGenerator: React.FC<AiEmailGeneratorProps> = ({
 
         <button
           type="submit"
-          className="save-profile-btn"
+          className="generate-email-btn"
           style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}
           disabled={isGeneratingEmail || blocked}
         >
