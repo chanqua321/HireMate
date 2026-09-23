@@ -5,7 +5,7 @@ import { MainLayout } from '../../shared/layouts/MainLayout/MainLayout';
 import { Home } from '../../features/home';
 import { AuthContainer, VerifyOtp } from '../../features/auth';
 import { OnboardingSummary } from '../../features/onboarding';
-import { Pricing, Checkout, PaymentSuccess, Invoice } from '../../features/billing';
+import { Pricing, Checkout, FreePlanActivation, PaymentSuccess, Invoice } from '../../features/billing';
 import { BillingResult } from '../../pages/billing/BillingResult';
 import { Dashboard } from '../../features/dashboard';
 import { InterviewSetup, InterviewRoom, Feedback, Questions } from '../../features/interview';
@@ -68,6 +68,7 @@ export const AppRouter: React.FC = () => {
         <Route path="pricing.html" element={<Pricing />} />
         <Route path="checkout" element={<Checkout />} />
         <Route path="checkout.html" element={<Checkout />} />
+        <Route path="activate-free" element={<FreePlanActivation />} />
         <Route path="billing-result" element={<BillingResult />} />
         <Route path="payment-success" element={<PaymentSuccess />} />
         <Route path="payment-success.html" element={<PaymentSuccess />} />

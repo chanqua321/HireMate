@@ -79,6 +79,9 @@ public class MatchService(IUnitOfWork uow, IAiQuotaService aiQuota, UserManager<
                 new { errorCode = OperationCvResolvePolicy.ActiveCvRequiredCode });
         }
 
+        if (cv is null)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy CV");
+
         if (string.IsNullOrWhiteSpace(cv.ExtractedText))
             return new ServiceResult(Const.FAIL_CREATE_CODE,
                 "Cần CV đã có nội dung (Active CV hoặc chọn CV trong kho) để so khớp JD.");

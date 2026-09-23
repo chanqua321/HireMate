@@ -137,6 +137,12 @@ public class InterviewAnswerViewDto
 public class AnswerAnalysisDto
 {
     public bool AnalysisAvailable { get; set; }
+    public string? FeedbackStatus { get; set; }
+    public string? FeedbackComment { get; set; }
+    public string? StarTip { get; set; }
+    public int? NextQuestionNumber { get; set; }
+    public string? NextQuestionContent { get; set; }
+    public string? NextQuestionHint { get; set; }
     public int? Relevance { get; set; }
     public int? Completeness { get; set; }
     public int? TechnicalKnowledge { get; set; }
@@ -157,6 +163,7 @@ public class AnswerAnalysisDto
 
 public class StructuredFeedbackDto
 {
+    public CoachReportDto? CoachReport { get; set; }
     public Guid SessionId { get; set; }
     public int? OverallScore { get; set; }
     public string? Summary { get; set; }
@@ -169,6 +176,44 @@ public class StructuredFeedbackDto
     public List<EvidenceGapItemDto> EvidenceGaps { get; set; } = [];
     public AnswerHighlightsDto AnswerHighlights { get; set; } = new();
     public List<string> Improvements { get; set; } = [];
+}
+
+public class CoachReportDto
+{
+    public CoachReportSummaryDto Summary { get; set; } = new();
+    public CoachReportScoresDto Scores { get; set; } = new();
+    public CoachStarAnalysisDto StarAnalysis { get; set; } = new();
+}
+
+public class CoachReportSummaryDto
+{
+    public int OverallScore { get; set; }
+    public string Headline { get; set; } = string.Empty;
+    public string Date { get; set; } = string.Empty;
+}
+
+public class CoachReportScoresDto
+{
+    public int Situation { get; set; }
+    public int Task { get; set; }
+    public int Action { get; set; }
+    public int Result { get; set; }
+    public int Clarity { get; set; }
+}
+
+public class CoachStarAnalysisDto
+{
+    public CoachStarItemDto Situation { get; set; } = new();
+    public CoachStarItemDto Task { get; set; } = new();
+    public CoachStarItemDto Action { get; set; } = new();
+    public CoachStarItemDto Result { get; set; } = new();
+}
+
+public class CoachStarItemDto
+{
+    public int Score { get; set; }
+    public string Issue { get; set; } = string.Empty;
+    public string Advice { get; set; } = string.Empty;
 }
 
 public class CategoryScoresDto

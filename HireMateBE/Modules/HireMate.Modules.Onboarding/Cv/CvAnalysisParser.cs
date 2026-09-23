@@ -24,6 +24,11 @@ public sealed class CvExperienceItem
     public string? Org { get; set; }
     public string? Period { get; set; }
     public string? Description { get; set; }
+    public string? StartDate { get; set; }
+    public string? EndDate { get; set; }
+    public bool IsCurrent { get; set; }
+    public string? Role { get; set; }
+    public List<string> BulletPoints { get; set; } = [];
 }
 
 public static class CvAnalysisParser

@@ -124,7 +124,9 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
             e.HasIndex(x => new { x.JobDescriptionId, x.CreatedAt });
             e.HasOne(x => x.CvDocument).WithMany().HasForeignKey(x => x.CvDocumentId)
-                .OnDelete(DeleteBehavior.NoAction);
+               // A match is an immutable, user-owned history record.  Removing its source CV
+               // must retain the result and only detach this optional reference.
+               .OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.JobDescription).WithMany(j => j.Matches).HasForeignKey(x => x.JobDescriptionId)
                 .OnDelete(DeleteBehavior.NoAction);
         });

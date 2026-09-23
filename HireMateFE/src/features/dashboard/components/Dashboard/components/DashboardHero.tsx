@@ -5,14 +5,12 @@ import './DashboardHero.css';
 
 interface DashboardHeroProps {
   greetingName: string;
-  completionPercent: number;
   isProUser: boolean;
   onOpenGuideModal: () => void;
 }
 
 export const DashboardHero: React.FC<DashboardHeroProps> = ({
   greetingName,
-  completionPercent,
   isProUser,
   onOpenGuideModal,
 }) => {
@@ -26,10 +24,7 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
       <div className="dashboard-hero-text">
         <h1>Welcome back{greetingName}! 👋</h1>
         <p className="dashboard-hero-subtitle">
-          Hồ sơ nghề nghiệp (Career Profile) của bạn đã hoàn thiện <strong>{completionPercent}%</strong>.{' '}
-          {completionPercent >= 100
-            ? 'Hồ sơ đã sẵn sàng 100%. Bạn có thể tự tin bắt đầu phỏng vấn AI ngay bây giờ!'
-            : 'Vui lòng hoàn thiện hồ sơ hoặc kích hoạt CV từ kho để AI phỏng vấn sát thực tế nhất.'}
+          Điền form Tạo CV một lần, xem trước rồi xác nhận để lưu vào Kho CV. Kích hoạt CV đã chấm điểm để luyện phỏng vấn AI.
         </p>
       </div>
 
@@ -39,7 +34,7 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
             type="button"
             className="dashboard-guide-trigger-btn"
             onClick={onOpenGuideModal}
-            title="Xem cẩm nang hướng dẫn hoàn thiện hồ sơ"
+            title="Xem hướng dẫn tạo CV"
           >
             <BookOpen size={15} color="#0284c7" />
             <span>Hướng dẫn (Tutorial)</span>

@@ -19,26 +19,20 @@ export async function ensureInterviewReady(cvId?: string | null): Promise<Interv
 
   let next = statusRes.data?.nextStep || statusRes.data?.NextStep || '';
 
-  // Prefer explicit cvId (caller) → server Confirmed/Active → status latest (existence check only).
-  let hasCvId = (cvId && String(cvId).trim()) || null;
+  // Active CV must be confirmed by the server. An explicit non-active id cannot become active here.
+  let hasCvId: string | null = null;
   if (!hasCvId) {
     const list = await cvService.listCvs().catch(() => null);
     const cvs = Array.isArray(list?.data) ? list!.data! : [];
-    const confirmed =
-      cvs.find((c: any) => c.isConfirmed || c.isActive) ||
-      null;
-    hasCvId =
-      confirmed?.id ||
-      statusRes.data?.latestCvId ||
-      statusRes.data?.LatestCvId ||
-      null;
+    const confirmed = cvs.find((c: any) => c.isActive) || null;
+    hasCvId = confirmed?.id || null;
   }
 
   if (next === 'upload_cv' || !hasCvId) {
     return {
       ok: false,
       reason: 'need_cv',
-      message: 'Tạo hoặc tải CV trên Dashboard trước. Hệ thống sẽ chấm ATS và đưa gợi ý sửa ngay lúc đó.',
+      message: 'Tạo hoặc tải CV, sau đó bấm “Chọn làm CV phỏng vấn” trong Kho CV.',
     };
   }
 
@@ -75,7 +69,7 @@ export async function ensureInterviewReady(cvId?: string | null): Promise<Interv
         return {
           ok: false,
           reason: 'need_cv',
-          message: msg + ' Hãy sửa CV theo gợi ý trên Kho CV rồi thử lại.',
+          message: msg,
         };
       }
       return { ok: false, reason: 'error', message: msg };

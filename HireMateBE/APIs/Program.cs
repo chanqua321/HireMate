@@ -189,24 +189,27 @@ builder.Services.AddSwaggerGen(option =>
     });
 });
 
-var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];
+var corsOrigins = (builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [])
+    .Where(origin => !string.IsNullOrWhiteSpace(origin)).ToArray();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowConfigured", policy =>
     {
-        if (corsOrigins.Length == 0 || corsOrigins.Contains("*"))
+        if (builder.Environment.IsDevelopment() && (corsOrigins.Length == 0 || corsOrigins.Contains("*")))
             policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
-        else
+        else if (corsOrigins.Length > 0 && !corsOrigins.Contains("*"))
             policy.WithOrigins(corsOrigins).AllowAnyMethod().AllowAnyHeader().AllowCredentials();
+        else
+            policy.SetIsOriginAllowed(_ => false);
     });
 });
 
 var app = builder.Build();
 
 Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "wwwroot", "uploads", "cv"));
-await DbSeeder.SeedAsync(app.Services);
+await DbSeeder.SeedAsync(app.Services, app.Environment.IsDevelopment());
 
-if (builder.Configuration.GetValue("Swagger:Enabled", true))
+if (builder.Configuration.GetValue("Swagger:Enabled", app.Environment.IsDevelopment()))
 {
     app.UseSwagger();
     app.UseSwaggerUI();

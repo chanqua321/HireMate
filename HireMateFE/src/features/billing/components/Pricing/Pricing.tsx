@@ -43,13 +43,13 @@ const DEFAULT_PLANS = [
       'Feedback cấu trúc STAR tóm tắt',
     ],
     cta: 'Bắt đầu miễn phí',
-    ctaTo: '/register',
+    ctaTo: '/activate-free',
     featured: false,
     badge: null,
   },
   {
-    id: 'basic',
-    label: 'Gói Chuyên Nghiệp (Pro)',
+    id: 'premium',
+    label: 'Gói Tiêu chuẩn',
     monthlyPrice: 79000,
     priceDisplay: '79.000đ',
     period: '/tháng',
@@ -62,13 +62,13 @@ const DEFAULT_PLANS = [
       'Ngân hàng 1,000+ câu hỏi JD thực tế',
     ],
     cta: 'Nâng cấp ngay',
-    ctaTo: '/checkout?plan=basic',
+    ctaTo: '/checkout?plan=premium',
     featured: true,
     badge: 'Phổ biến nhất 🔥',
   },
   {
-    id: 'pro',
-    label: 'Gói Toàn Diện (Ultimate)',
+    id: 'combo',
+    label: 'Gói Cao cấp',
     monthlyPrice: 149000,
     priceDisplay: '149.000đ',
     period: '/tháng',
@@ -83,7 +83,7 @@ const DEFAULT_PLANS = [
       'Hỗ trợ kỹ thuật ưu tiên 24/7',
     ],
     cta: 'Nâng cấp ngay',
-    ctaTo: '/checkout?plan=pro',
+    ctaTo: '/checkout?plan=combo',
     featured: false,
     badge: 'Đầy đủ tính năng ⚡',
   },
@@ -104,7 +104,6 @@ export const Pricing: React.FC = () => {
   const navigate = useNavigate();
   const [plans, setPlans] = useState(DEFAULT_PLANS);
   const [faqs, setFaqs] = useState(PRICING_FAQS);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authFeatureName, setAuthFeatureName] = useState('Bảng giá & Gói dịch vụ');
 
@@ -114,8 +113,7 @@ export const Pricing: React.FC = () => {
       setShowAuthModal(true);
       return;
     }
-    // Free cũng phải qua checkout để BE set PlanSelectedAt (ActivateFree)
-    navigate(`/checkout?plan=${plan.id}&cycle=${billingCycle}`);
+    navigate(plan.monthlyPrice <= 0 || plan.id === 'free' ? '/activate-free' : `/checkout?plan=${plan.id}`);
   };
 
   useEffect(() => {
@@ -125,7 +123,7 @@ export const Pricing: React.FC = () => {
         const mapped = res.data.map((p) => {
           const code = p.code.toLowerCase();
           const isFree = p.priceVnd === 0 || code === 'free';
-          const isCombo = code.includes('combo') || code.includes('pro') || (!isFree && p.priceVnd >= 100000);
+          const isCombo = code === 'combo' || (!isFree && p.priceVnd >= 100000);
           const isPremium = !isFree && !isCombo;
           return {
             id: code,
@@ -140,7 +138,7 @@ export const Pricing: React.FC = () => {
               ? ['50 lượt phỏng vấn mỗi tháng', 'Phân tích CV 70 lần/tháng', 'Trợ lý Cover Letter AI', 'So khớp CV & JD']
               : ['15 lượt phỏng vấn mỗi tháng', 'Feedback chuẩn STAR chi tiết', 'Phân tích CV 20 lần/tháng', 'Luyện tập câu hỏi nâng cao'],
             cta: isFree ? 'Bắt đầu miễn phí' : 'Nâng cấp ngay',
-            ctaTo: `/checkout?plan=${code}`,
+            ctaTo: isFree ? '/activate-free' : `/checkout?plan=${code}`,
             featured: isPremium && p.priceVnd === 79000,
             badge: isPremium && p.priceVnd === 79000 ? 'Phổ biến nhất 🔥' : null,
           };
@@ -190,23 +188,6 @@ export const Pricing: React.FC = () => {
             Đầu tư thông minh cho sự nghiệp với chi phí chỉ bằng vài ly cà phê. Nâng cấp hoặc hủy bất cứ lúc nào không ràng buộc.
           </motion.p> */}
 
-          {/* Billing Toggle */}
-          <div className="billing-toggle-container">
-            <button
-              type="button"
-              className={`billing-toggle-btn ${billingCycle === 'monthly' ? 'active' : ''}`}
-              onClick={() => setBillingCycle('monthly')}
-            >
-              Thanh toán theo tháng
-            </button>
-            <button
-              type="button"
-              className={`billing-toggle-btn ${billingCycle === 'annual' ? 'active' : ''}`}
-              onClick={() => setBillingCycle('annual')}
-            >
-              Thanh toán theo năm <span className="save-badge">Tiết kiệm 20%</span>
-            </button>
-          </div>
         </div>
       </section>
 
@@ -215,22 +196,10 @@ export const Pricing: React.FC = () => {
         <div className="container">
           <div className="pricing-grid">
             {plans.map((plan, i) => {
-              const isAnnual = billingCycle === 'annual';
               const hasPrice = plan.monthlyPrice > 0;
-              
-              // Full year price when annual billing, or monthly price when monthly billing
-              const annualTotal = Math.round(plan.monthlyPrice * 0.8 * 12);
-              const perMonthDiscounted = Math.round(plan.monthlyPrice * 0.8);
-
-              const displayPrice = isAnnual
-                ? (hasPrice ? `${annualTotal.toLocaleString('vi-VN')}đ` : '0đ')
-                : (hasPrice ? `${plan.monthlyPrice.toLocaleString('vi-VN')}đ` : '0đ');
-
-              const displayPeriod = isAnnual ? '/năm' : '/tháng';
-
-              const displaySubtext = isAnnual
-                ? (hasPrice ? `~${perMonthDiscounted.toLocaleString('vi-VN')}đ / tháng (tiết kiệm 20%)` : 'Miễn phí trọn đời')
-                : (hasPrice ? 'Thanh toán theo từng tháng' : 'Miễn phí trải nghiệm');
+              const displayPrice = hasPrice ? `${plan.monthlyPrice.toLocaleString('vi-VN')}đ` : '0đ';
+              const displayPeriod = '/tháng';
+              const displaySubtext = hasPrice ? 'Thanh toán theo từng tháng' : 'Miễn phí trải nghiệm';
 
               return (
                 <motion.div
@@ -261,16 +230,7 @@ export const Pricing: React.FC = () => {
                         <span className="plan-price-amount">{displayPrice}</span>
                         <span className="plan-price-period">{displayPeriod}</span>
                       </div>
-                      <div className="plan-price-subtext">
-                        {isAnnual && hasPrice ? (
-                          <>
-                            <span>~{perMonthDiscounted.toLocaleString('vi-VN')}đ/tháng</span>
-                            <span className="highlight-badge">Tiết kiệm 20%</span>
-                          </>
-                        ) : (
-                          <span>{displaySubtext}</span>
-                        )}
-                      </div>
+                      <div className="plan-price-subtext"><span>{displaySubtext}</span></div>
                     </div>
 
                     {/* Features List */}

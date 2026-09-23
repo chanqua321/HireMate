@@ -3,6 +3,9 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$PublicIp,
 
+  [Parameter(Mandatory = $true)]
+  [string]$FrontendUrl,
+
   [string]$SshUser = "ubuntu",
 
   [string]$KeyPath = (Join-Path $PSScriptRoot "id_ed25519"),
@@ -14,6 +17,9 @@ $ErrorActionPreference = "Stop"
 
 if (-not (Test-Path $KeyPath)) {
   throw "Missing SSH private key: $KeyPath"
+}
+if ([string]::IsNullOrWhiteSpace($env:HIREMATE_AI_API_KEY)) {
+  throw "Set HIREMATE_AI_API_KEY in the local environment before deploying."
 }
 
 # OpenSSH on Windows rejects keys that are too open; tighten ACL best-effort
@@ -57,11 +63,13 @@ if (Test-Path $tarPath) { Remove-Item $tarPath -Force }
 Push-Location $BeRoot
 try {
   tar -czf $tarPath `
-    --exclude=bin --exclude=obj --exclude=.git `
+    --exclude=bin --exclude=obj --exclude=.git --exclude=tests --exclude=docs `
+    --exclude=artifacts --exclude='_qa_*' --exclude='tmp_*.py' `
+    --exclude='appsettings*.json' --exclude='*.log' --exclude='wwwroot/uploads' `
     --exclude=deploy/oracle/id_ed25519 `
     --exclude=.env `
-    APIs BusinessLogic Common Infrastructure scripts `
-    Dockerfile docker-compose.yml .env.example HireMateBE.sln
+    APIs BuildingBlocks Common Infrastructure Modules scripts `
+    Dockerfile docker-compose.yml HireMateBE.sln
 } finally {
   Pop-Location
 }
@@ -78,9 +86,9 @@ $envContent = @"
 MSSQL_SA_PASSWORD=$saPass
 JWT_KEY=$jwtKey
 API_PUBLIC_URL=$apiUrl
-FRONTEND_URL=http://localhost:5173
-CORS_ORIGIN_0=http://localhost:5173
-CORS_ORIGIN_1=http://localhost:3000
+FRONTEND_URL=$FrontendUrl
+CORS_ORIGIN_0=$FrontendUrl
+AI_API_KEY=$env:HIREMATE_AI_API_KEY
 "@
 
 $envB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($envContent))
@@ -92,10 +100,10 @@ Invoke-Remote "cd ~/HireMateBE && sudo docker compose up --build -d"
 Write-Host "==> Health check"
 Start-Sleep -Seconds 20
 try {
-  $sw = Invoke-WebRequest -Uri "$apiUrl/swagger/index.html" -UseBasicParsing -TimeoutSec 30
-  Write-Host "Swagger OK: $($sw.StatusCode)"
+  $sw = Invoke-WebRequest -Uri "$apiUrl/api/Billing/plans" -UseBasicParsing -TimeoutSec 30
+  Write-Host "API OK: $($sw.StatusCode)"
 } catch {
-  Write-Host "Swagger chưa sẵn sàng, xem log:"
+  Write-Host "API chưa sẵn sàng, xem log:"
   Invoke-Remote "cd ~/HireMateBE && sudo docker compose ps && sudo docker compose logs --tail 40 api"
 }
 
@@ -103,7 +111,6 @@ Write-Host ""
 Write-Host "============================================"
 Write-Host " DONE"
 Write-Host " API:     $apiUrl"
-Write-Host " Swagger: $apiUrl/swagger"
 Write-Host " FE set:  VITE_API_BASE_URL=$apiUrl"
 Write-Host "============================================"
 Write-Host "Secrets đã lưu trên VM: ~/HireMateBE/.env"

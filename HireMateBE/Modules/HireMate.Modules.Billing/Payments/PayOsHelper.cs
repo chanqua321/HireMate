@@ -31,6 +31,16 @@ public class PayOsCreateResult
 
 public static class PayOsHelper
 {
+    /// <summary>
+    /// A PayOS webhook can settle only when this success code is inside the signed data object.
+    /// Root-level fields are not part of VerifyWebhookSignature's trust boundary.
+    /// </summary>
+    public static bool IsSuccessfulWebhookData(JsonElement data)
+        => data.ValueKind == JsonValueKind.Object
+           && data.TryGetProperty("code", out var code)
+           && code.ValueKind == JsonValueKind.String
+           && string.Equals(code.GetString(), "00", StringComparison.Ordinal);
+
     public static string SignPaymentRequest(long orderCode, int amount, string description, string cancelUrl, string returnUrl, string checksumKey)
     {
         var raw =

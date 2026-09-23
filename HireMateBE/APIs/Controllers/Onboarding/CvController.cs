@@ -77,8 +77,21 @@ public class CvController(ICvService svc, IWebHostEnvironment env) : HireMateCon
             && !fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
             fileName += ".pdf";
 
-        Response.Headers["Content-Disposition"] =
-            $"attachment; filename=\"{fileName}\"; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
+        // FileContentResult safely encodes Vietnamese file names in Content-Disposition.
         return File(file.Bytes, contentType, fileName);
+    }
+
+    [HttpPost("preview-draft")]
+    public async Task<IActionResult> PreviewDraft([FromBody] CvWizardDto dto)
+        => this.FromService(await svc.PreviewDraftAsync(UserId, dto));
+
+    [HttpGet("{id:guid}/preview")]
+    public async Task<IActionResult> Preview(Guid id)
+    {
+        var result = await svc.GetDownloadAsync(UserId, id);
+        if (result.Status <= 0 || result.Data is not HireMate.Modules.Onboarding.Services.FileDownloadDto file)
+            return this.FromService(result);
+        Response.Headers["Content-Disposition"] = "inline";
+        return File(file.Bytes, file.ContentType);
     }
 }

@@ -113,6 +113,26 @@ const tryRefreshToken = async (): Promise<string | null> => {
   }
 };
 
+/** Raw authenticated fetch for binary endpoints, with the same access-token refresh behavior as apiClient. */
+export const authenticatedFetch = async (endpoint: string, init: RequestInit = {}): Promise<Response> => {
+  const url = endpoint.startsWith('http://') || endpoint.startsWith('https://')
+    ? endpoint
+    : buildUrl(endpoint);
+  const execute = (token: string | null) => fetch(url, {
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  let response = await execute(localStorage.getItem('hm_access_token'));
+  if (response.status !== 401) return response;
+  const refreshed = await tryRefreshToken();
+  if (refreshed) response = await execute(refreshed);
+  return response;
+};
+
 const handleResponse = async <T>(response: Response): Promise<ApiResponse<T>> => {
   let body: any = {};
   const contentType = response.headers.get('content-type');

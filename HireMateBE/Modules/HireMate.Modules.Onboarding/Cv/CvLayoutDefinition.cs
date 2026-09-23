@@ -25,13 +25,25 @@ public sealed class CvLayoutDefinition
     [JsonPropertyName("style")]
     public CvStyle Style { get; set; } = new();
 
+    [JsonPropertyName("page")]
+    public CvPageLayout Page { get; set; } = new();
+
+    [JsonPropertyName("header")]
+    public CvHeaderLayout Header { get; set; } = new();
+
+    [JsonPropertyName("entry")]
+    public CvEntryLayout Entry { get; set; } = new();
+
     public static CvLayoutDefinition Modern01() => new()
     {
         LayoutKey = "modern-01",
-        Sections = ["personal", "objective", "education", "experience", "skills", "projects"],
-        Typography = new CvTypography { FontFamily = "Arial", TitleSize = 20, BodySize = 11, SectionTitleSize = 12 },
-        Spacing = new CvSpacing { Margin = 40, SectionGap = 10 },
-        Style = new CvStyle { AccentHex = "#0284C7", HeaderRule = true, TwoColumn = false }
+        Sections = ["personal", "objective", "education", "experience", "activities", "certifications", "skills", "hobbies", "references", "projects"],
+        Typography = new CvTypography { FontFamily = "Roboto", TitleSize = 18.01f, BodySize = 9.75f, SectionTitleSize = 12.01f },
+        Spacing = new CvSpacing { Margin = 18, SectionGap = 12 },
+        Style = new CvStyle { AccentHex = "#2F5173", HeaderRule = true, TwoColumn = false },
+        Page = new CvPageLayout { Size = "A4", MarginTop = 12, MarginRight = 15, MarginBottom = 18, MarginLeft = 18, SeparatorWidth = 0.75f },
+        Header = new CvHeaderLayout { AvatarWidth = 89.29f, AvatarHeight = 118.55f, Gap = 19.3f },
+        Entry = new CvEntryLayout { DateColumnWidth = 108.6f, ContentColumnRatio = 0.81f, Bullet = "•" }
     };
 
     public static CvLayoutDefinition Modern02() => new()
@@ -88,6 +100,30 @@ public sealed class CvStyle
     [JsonPropertyName("accentHex")] public string AccentHex { get; set; } = "#0284C7";
     [JsonPropertyName("headerRule")] public bool HeaderRule { get; set; } = true;
     [JsonPropertyName("twoColumn")] public bool TwoColumn { get; set; }
+}
+
+public sealed class CvPageLayout
+{
+    [JsonPropertyName("size")] public string Size { get; set; } = "A4";
+    [JsonPropertyName("marginTop")] public float MarginTop { get; set; } = 18;
+    [JsonPropertyName("marginRight")] public float MarginRight { get; set; } = 18;
+    [JsonPropertyName("marginBottom")] public float MarginBottom { get; set; } = 18;
+    [JsonPropertyName("marginLeft")] public float MarginLeft { get; set; } = 18;
+    [JsonPropertyName("separatorWidth")] public float SeparatorWidth { get; set; } = 0.75f;
+}
+
+public sealed class CvHeaderLayout
+{
+    [JsonPropertyName("avatarWidth")] public float AvatarWidth { get; set; } = 89.29f;
+    [JsonPropertyName("avatarHeight")] public float AvatarHeight { get; set; } = 118.55f;
+    [JsonPropertyName("gap")] public float Gap { get; set; } = 19.3f;
+}
+
+public sealed class CvEntryLayout
+{
+    [JsonPropertyName("dateColumnWidth")] public float DateColumnWidth { get; set; } = 108.6f;
+    [JsonPropertyName("contentColumnRatio")] public float ContentColumnRatio { get; set; } = 0.81f;
+    [JsonPropertyName("bullet")] public string Bullet { get; set; } = "•";
 }
 
 /// <summary>Well-known system template IDs (stable for seed/migration).</summary>

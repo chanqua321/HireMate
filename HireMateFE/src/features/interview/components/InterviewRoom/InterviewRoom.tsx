@@ -54,26 +54,17 @@ function formatEvidenceLabel(status?: string | null): string {
 
 function formatAnalysisSummary(a?: AnswerAnalysis | null): string {
   if (!a || !a.analysisAvailable) {
-    return '📊 Phân tích: Analysis unavailable (câu trả lời vẫn đã được lưu).';
+    return 'Tôi đã ghi nhận câu trả lời của Bạn. Hiện tôi chưa thể đưa ra nhận xét chi tiết.';
   }
-  const lines: string[] = ['📊 Phân tích câu trả lời:'];
-  if (a.relevance != null) lines.push(`• Relevance: ${a.relevance}`);
-  if (a.completeness != null) lines.push(`• Completeness: ${a.completeness}`);
-  if (a.communication != null) lines.push(`• Communication: ${a.communication}`);
-  if (a.technicalKnowledge != null) lines.push(`• Technical knowledge: ${a.technicalKnowledge}`);
-  if (a.problemSolving != null) lines.push(`• Problem solving: ${a.problemSolving}`);
-  if (a.starScore != null) {
-    const parts = [
-      a.starSituation ? 'S✓' : 'S✗',
-      a.starTask ? 'T✓' : 'T✗',
-      a.starAction ? 'A✓' : 'A✗',
-      a.starResult ? 'R✓' : 'R✗',
-    ];
-    lines.push(`• STAR: ${a.starScore} (${parts.join(' ')})`);
-  }
-  if (a.cvConsistency != null) lines.push(`• CV consistency: ${a.cvConsistency}`);
-  lines.push(`• Evidence: ${formatEvidenceLabel(a.evidenceStatus)}`);
-  if (a.followUpReason) lines.push(`• Gợi ý đào sâu: ${a.followUpReason}`);
+  const lines: string[] = [a.feedbackComment || 'Tôi đã ghi nhận câu trả lời của Bạn. Bạn có thể bổ sung ví dụ cụ thể để làm rõ hơn.'];
+  const scores = [
+    a.relevance != null ? `Đúng trọng tâm ${a.relevance}` : null,
+    a.completeness != null ? `Đầy đủ ${a.completeness}` : null,
+    a.communication != null ? `Diễn đạt ${a.communication}` : null,
+    a.cvConsistency != null ? `Khớp CV ${a.cvConsistency}` : null,
+  ].filter(Boolean);
+  if (scores.length) lines.push(`Điểm: ${scores.join(' · ')}`);
+  if (a.starTip) lines.push(`Mẹo ngắn: ${a.starTip}`);
   return lines.join('\n');
 }
 
@@ -454,6 +445,24 @@ export const InterviewRoom: React.FC = () => {
         });
         if (res.ok && res.data) {
           submitResult = res.data;
+          const suggestedNext = submitResult.nextQuestion;
+          if (suggestedNext?.content) {
+            const replaceAt = currentIndex + 1;
+            setQuestions((prev) => {
+              const next = [...prev];
+              next[replaceAt] = {
+                cat: suggestedNext.category || 'CV-based',
+                q: suggestedNext.content,
+                hint: suggestedNext.hint || '',
+              };
+              return next;
+            });
+            setQuestionIds((prev) => {
+              const next = [...prev];
+              next[replaceAt] = suggestedNext.questionId || '';
+              return next;
+            });
+          }
           // Insert adaptive follow-up into local question list if returned
           const fu = submitResult.followUp;
           if (fu?.content) {
@@ -571,6 +580,8 @@ export const InterviewRoom: React.FC = () => {
     const nextQ =
       submitResult?.followUp?.content
         ? { q: submitResult.followUp.content, cat: 'Follow-up', hint: submitResult.followUp.hint || '' }
+        : submitResult?.nextQuestion?.content
+        ? { q: submitResult.nextQuestion.content, cat: submitResult.nextQuestion.category || 'CV-based', hint: submitResult.nextQuestion.hint || '' }
         : questions[nextIdx];
 
     const analysisBlock = analysisNote ? `${analysisNote}\n\n` : '';
@@ -720,6 +731,24 @@ export const InterviewRoom: React.FC = () => {
     ];
 
     // Mirror follow-up insertion from proceedWithAnswer
+    if (submitResult?.nextQuestion?.content) {
+      const suggestedNext = submitResult.nextQuestion;
+      const replaceAt = currentIndex + 1;
+      setQuestions((prev) => {
+        const next = [...prev];
+        next[replaceAt] = {
+          cat: suggestedNext.category || 'CV-based',
+          q: suggestedNext.content,
+          hint: suggestedNext.hint || '',
+        };
+        return next;
+      });
+      setQuestionIds((prev) => {
+        const next = [...prev];
+        next[replaceAt] = suggestedNext.questionId || '';
+        return next;
+      });
+    }
     if (submitResult?.followUp?.content) {
       const fu = submitResult.followUp;
       const insertAt = typeof fu.orderIndex === 'number' ? fu.orderIndex : currentIndex + 1;
@@ -753,7 +782,7 @@ export const InterviewRoom: React.FC = () => {
     }
 
     const nextIdx = currentIndex + 1;
-    const nextQ = questions[nextIdx]?.q || 'Câu hỏi tiếp theo';
+    const nextQ = submitResult?.followUp?.content || submitResult?.nextQuestion?.content || questions[nextIdx]?.q || 'Câu hỏi tiếp theo';
     const aiFeedback = analysisNote
       ? `${analysisNote}\n\n📌 Câu hỏi tiếp theo:\n${nextQ}`
       : `Cảm ơn bạn. 📌 Câu hỏi tiếp theo:\n${nextQ}`;
@@ -1087,14 +1116,6 @@ export const InterviewRoom: React.FC = () => {
             )}
 
             <div className="room-actions-bar">
-              <div className="coach-hint-inline">
-                <Sparkles size={16} color="#03bfff" />
-                <span>
-                  Mẹo STAR: Mở đầu bằng Bối cảnh (S) & kết thúc bằng Kết quả (R)
-                  có số liệu.
-                </span>
-              </div>
-
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
                   type="button"

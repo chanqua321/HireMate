@@ -10,18 +10,17 @@ namespace Infrastructure.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(IServiceProvider services)
+    public static async Task SeedAsync(IServiceProvider services, bool isDevelopment)
     {
         using var scope = services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<HireMateContext>();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
         var logger = scope.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("DbSeeder");
 
-        await EnsureDatabaseCreatedAndMigratedAsync(context, logger);
+        await EnsureDatabaseCreatedAndMigratedAsync(context, logger, isDevelopment);
 
         await EnsureRoleAsync(roleManager, "User", "Default HireMate user");
         await EnsureRoleAsync(roleManager, "Admin", "System administrator");
-        await CleanupLegacyB2BDataAsync(context, roleManager, scope.ServiceProvider);
         await SeedQuestionsAsync(context);
         await SeedCmsAndPlansAsync(context);
         await SeedBadgesAsync(context);
@@ -35,7 +34,7 @@ public static class DbSeeder
     /// LocalDB đôi khi giữ catalog HireMateDB trong khi file .mdf đã mất — EF coi là chưa có DB,
     /// gọi CREATE DATABASE rồi dính lỗi 1801. Trường hợp đó drop catalog mồ côi rồi tạo lại.
     /// </summary>
-    private static async Task EnsureDatabaseCreatedAndMigratedAsync(HireMateContext context, ILogger? logger)
+    private static async Task EnsureDatabaseCreatedAndMigratedAsync(HireMateContext context, ILogger? logger, bool isDevelopment)
     {
         if (await TrySkipWhenDatabaseReadyAsync(context, logger))
             return;
@@ -56,7 +55,7 @@ public static class DbSeeder
                 last = ex;
                 try
                 {
-                    if (await TryDropOrphanedDatabaseAsync(context, logger))
+                    if (isDevelopment && await TryDropOrphanedDatabaseAsync(context, logger))
                         continue;
                 }
                 catch (Exception dropEx)
@@ -136,6 +135,9 @@ public static class DbSeeder
             return false;
 
         var builder = new SqlConnectionStringBuilder(connectionString);
+        if (!OperatingSystem.IsWindows()
+            || !builder.DataSource.Contains("(localdb)", StringComparison.OrdinalIgnoreCase))
+            return false;
         var dbName = builder.InitialCatalog;
         if (string.IsNullOrWhiteSpace(dbName) || !Regex.IsMatch(dbName, @"^[\w$-]+$"))
             return false;
@@ -336,62 +338,6 @@ public static class DbSeeder
     }
 
     private const string AdminEmail = "admin@gmail.com";
-
-    private static async Task CleanupLegacyB2BDataAsync(
-        HireMateContext context,
-        RoleManager<Role> roleManager,
-        IServiceProvider sp)
-    {
-        var users = sp.GetRequiredService<UserManager<UserAccount>>();
-
-        if (await context.OrganizationMembers.AnyAsync())
-        {
-            context.OrganizationMembers.RemoveRange(await context.OrganizationMembers.ToListAsync());
-            await context.SaveChangesAsync();
-        }
-
-        if (await context.Organizations.AnyAsync())
-        {
-            context.Organizations.RemoveRange(await context.Organizations.ToListAsync());
-            await context.SaveChangesAsync();
-        }
-
-        foreach (var email in new[] { "uni@hiremate.local", "enterprise@hiremate.local", "student@hiremate.local" })
-        {
-            var u = await users.FindByEmailAsync(email);
-            if (u != null)
-                await users.DeleteAsync(u);
-        }
-
-        foreach (var legacyRole in new[] { "UniversityAdmin", "EnterpriseAdmin" })
-        {
-            if (!await roleManager.RoleExistsAsync(legacyRole))
-                continue;
-
-            var members = await users.GetUsersInRoleAsync(legacyRole);
-            foreach (var member in members)
-            {
-                await users.RemoveFromRoleAsync(member, legacyRole);
-                if (!await users.IsInRoleAsync(member, "User"))
-                    await users.AddToRoleAsync(member, "User");
-            }
-
-            var roleEntity = await roleManager.FindByNameAsync(legacyRole);
-            if (roleEntity != null)
-                await roleManager.DeleteAsync(roleEntity);
-        }
-
-        var admins = await users.GetUsersInRoleAsync("Admin");
-        foreach (var adminUser in admins)
-        {
-            if (!string.Equals(adminUser.Email, AdminEmail, StringComparison.OrdinalIgnoreCase))
-            {
-                await users.RemoveFromRoleAsync(adminUser, "Admin");
-                if (!await users.IsInRoleAsync(adminUser, "User"))
-                    await users.AddToRoleAsync(adminUser, "User");
-            }
-        }
-    }
 
     private static async Task SeedAdminAsync(IServiceProvider sp)
     {

@@ -18,6 +18,7 @@ import {
   Pencil,
   LayoutTemplate,
   BookmarkPlus,
+  RefreshCw,
 } from 'lucide-react';
 import { UserCvCard } from '../Dashboard';
 import type { CvTemplateDto } from '../../../../../shared/services/cv.service';
@@ -36,8 +37,10 @@ interface MultiCvHubProps {
   fileInputRef: React.RefObject<HTMLInputElement>;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>, displayName?: string) => void;
   onSelectActiveCv: (cv: UserCvCard) => void | Promise<void>;
+  onAnalyzeCv?: (cv: UserCvCard) => void | Promise<void>;
   onDeleteCv: (id: string, title: string) => void | Promise<void>;
   onOpenDetailModal: (cv: UserCvCard) => void;
+  onPreviewCv?: (cv: UserCvCard) => void | Promise<void>;
   onNavigateInterview: () => void;
   onSwitchToMatch: (cvId: string) => void;
   onDownloadCv?: (cv: UserCvCard) => void;
@@ -60,8 +63,10 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
   fileInputRef,
   onFileUpload,
   onSelectActiveCv,
+  onAnalyzeCv,
   onDeleteCv,
   onOpenDetailModal,
+  onPreviewCv,
   onNavigateInterview,
   onSwitchToMatch,
   onDownloadCv,
@@ -108,24 +113,16 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
     </div>
   );
 
-  const renderTemplateLine = (cv: UserCvCard) =>
-    cv.templateName ? (
-      <div className="cv-template-line">
-        <LayoutTemplate size={13} />
-        <span>Mẫu: {cv.templateName}</span>
-      </div>
-    ) : null;
-
   const renderSecondaryActions = (cv: UserCvCard, compact = false) => (
     <div className={compact ? 'cv-item-secondary-btns' : 'cv-extra-actions'}>
       <button
         type="button"
         className={compact ? 'icon-detail-btn' : 'action-btn-detail'}
-        onClick={() => onOpenDetailModal(cv)}
-        title="Xem chi tiết / Phân tích"
+        onClick={() => onPreviewCv ? void onPreviewCv(cv) : onOpenDetailModal(cv)}
+        title="Xem trước CV thực tế"
       >
         <Eye size={compact ? 15 : 16} />
-        {!compact && <span>Xem / Phân tích</span>}
+        {!compact && <span>Xem trước</span>}
       </button>
       {onRenameCv && (
         <button
@@ -136,6 +133,18 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
         >
           <Pencil size={compact ? 15 : 16} />
           {!compact && <span>Đổi tên</span>}
+        </button>
+      )}
+      {onDownloadCv && compact && (
+        <button
+          type="button"
+          className={compact ? 'icon-detail-btn' : 'action-btn-detail'}
+          onClick={() => onDownloadCv(cv)}
+          disabled={cv.canDownload === false}
+          title={cv.canDownload === false ? 'File CV không còn trên máy chủ' : 'Tải đúng file CV này'}
+        >
+          <Download size={compact ? 15 : 16} />
+          {!compact && <span>Tải CV</span>}
         </button>
       )}
       {onChangeCvTemplate && templates.length > 0 && (
@@ -345,7 +354,6 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
               </div>
 
               {renderMetaLine(activeCv)}
-              {renderTemplateLine(activeCv)}
 
               {activeCv.filename && activeCv.filename !== activeCv.title && (
                 <div className="cv-filename-sub">File: {activeCv.filename}</div>
@@ -418,6 +426,7 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                   type="button"
                   className="action-btn-detail"
                   onClick={() => onDownloadCv(activeCv)}
+                  disabled={activeCv.canDownload === false}
                   title="Tải CV về máy (PDF)"
                 >
                   <Download size={16} />
@@ -482,11 +491,10 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                       {cv.title}
                     </span>
                   </div>
-                  <div className="cv-item-score-badge">{cv.atsScore}/100 ATS</div>
+                  <div className="cv-item-score-badge">{cv.parseSucceeded ? `${cv.atsScore}/100 ATS` : 'Chưa chấm điểm'}</div>
                 </div>
 
                 {renderMetaLine(cv)}
-                {renderTemplateLine(cv)}
 
                 <div className="cv-item-skills-preview">
                   {cv.skills.slice(0, 4).map((s) => (
@@ -499,6 +507,11 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                   )}
                 </div>
 
+                {!cv.parseSucceeded && onAnalyzeCv && (
+                  <button type="button" className="set-active-cv-btn cv-item-analyze-btn" onClick={() => void onAnalyzeCv(cv)} title="Thử chấm điểm CV">
+                    <RefreshCw size={14} /><span>Chấm điểm CV</span>
+                  </button>
+                )}
                 <div className="cv-item-footer-actions">
                   <button
                     type="button"

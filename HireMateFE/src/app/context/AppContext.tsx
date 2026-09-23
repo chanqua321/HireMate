@@ -11,7 +11,6 @@ import {
   DEFAULT_INTERVIEW_CONFIG,
   sanitizeAutoFilledProfile,
 } from '../../shared/config/constants';
-import { SAMPLE_HISTORY, SAMPLE_LAST_RESULT } from '../../shared/data/sampleHistory';
 import { profileService } from '../../shared/services';
 import { authService } from '../../features/auth';
 
@@ -31,6 +30,17 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const USER_SCOPED_STORAGE_KEYS = [
+  STORAGE_KEYS.PROFILE,
+  STORAGE_KEYS.INTERVIEW_CONFIG,
+  STORAGE_KEYS.HISTORY,
+  STORAGE_KEYS.LAST_RESULT,
+  'hm_saved_user_cvs',
+  'hm_active_cv_id',
+  'hm_active_cv',
+  'hm_avatar_url',
+];
 
 const safeReadJSON = <T,>(key: string, fallback: T): T => {
   try {
@@ -67,14 +77,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 
   const [history, setHistoryState] = useState<HistoryItem[]>(() =>
-    safeReadJSON<HistoryItem[]>(STORAGE_KEYS.HISTORY, SAMPLE_HISTORY)
+    safeReadJSON<HistoryItem[]>(STORAGE_KEYS.HISTORY, [])
   );
 
   const [lastResult, setLastResultState] = useState<InterviewResult | null>(() =>
-    safeReadJSON<InterviewResult | null>(
-      STORAGE_KEYS.LAST_RESULT,
-      SAMPLE_LAST_RESULT
-    )
+    safeReadJSON<InterviewResult | null>(STORAGE_KEYS.LAST_RESULT, null)
   );
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
@@ -132,9 +139,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const logout = useCallback(() => {
     authService.logout().catch(() => {});
+    USER_SCOPED_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
     setIsLoggedIn(false);
-    updateProfile({ name: '' });
-  }, [updateProfile]);
+    setProfileState(DEFAULT_PROFILE);
+    setInterviewConfigState(DEFAULT_INTERVIEW_CONFIG);
+    setHistoryState([]);
+    setLastResultState(null);
+  }, []);
 
   const refreshProfile = useCallback(async () => {
     if (!localStorage.getItem('hm_access_token')) return;

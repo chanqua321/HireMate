@@ -140,11 +140,15 @@ public class CvTemplateService(IUnitOfWork uow) : ICvTemplateService
                 && t.IsActive
                 && (t.IsSystemTemplate || t.UserId == userId));
 
-    private static object Map(CvTemplate t, bool limitationNoted = false) => new
+    private static object Map(CvTemplate t, bool limitationNoted = false)
     {
+        var publicName = CvTemplateDisplay.Name(t.IsSystemTemplate, t.LayoutKey, t.Name);
+        var publicDescription = CvTemplateDisplay.Description(t.LayoutKey, t.Description);
+        return new
+        {
         t.Id,
-        t.Name,
-        t.Description,
+        name = publicName,
+        description = publicDescription,
         t.PreviewUrl,
         t.TemplateType,
         t.LayoutKey,
@@ -159,7 +163,8 @@ public class CvTemplateService(IUnitOfWork uow) : ICvTemplateService
         note = limitationNoted
             ? "Custom template lưu layout metadata từ template gốc của CV; không clone pixel-perfect từ file PDF."
             : null
-    };
+        };
+    }
 
     private static object? SafeParseLayout(string? json)
     {

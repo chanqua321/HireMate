@@ -1,136 +1,77 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useSearchParams, useLocation } from 'react-router-dom';
-import { CheckCircle, ArrowRight, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { CheckCircle, ArrowRight, FileText, Loader2, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useConfetti } from '../../../../shared/hooks';
 import { billingService } from '../../api/billing.service';
 import { useApp } from '../../../../app/context/AppContext';
 import './css/PaymentSuccess.css';
 
-const PLAN_SUCCESS_MAP: Record<
-  string,
-  {
-    title: string;
-    packageName: string;
-    price: string;
-  }
-> = {
-  free: {
-    title: 'Chào mừng bạn đến với Gói Miễn phí!',
-    packageName: 'Gói Miễn phí - 1 tháng',
-    price: '0đ',
-  },
-  basic: {
-    title: 'Chào mừng bạn đến với Gói Cơ Bản!',
-    packageName: 'Gói Cơ Bản - 1 tháng',
-    price: '79.000đ',
-  },
-  pro: {
-    title: 'Chào mừng bạn đến với Gói Nâng Cao!',
-    packageName: 'Gói Nâng Cao - 1 tháng',
-    price: '149.000đ',
-  },
-  premium: {
-    title: 'Chào mừng bạn đến với Gói Cao Cấp!',
-    packageName: 'Gói Cao Cấp - 1 tháng',
-    price: '149.000đ',
-  },
-};
+type VerificationState =
+  | { status: 'loading' }
+  | { status: 'paid'; invoiceNumber: string; planName: string; amount: number }
+  | { status: 'failed'; message: string };
 
 export const PaymentSuccess: React.FC = () => {
-  const { triggerConfetti } = useConfetti();
   const { refreshProfile } = useApp();
   const [searchParams] = useSearchParams();
-  const location = useLocation();
-
-  const planKey = (searchParams.get('plan') || 'pro').toLowerCase();
-  const invoiceParam = searchParams.get('invoice') || '';
-  const planInfo = PLAN_SUCCESS_MAP[planKey] || {
-    title: `Chào mừng bạn đến với gói ${planKey}!`,
-    packageName: `Gói ${planKey}`,
-    price: '',
-  };
-
-  const [isVerifying, setIsVerifying] = useState(false);
+  const invoiceId = searchParams.get('invoice') || '';
+  const [verification, setVerification] = useState<VerificationState>({ status: 'loading' });
 
   useEffect(() => {
-    triggerConfetti();
-
-    // If returning from VNPay or PayOS with query parameters
-    if (location.search && (location.search.includes('vnp_') || location.search.includes('code='))) {
-      setIsVerifying(true);
-      billingService.handleVnPayReturn(location.search)
-        .then(() => {
-          if (refreshProfile) refreshProfile();
-        })
-        .catch(() => {})
-        .finally(() => setIsVerifying(false));
-    } else {
-      if (refreshProfile) refreshProfile();
+    let alive = true;
+    if (!invoiceId) {
+      setVerification({ status: 'failed', message: 'Thiếu mã hóa đơn để xác nhận thanh toán.' });
+      return;
     }
-  }, [triggerConfetti, location.search]);
+
+    billingService.getInvoiceDetail(invoiceId)
+      .then(async (res) => {
+        if (!alive) return;
+        const invoice = res.data;
+        if (!res.ok || !invoice || invoice.status !== 'Paid') {
+          setVerification({ status: 'failed', message: res.message || 'Thanh toán chưa được máy chủ xác nhận.' });
+          return;
+        }
+        await refreshProfile();
+        if (!alive) return;
+        setVerification({
+          status: 'paid',
+          invoiceNumber: invoice.invoiceNumber || invoice.id,
+          planName: invoice.plan?.name || invoice.plan?.code || 'Gói HireMate',
+          amount: invoice.amountVnd,
+        });
+      })
+      .catch(() => {
+        if (alive) setVerification({ status: 'failed', message: 'Không thể xác minh hóa đơn với máy chủ.' });
+      });
+
+    return () => { alive = false; };
+  }, [invoiceId, refreshProfile]);
+
+  if (verification.status === 'loading') {
+    return <div className="payment-success-page"><div className="payment-success-card"><Loader2 className="animate-spin" /><p>Đang xác minh thanh toán với máy chủ…</p></div></div>;
+  }
+
+  if (verification.status === 'failed') {
+    return <div className="payment-success-page"><div className="payment-success-card"><XCircle size={38} /><h2>Thanh toán chưa được xác nhận</h2><p>{verification.message}</p><Link to="/pricing" className="payment-btn-primary">Về bảng giá <ArrowRight size={18} /></Link></div></div>;
+  }
 
   return (
     <div className="payment-success-page">
-      <motion.div
-        className="payment-success-card"
-        initial={{ opacity: 0, scale: 0.92, y: 15 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: 'easeOut' }}
-      >
-        <motion.div
-          className="payment-success-icon-wrap"
-          initial={{ scale: 0.5, rotate: -20 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-        >
-          <CheckCircle size={38} />
-        </motion.div>
-
-        <span className="payment-success-badge">
-          <Sparkles size={15} /> Thanh toán thành công
-        </span>
-        <h2 className="payment-success-title">{planInfo.title}</h2>
-        <p className="payment-success-subtitle">
-          Tài khoản HireMate của bạn đã được kích hoạt đầy đủ quyền lợi phỏng vấn AI cao cấp.
-        </p>
-
+      <motion.div className="payment-success-card" initial={{ opacity: 0, scale: 0.92, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.35, ease: 'easeOut' }}>
+        <div className="payment-success-icon-wrap"><CheckCircle size={38} /></div>
+        <h2 className="payment-success-title">Thanh toán thành công</h2>
+        <p className="payment-success-subtitle">Quyền lợi được xác nhận từ hóa đơn trên máy chủ.</p>
         <div className="payment-receipt-box">
-          <div className="receipt-row">
-            <span className="receipt-label">Mã đơn hàng</span>
-            <span className="receipt-value">#{invoiceParam}</span>
-          </div>
-          <div className="receipt-row">
-            <span className="receipt-label">Gói cước</span>
-            <span className="receipt-value">{planInfo.packageName}</span>
-          </div>
-          <div className="receipt-row">
-            <span className="receipt-label">Số tiền thanh toán</span>
-            <span className="receipt-value receipt-value--price">{planInfo.price}</span>
-          </div>
-          <div className="receipt-row">
-            <span className="receipt-label">Trạng thái</span>
-            <span className="badge badge--success">
-              {isVerifying ? 'Đang xác thực...' : 'Đã thanh toán'}
-            </span>
-          </div>
+          <div className="receipt-row"><span className="receipt-label">Mã đơn hàng</span><span className="receipt-value">#{verification.invoiceNumber}</span></div>
+          <div className="receipt-row"><span className="receipt-label">Gói cước</span><span className="receipt-value">{verification.planName}</span></div>
+          <div className="receipt-row"><span className="receipt-label">Số tiền thanh toán</span><span className="receipt-value receipt-value--price">{verification.amount.toLocaleString('vi-VN')}đ</span></div>
+          <div className="receipt-row"><span className="receipt-label">Trạng thái</span><span className="badge badge--success">Đã thanh toán</span></div>
         </div>
-
         <div className="payment-actions">
-          <Link to="/onboarding/summary" className="payment-btn-primary">
-            <span>Xác nhận hồ sơ & Phỏng vấn AI</span>
-            <ArrowRight size={18} />
-          </Link>
-          <Link to="/dashboard?tab=scan" className="payment-btn-ghost">
-            <span>Về Kho CV</span>
-          </Link>
-          <Link
-            to={`/invoice?plan=${planKey}&invoice=${invoiceParam}`}
-            className="payment-btn-ghost"
-          >
-            <FileText size={18} />
-            <span>Xem hóa đơn điện tử</span>
-          </Link>
+          <Link to="/onboarding/summary" className="payment-btn-primary"><span>Xác nhận hồ sơ & Phỏng vấn AI</span><ArrowRight size={18} /></Link>
+          <Link to="/dashboard?tab=scan" className="payment-btn-ghost"><span>Về Kho CV</span></Link>
+          <Link to={`/invoice?invoice=${encodeURIComponent(invoiceId)}`} className="payment-btn-ghost"><FileText size={18} /><span>Xem hóa đơn điện tử</span></Link>
         </div>
       </motion.div>
     </div>

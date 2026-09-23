@@ -9,7 +9,7 @@ public static class ActiveCvConfirmPolicy
     /// <summary>
     /// Returns the CV id onboarding confirm should keep.
     /// Existing owned confirmed id always wins.
-    /// Latest analyzed is used only when there is no confirmed id yet (one-time).
+    /// Never selects a latest/first CV implicitly. Activation is an explicit user action.
     /// </summary>
     public static Guid? ResolveOnboardingTarget(
         Guid? existingConfirmedId,
@@ -19,10 +19,6 @@ public static class ActiveCvConfirmPolicy
         if (existingConfirmedId.HasValue && existingOwned)
             return existingConfirmedId;
 
-        if (!existingConfirmedId.HasValue)
-            return latestAnalyzedId;
-
-        // Dangling ConfirmedCvDocumentId (CV deleted / not owned): one-time fallback only.
-        return latestAnalyzedId;
+        return null;
     }
 }

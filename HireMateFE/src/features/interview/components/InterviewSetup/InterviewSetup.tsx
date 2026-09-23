@@ -37,6 +37,7 @@ interface CustomSelectProps {
   options: string[];
   onChange: (val: string) => void;
   icon: React.ReactNode;
+  disabled?: boolean;
 }
 
 const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -45,6 +46,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   options,
   onChange,
   icon,
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,8 +70,9 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     <div className="custom-select-wrap" ref={containerRef}>
       <button
         type="button"
+        disabled={disabled}
         className={`custom-select-trigger ${isOpen ? 'is-open' : ''}`}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => { if (!disabled) setIsOpen((prev) => !prev); }}
       >
         <div className="trigger-left">
           <div className="trigger-icon">{icon}</div>
@@ -139,12 +142,13 @@ export const InterviewSetup: React.FC = () => {
   const [activeCvInfo, setActiveCvInfo] = useState<any>(null);
   const [backendActiveCvId, setBackendActiveCvId] = useState<string | null>(null);
   const [cvOptions, setCvOptions] = useState<
-    { id: string; title: string; role?: string; field?: string; parseSucceeded?: boolean }[]
+    { id: string; title: string; role?: string; field?: string; major?: string; parseSucceeded?: boolean }[]
   >([]);
   // Operation CV: fromCv or user pick. Empty string = use Active (send null to API).
   const [selectedOpCvId, setSelectedOpCvId] = useState<string>(() =>
     cvFromState?.id ? String(cvFromState.id) : ''
   );
+  const interviewCv = cvOptions.find(c => c.id === (selectedOpCvId || cvFromState?.id)) || activeCvInfo;
 
   // Career Profile extra info from GET /api/Career/profile
   const [careerSkills, setCareerSkills] = useState<string[]>([]);
@@ -223,15 +227,31 @@ export const InterviewSetup: React.FC = () => {
       .catch(() => undefined);
   }, []);
 
-  // Hydrate plan + Active CV from backend (SoT). localStorage only seeds UI until this resolves.
+  const mapCvOption = (c: any, fallbackRole?: string, fallbackField?: string) => {
+    const display =
+      c.displayName ||
+      c.DisplayName ||
+      c.fileName ||
+      c.parsedProfile?.desiredPosition ||
+      'CV';
+    return {
+      id: String(c.id),
+      title: display,
+      fileName: c.fileName || '',
+      role: c.targetRole || c.parsedProfile?.desiredPosition || fallbackRole || '',
+      field: c.targetField || fallbackField || '',
+      major: c.targetMajor || c.parsedProfile?.major || '',
+      parseSucceeded: c.parseSucceeded,
+    };
+  };
+
+  // Hydrate plan + Active CV from backend (SoT). fromCv is operation selection only — never Active.
   useEffect(() => {
     if (cvFromState) {
       const f = normalizeIndustry(cvFromState.field);
       const r = normalizeRole(cvFromState.role, f);
       setField(f);
       setRole(r);
-      setActiveCvInfo(cvFromState);
-      if (cvFromState.id) setBackendActiveCvId(String(cvFromState.id));
       updateInterviewConfig({ field: f, role: r });
     }
 
@@ -290,56 +310,43 @@ export const InterviewSetup: React.FC = () => {
         if (typeof hub?.sessionsCount === 'number') setCareerSessionsCount(hub.sessionsCount);
 
         const cvs = cvRes.ok && Array.isArray(cvRes.data) ? cvRes.data : [];
+        const options = cvs.map((c) =>
+          mapCvOption(c, cp?.desiredPosition, cp?.desiredIndustry)
+        );
+        setCvOptions(options);
+
+        // Active = ConfirmedCvDocumentId only. Never latest / first / isActive-without-confirmed.
         const activeDto =
-          (confirmedId && cvs.find((c) => String(c.id) === confirmedId)) ||
-          cvs.find((c) => c.isConfirmed || c.isActive) ||
-          null;
+          confirmedId ? cvs.find((c) => String(c.id) === confirmedId) : undefined;
 
         if (activeDto) {
-          const display =
-            (activeDto as any).displayName ||
-            (activeDto as any).DisplayName ||
-            activeDto.fileName ||
-            activeDto.parsedProfile?.desiredPosition ||
-            'CV đang dùng';
-          const mapped = {
-            id: activeDto.id,
-            title: display,
-            fileName: activeDto.fileName || '',
-            role:
-              activeDto.targetRole ||
-              activeDto.parsedProfile?.desiredPosition ||
-              cp?.desiredPosition ||
-              '',
-            field:
-              activeDto.targetField ||
-              cp?.desiredIndustry ||
-              '',
-            parseSucceeded: activeDto.parseSucceeded,
-          };
+          const mapped = mapCvOption(activeDto, cp?.desiredPosition, cp?.desiredIndustry);
           setBackendActiveCvId(String(activeDto.id));
           setActiveCvInfo(mapped);
           try {
             localStorage.setItem('hm_active_cv_id', String(activeDto.id));
             localStorage.setItem('hm_active_cv', JSON.stringify(mapped));
           } catch {}
-          if (!cvFromState && (mapped.role || mapped.field)) {
-            const f = normalizeIndustry(mapped.field || field);
-            const r = normalizeRole(mapped.role || role, f);
-            setField(f);
-            setRole(r);
-            updateInterviewConfig({ field: f, role: r });
-          }
         } else {
-          // No server Confirmed — clear stale localStorage so it cannot impersonate Active.
           setBackendActiveCvId(confirmedId || null);
-          if (!cvFromState) {
-            setActiveCvInfo(null);
-            try {
-              localStorage.removeItem('hm_active_cv_id');
-              localStorage.removeItem('hm_active_cv');
-            } catch {}
-          }
+          setActiveCvInfo(null);
+          try {
+            localStorage.removeItem('hm_active_cv_id');
+            localStorage.removeItem('hm_active_cv');
+          } catch {}
+        }
+
+        if (selectedOpCvId && !options.some((o) => o.id === selectedOpCvId)) {
+          setSelectedOpCvId('');
+        }
+        const chosenForInterview = options.find(o => o.id === (selectedOpCvId || cvFromState?.id))
+          || (activeDto ? options.find(o => o.id === String(activeDto.id)) : undefined);
+        if (chosenForInterview && (chosenForInterview.role || chosenForInterview.field)) {
+          const f = chosenForInterview.field || field;
+          const r = chosenForInterview.role || role;
+          setField(f);
+          setRole(r);
+          updateInterviewConfig({ field: f, role: r });
         }
       } catch {
         /* keep local cache banner */
@@ -352,6 +359,7 @@ export const InterviewSetup: React.FC = () => {
   }, [cvFromState]);
 
   useEffect(() => {
+    if (interviewCv?.role) return;
     const validRoles = INDUSTRY_ROLES[field] || [];
     if (!validRoles.includes(role)) {
       const normalized = normalizeRole(role, field);
@@ -361,7 +369,7 @@ export const InterviewSetup: React.FC = () => {
         setRole(validRoles[0] || 'Lập trình viên Backend');
       }
     }
-  }, [field, role]);
+  }, [field, role, interviewCv?.role]);
 
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -569,13 +577,14 @@ export const InterviewSetup: React.FC = () => {
                   <span>
                     Hồ sơ phỏng vấn:{' '}
                     <strong style={{ color: '#0F172A' }}>
-                      {activeCvInfo?.title || role}
+                      {interviewCv?.title || role}
                     </strong>
-                    {!activeCvInfo?.title && role ? ` (${field})` : null}
-                    {activeCvInfo?.title && role ? (
+                    {!interviewCv?.title && role ? ` (${field})` : null}
+                    {interviewCv?.title && role ? (
                       <span style={{ color: '#64748B', marginLeft: 6, fontWeight: 500 }}>
                         · {role}
                         {field ? ` (${field})` : ''}
+                        {interviewCv?.major ? ` · ${interviewCv.major}` : ''}
                       </span>
                     ) : null}
                   </span>
@@ -600,10 +609,10 @@ export const InterviewSetup: React.FC = () => {
                   <ArrowRight size={13} />
                 </Link>
               </div>
-              {((activeCvInfo?.fileName || activeCvInfo?.filename) &&
-                (activeCvInfo.fileName || activeCvInfo.filename) !== activeCvInfo.title) && (
+              {((interviewCv?.fileName || interviewCv?.filename) &&
+                (interviewCv.fileName || interviewCv.filename) !== interviewCv.title) && (
                 <div style={{ color: '#94A3B8', fontSize: '0.75rem', paddingLeft: 25 }}>
-                  File: {activeCvInfo.fileName || activeCvInfo.filename}
+                  File: {interviewCv.fileName || interviewCv.filename}
                 </div>
               )}
 
@@ -663,7 +672,7 @@ export const InterviewSetup: React.FC = () => {
               <div style={{ marginBottom: '24px' }}>
                 <div className="setup-section-label">
                   <span className="setup-label-text">1. Chọn ngành nghề</span>
-                  <span className="setup-label-hint">Lĩnh vực hoạt động chuyên môn</span>
+                  <span className="setup-label-hint">{interviewCv?.field ? 'Lấy từ CV dùng để phỏng vấn' : 'Lĩnh vực hoạt động chuyên môn'}</span>
                 </div>
                 <CustomSelect
                   label="Lĩnh vực chuyên môn"
@@ -671,6 +680,7 @@ export const InterviewSetup: React.FC = () => {
                   options={industries}
                   onChange={(val) => setField(val)}
                   icon={<Briefcase size={20} />}
+                  disabled={!!interviewCv?.field}
                 />
               </div>
 
@@ -678,7 +688,7 @@ export const InterviewSetup: React.FC = () => {
               <div style={{ marginBottom: '28px' }}>
                 <div className="setup-section-label">
                   <span className="setup-label-text">2. Vị trí ứng tuyển</span>
-                  <span className="setup-label-hint">Vai trò công việc mục tiêu</span>
+                  <span className="setup-label-hint">{interviewCv?.role ? 'Lấy từ CV dùng để phỏng vấn' : 'Vai trò công việc mục tiêu'}</span>
                 </div>
                 <CustomSelect
                   label="Vị trí mục tiêu"
@@ -686,6 +696,7 @@ export const InterviewSetup: React.FC = () => {
                   options={currentRoles}
                   onChange={(val) => setRole(val)}
                   icon={<Award size={20} />}
+                  disabled={!!interviewCv?.role}
                 />
               </div>
 

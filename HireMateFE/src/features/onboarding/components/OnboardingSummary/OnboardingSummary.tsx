@@ -66,7 +66,7 @@ export const OnboardingSummary: React.FC = () => {
         // Server SoT only — never prefer localStorage / first CV over Confirmed.
         const chosen =
           (confirmedId && cvs.find((c: any) => String(c.id) === confirmedId)) ||
-          cvs.find((c: any) => c.isConfirmed || c.isActive) ||
+          cvs.find((c: any) => c.isActive) ||
           null;
 
         // Analyze + gợi ý sửa chỉ làm lúc tạo/upload CV — không kẹt ở bước này
