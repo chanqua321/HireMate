@@ -24,11 +24,13 @@ import {
   AlertTriangle,
   Compass,
   FileText,
+  UploadCloud,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { InterviewStepper } from '../InterviewStepper/InterviewStepper';
 import { InterviewSidebar } from './components/InterviewSidebar';
 import { InterviewTutorialModal } from './components/InterviewTutorialModal';
+import { CvRequiredModal } from '../../../../shared/components/CvRequiredModal/CvRequiredModal';
 import './css/InterviewSetup.css';
 
 interface CustomSelectProps {
@@ -149,6 +151,7 @@ export const InterviewSetup: React.FC = () => {
     cvFromState?.id ? String(cvFromState.id) : ''
   );
   const interviewCv = cvOptions.find(c => c.id === (selectedOpCvId || cvFromState?.id)) || activeCvInfo;
+  const [cvRequiredModalOpen, setCvRequiredModalOpen] = useState(false);
 
   // Career Profile extra info from GET /api/Career/profile
   const [careerSkills, setCareerSkills] = useState<string[]>([]);
@@ -415,7 +418,7 @@ export const InterviewSetup: React.FC = () => {
           : undefined;
 
     if (!cvDocumentId && !backendActiveCvId) {
-      setErrorMsg('ACTIVE_CV_REQUIRED: Hãy kích hoạt một CV trên Dashboard trước khi phỏng vấn.');
+      setCvRequiredModalOpen(true);
       return;
     }
 
@@ -522,40 +525,73 @@ export const InterviewSetup: React.FC = () => {
 
           {/* Setup Form Body */}
           <div className="setup-body">
-            {/* Onboarding Notice Warning Banner */}
-            {/* <AnimatePresence>
-              {showOnboardingWarning && isOnboardingIncomplete && (
-                <motion.div
-                  className="interview-onboarding-alert"
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                >
-                  <div className="alert-badge-icon">
-                    <AlertTriangle size={22} />
+            {/* Active CV Guidance Warning Banner */}
+            {!backendActiveCvId && !selectedOpCvId && (
+              <div
+                style={{
+                  marginBottom: '20px',
+                  padding: '16px 20px',
+                  background: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)',
+                  border: '1.5px solid #FDE68A',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  gap: '14px',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <div style={{ color: '#D97706', marginTop: 2, flexShrink: 0 }}>
+                  <AlertTriangle size={24} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ margin: '0 0 4px', fontSize: '0.98rem', fontWeight: 800, color: '#92400E' }}>
+                    Chưa có CV nào được kích hoạt cho phiên phỏng vấn này
+                  </h4>
+                  <p style={{ margin: '0 0 12px', fontSize: '0.86rem', color: '#B45309', lineHeight: 1.55 }}>
+                    HireMate AI Coach cần đọc hồ sơ CV để tạo bộ câu hỏi phỏng vấn mô phỏng chuẩn xác nhất theo năng lực của bạn. Bạn hãy nạp hoặc kích hoạt một CV trước khi bắt đầu.
+                  </p>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <Link
+                      to="/dashboard?tab=scan&action=upload"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 14px',
+                        borderRadius: '10px',
+                        background: '#D97706',
+                        color: '#FFFFFF',
+                        fontWeight: 700,
+                        fontSize: '0.84rem',
+                        textDecoration: 'none',
+                        boxShadow: '0 2px 8px rgba(217, 119, 6, 0.25)',
+                      }}
+                    >
+                      <UploadCloud size={15} />
+                      <span>Tải lên CV có sẵn</span>
+                    </Link>
+                    <Link
+                      to="/dashboard?tab=manual"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 14px',
+                        borderRadius: '10px',
+                        background: '#FFFFFF',
+                        border: '1px solid #D97706',
+                        color: '#92400E',
+                        fontWeight: 700,
+                        fontSize: '0.84rem',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <Sparkles size={15} />
+                      <span>Tạo CV mới với AI</span>
+                    </Link>
                   </div>
-                  <div className="alert-content">
-                    <h4>💡 Hồ sơ / CV chưa sẵn sàng?</h4>
-                    <p>
-                      Câu hỏi cá nhân hóa tốt hơn khi bạn đã có <strong>CV phân tích thành công</strong> và đã{' '}
-                      <strong>chọn gói</strong> (Free cũng được).
-                    </p>
-                    <div className="alert-actions">
-                      <Link to="/dashboard?tab=scan" className="alert-btn-primary">
-                        <Compass size={15} />
-                        <span>Mở Kho CV</span>
-                      </Link>
-                      <button
-                        type="button"
-                        className="alert-btn-dismiss"
-                        onClick={() => setShowOnboardingWarning(false)}
-                      >
-                        Tiếp tục thiết lập
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+                </div>
+              </div>
+            )}
             {/* Active CV & Career Profile indicator banner */}
             <div
               style={{
@@ -885,6 +921,12 @@ export const InterviewSetup: React.FC = () => {
         isOpen={videoModalOpen}
         onClose={() => setVideoModalOpen(false)}
         videoConfig={TUTORIAL_VIDEO_CONFIG}
+      />
+
+      {/* CV Required Guidance Modal */}
+      <CvRequiredModal
+        isOpen={cvRequiredModalOpen}
+        onClose={() => setCvRequiredModalOpen(false)}
       />
     </div>
   );

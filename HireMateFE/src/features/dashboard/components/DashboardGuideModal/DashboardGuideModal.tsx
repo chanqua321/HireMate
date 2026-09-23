@@ -6,18 +6,15 @@ import {
   CheckCircle2,
   Sparkles,
   BookOpen,
-  User,
-  FileSearch,
+  Folder,
+  Target,
+  Mail,
   Video,
-  Compass,
-  ArrowRight,
-  HelpCircle,
+  Layers,
   Lightbulb,
   Check,
-  Layers,
-  Image as ImageIcon,
-  Target,
   Maximize2,
+  Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './css/DashboardGuideModal.css';
@@ -30,8 +27,8 @@ export interface GuideStepData {
   title: string;
   subtitle: string;
   purpose: string;
-  imageSrc: string;
-  imageAlt: string;
+  imageSrc?: string;
+  imageAlt?: string;
   targetModule: string;
   requiredFields: {
     name: string;
@@ -44,94 +41,189 @@ export interface GuideStepData {
 export const GUIDE_STEPS: GuideStepData[] = [
   {
     id: 1,
-    badge: 'HỒ SƠ ƯU TIÊN (QUAN TRỌNG)',
+    badge: 'BƯỚC 1: KHỞI TẠO & KÍCH HOẠT CV (QUAN TRỌNG NHẤT)',
     badgeColor: '#0284c7',
-    icon: <User size={20} color="#0284c7" />,
-    title: 'Hướng Dẫn Điền Hồ Sơ Đạt Chuẩn 100%',
-    subtitle: 'Làm theo chỉ dẫn để AI hiểu rõ năng lực và may đo câu hỏi phỏng vấn chuẩn xác',
+    icon: <Sparkles size={20} color="#0284c7" />,
+    title: 'Khởi Tạo CV & Kích Hoạt Hồ Sơ Phỏng Vấn',
+    subtitle: '4 thao tác chuẩn chỉ để AI sẵn sàng luyện phỏng vấn và so khớp JD chuẩn xác',
     purpose:
-      'Cần hoàn thành 100% hồ sơ để AI biết thêm về bạn và tăng tối đa độ chính xác khi so khớp CV với JD, cũng như tạo ra bộ câu hỏi phỏng vấn sát nhất với vị trí mong muốn.',
+      'Điền thông tin CV theo vị trí ứng tuyển mong muốn. HireMate AI sẽ hỗ trợ rà soát, tính toán độ sẵn sàng (Career Readiness) và may đo bộ câu hỏi phỏng vấn chuẩn STAR.',
     imageSrc: '/assets/guide/guide_profile_tutorial.png',
-    imageAlt: 'Hình ảnh hướng dẫn chi tiết điền hồ sơ ứng viên chuẩn 100%',
-    targetModule: 'Bảng điều khiển ➔ Tab: Hồ sơ ƯU TIÊN',
+    imageAlt: 'Sơ đồ hướng dẫn 4 bước khởi tạo và kích hoạt CV phỏng vấn',
+    targetModule: 'Bảng điều khiển ➔ Tab Tạo CV & Kho CV',
     requiredFields: [
-      { name: '1. Họ và tên ứng viên (*)', desc: 'Thông tin bắt buộc có dấu (*). Nhập chính xác họ tên, không để trống hoặc sai.', required: true },
-      { name: '2. Vị trí ứng tuyển mục tiêu (*)', desc: 'Nhập chính xác vị trí mong muốn (hoặc chọn nhanh ở các thẻ bên dưới).', required: true },
-      { name: '3. Ngành nghề & Kinh nghiệm', desc: 'Chọn đúng ngành và số năm kinh nghiệm để AI phân loại hồ sơ chuẩn xác.', required: true },
-      { name: '4. Thông tin học vấn', desc: 'Nhập chính xác tên trường ĐH/CĐ và năm tốt nghiệp dự kiến hoặc chính thức.', required: true },
-      { name: '5. Kỹ năng cốt lõi (Ít nhất 5)', desc: 'Dữ liệu then chốt cho AI so khớp. Sử dụng thẻ gợi ý để thêm nhanh kỹ năng phổ biến.', required: true },
-      { name: '6. Mục tiêu nghề nghiệp & Giới thiệu', desc: 'Đừng để trống. Viết tóm tắt mục tiêu và mô tả bản thân.', required: true },
-      { name: '7. Nhấn nút "Lưu thay đổi hồ sơ" (*)', desc: 'Sau khi nhập đủ, BẮT BUỘC PHẢI NHẤN NÚT NÀY để lưu lại và đồng bộ với AI.', required: true },
+      {
+        name: '① Điền thông tin vị trí & học vấn',
+        desc: 'Chọn vị trí ứng tuyển, mẫu CV và điền các mục cốt lõi. Bạn có thể nhấn "Điền mẫu nhanh" để lấy dữ liệu mẫu tức thì.',
+        required: true,
+      },
+      {
+        name: '② Bấm "Xem trước & Tối ưu bằng AI"',
+        desc: 'Nhấn nút ở cuối form để AI rà soát lỗi chính tả, tối ưu từ khóa ATS và hoàn thiện CV.',
+        required: true,
+      },
+      {
+        name: '③ Điểm Career Readiness (Độ sẵn sàng ATS)',
+        desc: 'Hệ thống tự động chấm điểm độ sẵn sàng nghề nghiệp từ 0 - 100 và phân tích điểm mạnh, điểm yếu hồ sơ.',
+        required: true,
+      },
+      {
+        name: '④ Nhấn "Luyện phỏng vấn nâng điểm"',
+        desc: 'Bắt đầu phiên phỏng vấn đối thoại với AI Coach theo đúng kinh nghiệm trong CV để nâng điểm.',
+        required: true,
+      },
     ],
     aiTips: [
-      'Điền đủ 100% mức độ hoàn thiện để kích hoạt toàn bộ tính năng AI và đề xuất việc làm.',
       'Bạn có thể bấm trực tiếp vào ảnh minh họa bên trái để phóng to xem chi tiết từng mũi tên chỉ dẫn.',
+      'Sử dụng nút "Điền mẫu nhanh" ở góc trên nếu bạn muốn xem nhanh bố cục chuẩn mà không mất thời gian nhập tay.',
     ],
   },
   {
     id: 2,
-    badge: 'BƯỚC 2: TỰ ĐỘNG HÓA CV',
-    badgeColor: '#10b981',
-    icon: <FileSearch size={20} color="#10b981" />,
-    title: 'Quét & Bóc tách CV Thông Minh bằng AI',
-    subtitle: 'Nhận diện tự động học vấn, kinh nghiệm và tính điểm chuẩn ATS',
+    badge: 'BƯỚC 2: QUẢN LÝ KHO CV',
+    badgeColor: '#0ea5e9',
+    icon: <Folder size={20} color="#0ea5e9" />,
+    title: 'Kho CV Cá Nhân & Quản Lý Đa Hồ Sơ',
+    subtitle: 'Lưu trữ linh hoạt nhiều CV cho từng vị trí ứng tuyển khác nhau',
     purpose:
-      'Thay vì mất thời gian gõ lại từng mục thông tin, bạn chỉ cần tải lên file CV (PDF/Word). Bộ máy OCR AI của HireMate sẽ bóc tách cấu trúc, tự động điền vào hồ sơ cá nhân và kiểm tra mức độ tối ưu từ khóa với hệ thống tuyển dụng ATS.',
-    imageSrc: '/assets/guide/step2_cv_scan.png',
-    imageAlt: 'Hướng dẫn quét CV bằng trí tuệ nhân tạo',
-    targetModule: 'Bảng điều khiển ➔ Tab 2: Quét CV bằng AI (Scan)',
+      'Một ứng viên có thể ứng tuyển nhiều vị trí (Frontend, Backend, Fullstack, PM...). Kho CV cho phép bạn lưu trữ không giới hạn các bản CV và chuyển đổi linh hoạt CV nào sẽ dùng để phỏng vấn hay so khớp JD.',
+    targetModule: 'Bảng điều khiển ➔ Tab: Kho CV cá nhân',
     requiredFields: [
-      { name: 'Tải lên file CV cá nhân', desc: 'Hỗ trợ định dạng PDF hoặc DOCX (dung lượng tối đa 10MB).', required: false },
-      { name: 'Hoặc chọn Dùng CV mẫu', desc: 'Có sẵn CV mẫu Frontend, Backend, Data, Tester để thử nghiệm tức thì.', required: false },
-      { name: 'Nút "Áp dụng vào hồ sơ"', desc: 'Bấm nút để lưu dữ liệu vừa bóc tách trực tiếp vào CSDL tài khoản.', required: true },
+      {
+        name: 'Quản lý đa CV cho từng vị trí',
+        desc: 'Lưu trữ riêng biệt CV lập trình viên, CV quản lý dự án hay CV thực tập sinh trong cùng 1 tài khoản.',
+        required: false,
+      },
+      {
+        name: 'Đổi mẫu giao diện (Template Picker)',
+        desc: 'Chuyển đổi giao diện CV tức thì giữa các mẫu Modern 01, Modern 02 mà không mất dữ liệu đã điền.',
+        required: false,
+      },
+      {
+        name: 'Xem trước thực tế & Tải PDF chuẩn',
+        desc: 'Bấm biểu tượng con mắt để xem trước CV và tải file PDF chính thức để gửi trực tiếp cho nhà tuyển dụng.',
+        required: false,
+      },
+      {
+        name: 'Lưu làm mẫu tùy chỉnh (Custom Template)',
+        desc: 'Lưu bố cục và phong cách CV bạn ưng ý thành mẫu cá nhân để tái sử dụng cho các lần sau.',
+        required: false,
+      },
     ],
     aiTips: [
-      'Bộ quét CV hỗ trợ song ngữ Tiếng Việt và Tiếng Anh hoàn toàn tự động.',
-      'Sau khi quét xong, bạn có thể kiểm tra danh sách từ khóa ATS còn thiếu để bổ sung vào CV trước khi nộp việc.',
+      'Luôn chỉ có 1 CV được kích hoạt làm hồ sơ chính tại một thời điểm.',
+      'Khi muốn đổi vị trí ứng tuyển để luyện phỏng vấn, chỉ cần bấm "Chọn làm CV phỏng vấn" ở CV tương ứng trong Kho.',
     ],
   },
   {
     id: 3,
-    badge: 'BƯỚC 3: LUYỆN ĐỐI THOẠI',
-    badgeColor: '#8b5cf6',
-    icon: <Video size={20} color="#8b5cf6" />,
-    title: 'Phòng Phỏng Vấn AI Giọng Nói Chuẩn STAR',
-    subtitle: 'Rèn luyện phản xạ nói tiếng Việt 1-1 với chuyên gia AI',
+    badge: 'BƯỚC 3: SO KHỚP JD TUYỂN DỤNG',
+    badgeColor: '#10b981',
+    icon: <Target size={20} color="#10b981" />,
+    title: 'So Khớp CV & Mô Tả Công Việc (JD Matcher)',
+    subtitle: 'Đo lường độ phù hợp và phát hiện từ khóa còn thiếu trước khi nộp đơn',
     purpose:
-      'Trải nghiệm phỏng vấn ảo chân thực như ngồi trước nhà tuyển dụng. AI đọc câu hỏi bằng giọng nói tự nhiên, lắng nghe bạn trả lời qua micro và phân tích câu trả lời theo 4 thành phần chuẩn STAR (Situation - Task - Action - Result).',
-    imageSrc: '/assets/guide/step3_interview.png',
-    imageAlt: 'Hướng dẫn phòng phỏng vấn ảo AI chuẩn STAR',
-    targetModule: 'Menu chính ➔ Phỏng vấn AI (Interview Setup)',
+      'Dán bản mô tả công việc (Job Description) từ nhà tuyển dụng vào hệ thống. AI sẽ so sánh chuyên sâu từng yêu cầu trong JD với CV của bạn, đưa ra % phù hợp, chỉ rõ điểm mạnh và kỹ năng còn thiếu.',
+    targetModule: 'Bảng điều khiển ➔ Tab: So khớp JD',
     requiredFields: [
-      { name: 'Cấp quyền Micro', desc: 'Cho phép trình duyệt dùng micro để AI nhận diện giọng nói tiếng Việt.', required: true },
-      { name: 'Chọn phòng & số câu hỏi', desc: 'Tùy chỉnh số lượng 3 - 5 câu hỏi tình huống hành vi hoặc kỹ thuật.', required: true },
-      { name: 'Cấu hình giọng AI', desc: 'Lựa chọn giọng đọc truyền cảm (Nam miền Bắc, Nữ miền Nam,...).', required: false },
+      {
+        name: 'Dán nội dung JD tuyển dụng',
+        desc: 'Sao chép và dán toàn bộ bài đăng tuyển dụng từ TopCV, VietnamWorks, LinkedIn hoặc ITviec.',
+        required: true,
+      },
+      {
+        name: 'Chọn CV đối sánh',
+        desc: 'Mặc định dùng CV đang kích hoạt, hoặc chọn CV khác trong kho phù hợp nhất với JD đó.',
+        required: true,
+      },
+      {
+        name: 'Báo cáo từ khóa còn thiếu (Keyword Gaps)',
+        desc: 'Xem danh sách công nghệ và kỹ năng mà JD yêu cầu nhưng CV bạn chưa nhắc đến để bổ sung kịp thời.',
+        required: false,
+      },
+      {
+        name: 'Gợi ý nâng cấp kinh nghiệm chuẩn STAR',
+        desc: 'AI chỉ dẫn cách diễn đạt lại các dự án thực tế để tăng tối đa điểm số lọc hồ sơ tự động của HR.',
+        required: false,
+      },
     ],
     aiTips: [
-      'Hãy cấu trúc câu trả lời theo đúng 4 phần: Nêu bối cảnh ➔ Trách nhiệm được giao ➔ Hành động cụ thể ➔ Kết quả đạt được.',
-      'Đặc biệt lưu ý đưa số liệu định lượng vào phần Kết quả (ví dụ: "giảm 30% thời gian tải", "tăng 15% doanh số") để đạt điểm STAR tuyệt đối.',
+      'Nên bổ sung các từ khóa còn thiếu vào CV trong Kho CV rồi bấm "So khớp lại" để đạt trên 80% trước khi nộp việc.',
+      'Bạn có thể lưu lại các JD tiềm năng để theo dõi tiến độ ứng tuyển.',
     ],
   },
   {
     id: 4,
-    badge: 'BƯỚC 4: BỨT PHÁ SỰ NGHIỆP',
-    badgeColor: '#f59e0b',
-    icon: <Compass size={20} color="#f59e0b" />,
-    title: 'Career OS & Bảng Vàng Năng Lực',
-    subtitle: 'Đo lường điểm sẵn sàng tuyển dụng và nhận diện lỗ hổng kỹ năng',
+    badge: 'BƯỚC 4: THƯ ỨNG TUYỂN AI',
+    badgeColor: '#8b5cf6',
+    icon: <Mail size={20} color="#8b5cf6" />,
+    title: 'Soạn Thảo Thư Ứng Tuyển & Email Bằng AI',
+    subtitle: 'Tạo Cover Letter, thư cảm ơn và thư theo dõi chuyên nghiệp trong 5 giây',
     purpose:
-      'Hệ điều hành sự nghiệp toàn diện theo dõi Career Readiness Score (tổng hòa 50% điểm STAR, 25% điểm CV ATS, 25% độ tương thích JD). AI ghi nhớ những điểm yếu bạn hay mắc phải để gợi ý khóa học và bài luyện tập cải thiện trong 3-6 tháng tới.',
-    imageSrc: '/assets/guide/step4_roadmap.png',
-    imageAlt: 'Hướng dẫn hệ điều hành sự nghiệp Career OS và Bảng xếp hạng',
-    targetModule: 'Menu chính ➔ Career OS & Bảng vàng (Leaderboard)',
+      'Không còn lo lắng về việc viết email ứng tuyển dài dòng hoặc vụng về. HireMate AI tự động kết hợp thông tin CV và vị trí ứng tuyển để tạo nên những bức thư ứng tuyển chỉn chu, thuyết phục theo nhiều phong cách.',
+    targetModule: 'Bảng điều khiển ➔ Tab: Thư AI',
     requiredFields: [
-      { name: 'Biểu đồ Career Readiness', desc: 'Theo dõi điểm tổng hợp sau từng phiên phỏng vấn để thấy sự tiến bộ.', required: true },
-      { name: 'AI Memory Insights', desc: 'Đọc lời khuyên từ AI về các lỗi lặp từ ("à, ừm") và kỹ năng cần rèn thêm.', required: true },
-      { name: 'Bộ sưu tập Huy hiệu & Streak', desc: 'Duy trì luyện tập hằng ngày để thăng hạng trong Top 20 ứng viên xuất sắc.', required: false },
+      {
+        name: 'Cover Letter (Thư xin việc)',
+        desc: 'Lá thư ứng tuyển mở đầu làm nổi bật thế mạnh, kinh nghiệm cốt lõi và lý do công ty nên chọn bạn.',
+        required: true,
+      },
+      {
+        name: 'Thank You Email (Thư cảm ơn)',
+        desc: 'Gửi ngay trong vòng 24 giờ sau buổi phỏng vấn để tạo ấn tượng về sự chuyên nghiệp và nhiệt huyết.',
+        required: false,
+      },
+      {
+        name: 'Follow-up Email (Thư theo dõi)',
+        desc: 'Hỏi thăm kết quả ứng tuyển lịch sự sau khi hết hạn phản hồi đã hẹn.',
+        required: false,
+      },
+      {
+        name: 'Lựa chọn phong cách viết',
+        desc: 'Lựa chọn giữa các tông giọng: Chuyên nghiệp (Professional), Tự tin (Confident) hoặc Nhiệt huyết (Passionate).',
+        required: false,
+      },
     ],
     aiTips: [
-      'Duy trì luyện tập đều đặn 1 phiên mỗi ngày để giữ vững chuỗi Streak và nhận thêm lượt phỏng vấn Pro.',
-      'Sử dụng mục Đối sánh chuẩn ngành (Benchmark) để biết mình đang ở đâu so với các ứng viên cùng vị trí.',
+      'Bấm nút "Sao chép thư" để dán trực tiếp vào Gmail hoặc hệ thống nộp hồ sơ trực tuyến.',
+      'Hãy điền chính xác tên công ty và người nhận để email mang tính cá nhân hóa cao nhất.',
+    ],
+  },
+  {
+    id: 5,
+    badge: 'BƯỚC 5: PHÒNG PHỎNG VẤN AI',
+    badgeColor: '#f59e0b',
+    icon: <Video size={20} color="#f59e0b" />,
+    title: 'Luyện Phỏng Vấn Giọng Nói 1-1 Chuẩn STAR',
+    subtitle: 'Rèn luyện phản xạ đối thoại tiếng Việt thời gian thực với AI Coach',
+    purpose:
+      'AI đóng vai trò nhà tuyển dụng thực tế: đặt câu hỏi bằng giọng nói tự nhiên, lắng nghe bạn trả lời qua micro và chấm điểm chi tiết 4 tiêu chí STAR (Situation - Task - Action - Result) kèm lời khuyên cải thiện.',
+    targetModule: 'Menu chính ➔ Phỏng vấn AI (Interview Room)',
+    requiredFields: [
+      {
+        name: 'Cấp quyền Micro trình duyệt',
+        desc: 'Cho phép hệ thống sử dụng micro để AI nhận diện giọng nói tiếng Việt chuẩn xác theo thời gian thực.',
+        required: true,
+      },
+      {
+        name: 'Cấu hình phòng phỏng vấn',
+        desc: 'Tùy chỉnh số lượng câu hỏi (3 - 5 câu), độ khó và phong cách phỏng vấn viên.',
+        required: true,
+      },
+      {
+        name: 'Chấm điểm cấu trúc STAR từng câu',
+        desc: 'Phân tích chi tiết: Bối cảnh (S), Nhiệm vụ (T), Hành động bạn thực hiện (A) và Kết quả đạt được (R).',
+        required: false,
+      },
+      {
+        name: 'Báo cáo phân tích chuyên sâu',
+        desc: 'Nhận feedback về lỗi lặp từ ("à, ừm"), tốc độ nói và gợi ý câu trả lời mẫu xuất sắc hơn.',
+        required: false,
+      },
+    ],
+    aiTips: [
+      'Dành 60% thời lượng câu trả lời cho phần Action (Bạn đã làm gì) và Result (Kết quả có số liệu) để đạt điểm cao nhất.',
+      'Duy trì luyện tập đều đặn để tích lũy điểm Career Readiness và thăng hạng trên Bảng vàng.',
     ],
   },
 ];
@@ -159,7 +251,7 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
     }
   }, [isOpen]);
 
-  // Handle ESC key press
+  // Handle ESC and Arrow keys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -179,9 +271,8 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
   }, [isOpen, lightboxOpen, currentStepIndex]);
 
   const handleClose = () => {
-    // Lưu cờ đã xem vĩnh viễn cho tài khoản này
     localStorage.setItem(`hm_tutorial_seen_${accountKey}`, 'true');
-    localStorage.removeItem('hm_daily_guide_last_seen');
+    localStorage.setItem('hm_tutorial_seen_global', 'true');
     onClose();
   };
 
@@ -200,13 +291,14 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
   };
 
   const currentStep = GUIDE_STEPS[currentStepIndex];
+  const hasImage = Boolean(currentStep.imageSrc);
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="guide-modal-overlay" onClick={handleClose}>
           <motion.div
-            className="guide-modal-card"
+            className={`guide-modal-card ${!hasImage ? 'no-image-layout' : ''}`}
             initial={{ opacity: 0, scale: 0.94, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 15 }}
@@ -222,7 +314,7 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
                 <div>
                   <h3 className="guide-header-title">Cẩm Nang Hướng Dẫn Sử Dụng HireMate</h3>
                   <p className="guide-header-sub">
-                    Nắm rõ mục đích từng phân hệ và cách khai thác tối đa sức mạnh AI
+                    Nắm rõ quy trình 4 bước khởi tạo CV và khai thác tối đa sức mạnh AI
                   </p>
                 </div>
               </div>
@@ -253,84 +345,142 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
                       {isCompleted ? <Check size={12} strokeWidth={3} /> : idx + 1}
                     </div>
                     <span className="guide-step-node-title">
-                      {step.title.split(' ')[0]} {step.title.split(' ')[1]}
+                      {step.id === 1 ? 'Khởi tạo CV' : step.title.split(' ')[0] + ' ' + (step.title.split(' ')[1] || '')}
                     </span>
                   </button>
                 );
               })}
             </div>
 
-            {/* Modal Body: Two Column Layout */}
-            <div className="guide-modal-body">
-              {/* Left Column: Image Illustration Slot */}
-              <div className="guide-media-column">
-                <div
-                  className="guide-image-container"
-                  onClick={() => !imageError[currentStep.id] && setLightboxOpen(true)}
-                  title="Nhấn để phóng to ảnh chỉ dẫn chi tiết"
-                >
-                  {!imageError[currentStep.id] ? (
-                    <>
-                      <img
-                        src={currentStep.imageSrc}
-                        alt={currentStep.imageAlt}
-                        className="guide-step-image"
-                        onError={() =>
-                          setImageError((prev) => ({ ...prev, [currentStep.id]: true }))
-                        }
-                      />
-                      <div className="guide-image-zoom-badge">
-                        <Maximize2 size={13} /> Phóng to ảnh
+            {/* Modal Body */}
+            <div className={`guide-modal-body ${!hasImage ? 'single-column-body' : ''}`}>
+              {/* Left Column: Image Illustration (Only for steps with image) */}
+              {hasImage && (
+                <div className="guide-media-column">
+                  <div
+                    className="guide-image-container"
+                    onClick={() => !imageError[currentStep.id] && setLightboxOpen(true)}
+                    title="Nhấn để phóng to ảnh chỉ dẫn chi tiết"
+                  >
+                    {!imageError[currentStep.id] ? (
+                      <>
+                        <img
+                          src={currentStep.imageSrc}
+                          alt={currentStep.imageAlt}
+                          className="guide-step-image"
+                          onError={() =>
+                            setImageError((prev) => ({ ...prev, [currentStep.id]: true }))
+                          }
+                        />
+
+                        {/* Interactive Visual Overlay with Arrows & Callout Badges */}
+                        <div className="guide-tutorial-overlay">
+                          <svg className="guide-arrows-svg" viewBox="0 0 1024 647">
+                            <defs>
+                              <marker id="guide-arrow-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                <polygon points="0 0, 8 3, 0 6" fill="#0284c7" />
+                              </marker>
+                              <marker id="guide-arrow-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                <polygon points="0 0, 8 3, 0 6" fill="#10b981" />
+                              </marker>
+                            </defs>
+                            {/* Path 1 -> 2: Form to 'Xem trước & Tối ưu bằng AI' */}
+                            <path
+                              d="M 260,260 C 260,390 380,430 410,480"
+                              fill="none"
+                              stroke="#0284c7"
+                              strokeWidth="3.5"
+                              strokeDasharray="6,4"
+                              markerEnd="url(#guide-arrow-blue)"
+                            />
+                            {/* Path 2 -> 3: 'Xem trước & Tối ưu AI' to 'Career Readiness' */}
+                            <path
+                              d="M 480,490 C 600,480 635,260 670,145"
+                              fill="none"
+                              stroke="#0284c7"
+                              strokeWidth="3.5"
+                              strokeDasharray="6,4"
+                              markerEnd="url(#guide-arrow-blue)"
+                            />
+                            {/* Path 3 -> 4: 'Career Readiness' to 'Luyện phỏng vấn nâng điểm' */}
+                            <path
+                              d="M 695,155 C 695,175 695,190 695,205"
+                              fill="none"
+                              stroke="#10b981"
+                              strokeWidth="3.5"
+                              markerEnd="url(#guide-arrow-green)"
+                            />
+                          </svg>
+
+                          {/* Pin 1 */}
+                          <div className="guide-pin-badge pin-1" style={{ top: '24%', left: '12%' }}>
+                            <span className="guide-pin-num">1</span>
+                            <span className="guide-pin-text">Điền thông tin CV</span>
+                          </div>
+
+                          {/* Pin 2 */}
+                          <div className="guide-pin-badge pin-2" style={{ top: '76%', left: '36%' }}>
+                            <span className="guide-pin-num">2</span>
+                            <span className="guide-pin-text">Xem trước & Tối ưu AI</span>
+                          </div>
+
+                          {/* Pin 3 */}
+                          <div className="guide-pin-badge pin-3" style={{ top: '16%', left: '67%' }}>
+                            <span className="guide-pin-num">3</span>
+                            <span className="guide-pin-text">Career Readiness</span>
+                          </div>
+
+                          {/* Pin 4 */}
+                          <div className="guide-pin-badge pin-4 green" style={{ top: '33%', left: '64%' }}>
+                            <span className="guide-pin-num green">4</span>
+                            <span className="guide-pin-text green">Luyện phỏng vấn AI</span>
+                          </div>
+                        </div>
+
+                        <div className="guide-image-zoom-badge">
+                          <Maximize2 size={13} /> Phóng to xem sơ đồ
+                        </div>
+                      </>
+                    ) : (
+                      <div className="guide-image-placeholder">
+                        <div className="guide-placeholder-icon">
+                          {currentStep.icon}
+                        </div>
+                        <div className="guide-placeholder-caption">
+                          {currentStep.title}
+                        </div>
                       </div>
-                    </>
-                  ) : (
-                    /* Graphic Fallback when real image is not found */
-                    <div className="guide-image-placeholder">
-                      <div className="guide-placeholder-glow" />
-                      <div className="guide-placeholder-icon">
-                        {currentStep.icon}
-                      </div>
-                      <div className="guide-placeholder-badge">
-                        <ImageIcon size={14} /> Khung hiển thị hình ảnh minh họa
-                      </div>
-                      <div className="guide-placeholder-caption">
-                        {currentStep.title}
-                      </div>
-                      <div className="guide-placeholder-hint">
-                        📁 Đường dẫn ảnh: <code>{currentStep.imageSrc}</code>
-                      </div>
+                    )}
+
+                    <div className="guide-module-locator">
+                      <Layers size={13} color="#0284c7" />
+                      <span>{currentStep.targetModule}</span>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Target module locator pill */}
-                  <div className="guide-module-locator">
-                    <Layers size={13} color="#0284c7" />
-                    <span>{currentStep.targetModule}</span>
+                  {/* AI Tip Box */}
+                  <div className="guide-ai-tip-box">
+                    <div className="guide-tip-header">
+                      <Lightbulb size={16} color="#eab308" />
+                      <span>Mẹo hữu ích từ AI:</span>
+                    </div>
+                    <ul className="guide-tip-list">
+                      {currentStep.aiTips.map((tip, tIdx) => (
+                        <li key={tIdx}>{tip}</li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
+              )}
 
-                {/* AI Tip Box */}
-                <div className="guide-ai-tip-box">
-                  <div className="guide-tip-header">
-                    <Lightbulb size={16} color="#eab308" />
-                    <span>Mẹo chuyên gia AI:</span>
-                  </div>
-                  <ul className="guide-tip-list">
-                    {currentStep.aiTips.map((tip, tIdx) => (
-                      <li key={tIdx}>{tip}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Right Column: Step Info & Purpose & Fields */}
-              <div className="guide-info-column">
+              {/* Right Column / Full Width: Step Info & Purpose & Fields */}
+              <div className={`guide-info-column ${!hasImage ? 'full-width-info' : ''}`}>
                 {/* Step Badge & Title */}
                 <div className="guide-step-header">
                   <span
                     className="guide-step-badge"
                     style={{
-                      background: `${currentStep.badgeColor}18`,
+                      background: `${currentStep.badgeColor}15`,
                       color: currentStep.badgeColor,
                       borderColor: `${currentStep.badgeColor}35`,
                     }}
@@ -344,7 +494,7 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
                 {/* Purpose Section */}
                 <div className="guide-section-block">
                   <h5 className="guide-block-heading">
-                    <Target size={15} color="#0284c7" /> Mục đích của bước này:
+                    <Target size={15} color="#0284c7" /> Mục đích của tính năng này:
                   </h5>
                   <p className="guide-purpose-desc">{currentStep.purpose}</p>
                 </div>
@@ -352,39 +502,54 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
                 {/* Required Fields Section */}
                 <div className="guide-section-block">
                   <h5 className="guide-block-heading">
-                    <CheckCircle2 size={15} color="#10b981" /> Hướng dẫn thao tác & Các trường cần nhập:
+                    <CheckCircle2 size={15} color="#10b981" /> Hướng dẫn thao tác & Chi tiết tính năng:
                   </h5>
-                  <div className="guide-fields-list">
+                  <div className={`guide-fields-list ${!hasImage ? 'two-column-fields' : ''}`}>
                     {currentStep.requiredFields.map((f, fIdx) => (
                       <div key={fIdx} className="guide-field-item">
                         <div className="guide-field-header">
                           <span className="guide-field-name">{f.name}</span>
-                          {f.required ? (
-                            <span className="guide-req-badge required">Bắt buộc</span>
-                          ) : (
-                            <span className="guide-req-badge optional">Tùy chọn</span>
-                          )}
+                          {f.required && <span className="guide-field-req-tag">Bắt buộc</span>}
                         </div>
                         <p className="guide-field-desc">{f.desc}</p>
                       </div>
                     ))}
                   </div>
                 </div>
+
+                {/* AI Tip Box for steps without image */}
+                {!hasImage && (
+                  <div className="guide-ai-tip-box" style={{ marginTop: 8 }}>
+                    <div className="guide-tip-header">
+                      <Lightbulb size={16} color="#eab308" />
+                      <span>Mẹo hữu ích từ AI:</span>
+                    </div>
+                    <ul className="guide-tip-list">
+                      {currentStep.aiTips.map((tip, tIdx) => (
+                        <li key={tIdx}>{tip}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Modal Footer Controls */}
+            {/* Modal Footer */}
             <div className="guide-modal-footer">
-              <div className="guide-footer-account-note">
-                <CheckCircle2 size={15} color="#10b981" />
-                <span>Popup sẽ chỉ hiển thị 1 lần cho tài khoản mới. Bạn có thể bấm nút <strong>Tutorial</strong> để xem lại bất cứ lúc nào.</span>
+              <div className="guide-footer-left">
+                <span>
+                  Bước <strong>{currentStepIndex + 1}</strong> / {GUIDE_STEPS.length}
+                </span>
+                <span className="guide-footer-note">
+                  (Popup tự động cho tài khoản mới. Bạn có thể bấm nút &quot;Tutorial&quot; để xem lại bất cứ lúc nào)
+                </span>
               </div>
 
               <div className="guide-footer-actions">
                 {currentStepIndex > 0 && (
                   <button
                     type="button"
-                    className="guide-btn-prev"
+                    className="guide-nav-btn secondary"
                     onClick={handlePrev}
                   >
                     <ChevronLeft size={16} /> Quay lại
@@ -393,18 +558,16 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
 
                 <button
                   type="button"
-                  className="guide-btn-next"
+                  className="guide-nav-btn primary"
                   onClick={handleNext}
                 >
-                  {currentStepIndex < GUIDE_STEPS.length - 1 ? (
+                  {currentStepIndex === GUIDE_STEPS.length - 1 ? (
                     <>
-                      <span>Tiếp theo ({currentStepIndex + 1}/{GUIDE_STEPS.length})</span>
-                      <ChevronRight size={16} />
+                      <Check size={16} /> Bắt đầu sử dụng ngay
                     </>
                   ) : (
                     <>
-                      <span>Đã hiểu & Bắt đầu</span>
-                      <ArrowRight size={16} />
+                      Bước tiếp theo <ChevronRight size={16} />
                     </>
                   )}
                 </button>
@@ -412,29 +575,95 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
             </div>
           </motion.div>
 
-          {/* Lightbox Modal when user clicks image to zoom in */}
-          {lightboxOpen && !imageError[currentStep.id] && (
+          {/* Image Lightbox Modal */}
+          {lightboxOpen && currentStep.imageSrc && (
             <div
               className="guide-lightbox-overlay"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLightboxOpen(false);
-              }}
+              onClick={() => setLightboxOpen(false)}
             >
-              <div className="guide-lightbox-content" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  className="guide-lightbox-close"
-                  onClick={() => setLightboxOpen(false)}
-                  aria-label="Đóng phóng to"
-                >
-                  <X size={20} />
-                </button>
-                <img
-                  src={currentStep.imageSrc}
-                  alt={currentStep.imageAlt}
-                  className="guide-lightbox-img"
-                />
+              <div
+                className="guide-lightbox-content"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="guide-lightbox-header">
+                  <div className="guide-lightbox-title">
+                    <Sparkles size={16} color="#0284c7" />
+                    <span>Sơ đồ 4 bước khởi tạo và kích hoạt CV</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="guide-lightbox-close"
+                    onClick={() => setLightboxOpen(false)}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="guide-lightbox-image-wrap">
+                  <img
+                    src={currentStep.imageSrc}
+                    alt={currentStep.imageAlt}
+                    className="guide-lightbox-img"
+                  />
+                  {/* Overlay inside lightbox */}
+                  <div className="guide-tutorial-overlay lightbox-overlay">
+                    <svg className="guide-arrows-svg" viewBox="0 0 1024 647">
+                      <defs>
+                        <marker id="lb-arrow-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                          <polygon points="0 0, 8 3, 0 6" fill="#0284c7" />
+                        </marker>
+                        <marker id="lb-arrow-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                          <polygon points="0 0, 8 3, 0 6" fill="#10b981" />
+                        </marker>
+                      </defs>
+                      {/* Path 1 -> 2: Form to 'Xem trước & Tối ưu bằng AI' */}
+                      <path
+                        d="M 260,260 C 260,390 380,430 410,480"
+                        fill="none"
+                        stroke="#0284c7"
+                        strokeWidth="3.5"
+                        strokeDasharray="6,4"
+                        markerEnd="url(#lb-arrow-blue)"
+                      />
+                      {/* Path 2 -> 3: 'Xem trước & Tối ưu AI' to 'Career Readiness' */}
+                      <path
+                        d="M 480,490 C 600,480 635,260 670,145"
+                        fill="none"
+                        stroke="#0284c7"
+                        strokeWidth="3.5"
+                        strokeDasharray="6,4"
+                        markerEnd="url(#lb-arrow-blue)"
+                      />
+                      {/* Path 3 -> 4: 'Career Readiness' to 'Luyện phỏng vấn nâng điểm' */}
+                      <path
+                        d="M 695,155 C 695,175 695,190 695,205"
+                        fill="none"
+                        stroke="#10b981"
+                        strokeWidth="3.5"
+                        markerEnd="url(#lb-arrow-green)"
+                      />
+                    </svg>
+
+                    <div className="guide-pin-badge pin-1" style={{ top: '24%', left: '12%' }}>
+                      <span className="guide-pin-num">1</span>
+                      <span className="guide-pin-text">Điền thông tin CV</span>
+                    </div>
+
+                    <div className="guide-pin-badge pin-2" style={{ top: '76%', left: '36%' }}>
+                      <span className="guide-pin-num">2</span>
+                      <span className="guide-pin-text">Xem trước & Tối ưu AI</span>
+                    </div>
+
+                    <div className="guide-pin-badge pin-3" style={{ top: '16%', left: '67%' }}>
+                      <span className="guide-pin-num">3</span>
+                      <span className="guide-pin-text">Career Readiness</span>
+                    </div>
+
+                    <div className="guide-pin-badge pin-4 green" style={{ top: '33%', left: '64%' }}>
+                      <span className="guide-pin-num green">4</span>
+                      <span className="guide-pin-text green">Luyện phỏng vấn AI</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -443,5 +672,3 @@ export const DashboardGuideModal: React.FC<DashboardGuideModalProps> = ({
     </AnimatePresence>
   );
 };
-
-export default DashboardGuideModal;

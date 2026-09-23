@@ -31,6 +31,9 @@ import { AiEmailGenerator } from './components/AiEmailGenerator';
 import { DashboardSidebar } from './components/DashboardSidebar';
 import { CvDetailModal } from './components/CvDetailModal';
 import { CvWizardModal } from '../../../../shared/components/CvWizard/CvWizardModal';
+import { PostCvSuccessModal } from '../../../../shared/components/PostCvSuccessModal/PostCvSuccessModal';
+import type { CvItemDto } from '../../../../shared/services/cv.service';
+import './components/CareerProfileForm.css';
 import './css/Dashboard.css';
 
 
@@ -227,11 +230,19 @@ export const Dashboard: React.FC = () => {
   const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
 
+  // PostCvSuccessModal — hiện sau khi tạo/upload CV để polling AI
+  const [postCvModalCvId, setPostCvModalCvId] = useState<string | null>(null);
+  const [postCvModalDisplayName, setPostCvModalDisplayName] = useState<string>('');
+  const [postCvModalInitialCv, setPostCvModalInitialCv] = useState<CvItemDto | null>(null);
+
   useEffect(() => {
     if (tabQuery && ['manual', 'scan', 'match', 'email'].includes(tabQuery)) {
       setActiveTab(tabQuery as 'manual' | 'scan' | 'match' | 'email');
+      if (tabQuery === 'scan' && searchParams.get('action') === 'upload') {
+        setShowAddCvForm(true);
+      }
     }
-  }, [tabQuery]);
+  }, [tabQuery, searchParams]);
 
   const handleTabChange = (tab: 'manual' | 'scan' | 'match' | 'email') => {
     setActiveTab(tab);
@@ -416,13 +427,13 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
-    if (!cv.parseSucceeded) {
-      setToastMsg('⚠️ CV chưa được chấm điểm. Bấm “Chấm điểm CV” trên thẻ CV rồi thử kích hoạt lại.');
-      setTimeout(() => setToastMsg(null), 3500);
+    if (!cv.parseSucceeded || !cv.analyzedAt) {
+      setToastMsg('⚠️ CV phải được phân tích và chấm điểm hoàn tất (parseSucceeded & analyzedAt) trước khi kích hoạt làm CV phỏng vấn. Hãy bấm “Chấm điểm CV” trước.');
+      setTimeout(() => setToastMsg(null), 4000);
       return;
     }
 
-    setToastMsg('⏳ Đang kích hoạt CV…');
+    setToastMsg('⏳ Đang gọi máy chủ để kích hoạt CV phỏng vấn…');
     try {
       const res = await cvService.activateCv(cv.id);
       if (!res.ok) {
@@ -682,30 +693,25 @@ export const Dashboard: React.FC = () => {
         });
 
         setScanProgress(100);
-        setScanStatusText('✅ Đã lưu & chấm CV — xem gợi ý trước khi phỏng vấn.');
+        setScanStatusText('✅ CV đã lưu — AI đang phân tích...');
         setIsScanning(false);
 
         const updatedList = [newCvCard, ...userCvs];
         setUserCvs(updatedList);
         setShowAddCvForm(false);
-        // Upload does NOT activate. Active CV stays ConfirmedCvDocumentId until user clicks Activate.
-        showCvReviewAfterSave(
-          newCvCard,
-          newCvCard.parseSucceeded
-            ? `✅ CV "${newCvCard.title}" đã chấm ATS. Xem gợi ý rồi mới luyện phỏng vấn.`
-            : `⚠️ CV "${newCvCard.title}" cần sửa theo gợi ý rồi phân tích lại.`
-        );
+
+        // Mở PostCvSuccessModal để poll phân tích thay vì show toast tĩnh
+        setPostCvModalDisplayName(newCvCard.title || nameLabel);
+        setPostCvModalInitialCv(aiPayload || uploadRes.data);
+        setPostCvModalCvId(uploadRes.data.id);
 
         try {
           const statusRes = await onboardingService.getStatus();
           const next = statusRes.data?.nextStep || statusRes.data?.NextStep;
           if (next === 'select_plan') {
             setTimeout(() => navigate('/pricing'), 1800);
-          } else if (newCvCard.parseSucceeded) {
-            const confirmRes = await onboardingService.confirm();
-            if (confirmRes.ok) sessionStorage.setItem('hm_onboarding_done', '1');
           }
-        } catch { /* giữ modal gợi ý */ }
+        } catch { /* ignore */ }
       } else {
         setIsScanning(false);
         setToastMsg(uploadRes.message || '❌ Không tải được CV. Vui lòng thử lại.');
@@ -800,20 +806,49 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-
-
-  const handleWizardCreated = async (created: any, analysisMessage?: string) => {
+  const handleWizardCreated = async (created: any, _analysisMessage?: string) => {
     try {
       const listRes = await cvService.listCvs();
       if (listRes.ok && Array.isArray(listRes.data)) setUserCvs(listRes.data.map(parseCvDocumentFromBackend));
       else setUserCvs(prev => [parseCvDocumentFromBackend(created), ...prev]);
-      setToastMsg(created.parseSucceeded
-        ? '✅ Đã tạo PDF, lưu CV và chấm điểm thành công.'
-        : `⚠️ ${analysisMessage || 'Đã lưu CV nhưng chưa chấm điểm. Bấm “Chấm điểm CV” để thử lại.'}`);
-      handleTabChange('scan');
-    } finally {
+    } catch { /* ignore */ }
+
+    handleTabChange('scan');
+    const cvId = created?.id;
+    const displayName = created?.displayName || created?.fileName || 'CV ủa bạn';
+    if (cvId) {
+      setPostCvModalDisplayName(displayName);
+      setPostCvModalInitialCv(created);
+      setPostCvModalCvId(cvId);
+    } else {
+      setToastMsg('✅ CV đã được tạo thành công!');
       setTimeout(() => setToastMsg(null), 3500);
     }
+  };
+  /** Activate CV từ PostCvSuccessModal rồi navigate vào interview-setup */
+  const handleActivateAndInterview = async (cv: CvItemDto) => {
+    if (!cv.id) return;
+    // Gọi activate API
+    const res = await cvService.activateCv(cv.id);
+    if (!res.ok) throw new Error(res.message || 'Không kích hoạt được CV.');
+
+    const activeId = (res.data as any)?.activeCvDocumentId || cv.id;
+    setActiveCvId(activeId);
+    setSelectedMatchCvId(activeId);
+    setUserCvs((prev) =>
+      prev.map((c) => ({
+        ...c,
+        isActive: c.id === activeId,
+        isConfirmed: c.id === activeId,
+      }))
+    );
+    localStorage.setItem('hm_active_cv_id', activeId);
+    const activatedCard = { id: activeId, isActive: true, isConfirmed: true } as any;
+    localStorage.setItem('hm_active_cv', JSON.stringify(activatedCard));
+
+    // Đóng modal rồi navigate
+    setPostCvModalCvId(null);
+    navigate('/interview-setup', { state: { fromCv: cv } });
   };
 
   const refreshQuota = async () => {
@@ -972,6 +1007,20 @@ export const Dashboard: React.FC = () => {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '_');
+
+  // Auto-open tutorial modal once for new users without any CV yet
+  useEffect(() => {
+    if (!accountKey) return;
+    const seen =
+      localStorage.getItem(`hm_tutorial_seen_${accountKey}`) ||
+      localStorage.getItem('hm_tutorial_seen_global');
+    if (!seen && userCvs.length === 0) {
+      const timer = setTimeout(() => {
+        setGuideModalOpen(true);
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [accountKey, userCvs.length]);
 
   // ConfirmedCvDocumentId loaded from the server is the sole active-CV authority.
   const activeCv = activeCvId ? userCvs.find((c) => c.id === activeCvId) : undefined;
@@ -1150,6 +1199,11 @@ export const Dashboard: React.FC = () => {
               defaultRole={role}
               templates={cvTemplates}
               initial={cvBuilderInitial}
+              onSwitchToUpload={() => {
+                handleTabChange('scan');
+                setShowAddCvForm(true);
+              }}
+              userCvCount={userCvs.length}
             /> : <p>Đang tải thông tin đã lưu để điền sẵn CV…</p>}
           </div>
 
@@ -1279,9 +1333,28 @@ export const Dashboard: React.FC = () => {
         isOpen={guideModalOpen}
         onClose={() => {
           localStorage.setItem(`hm_tutorial_seen_${accountKey}`, 'true');
+          localStorage.setItem('hm_tutorial_seen_global', 'true');
           setGuideModalOpen(false);
         }}
         accountKey={accountKey}
+      />
+
+      {/* PostCvSuccessModal — polling AI phân tích sau khi tạo/upload CV */}
+      <PostCvSuccessModal
+        cvId={postCvModalCvId}
+        cvDisplayName={postCvModalDisplayName}
+        initialCv={postCvModalInitialCv}
+        onClose={() => { setPostCvModalCvId(null); setPostCvModalInitialCv(null); }}
+        onActivateAndInterview={handleActivateAndInterview}
+        onViewDetail={(cv) => {
+          setPostCvModalCvId(null);
+          const card = userCvs.find((c) => c.id === cv.id);
+          if (card) {
+            setSelectedCvForDetail(card);
+            setCvDetailModalOpen(true);
+          }
+          handleTabChange('scan');
+        }}
       />
     </div>
   );

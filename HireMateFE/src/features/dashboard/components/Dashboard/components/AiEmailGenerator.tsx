@@ -50,15 +50,18 @@ export const AiEmailGenerator: React.FC<AiEmailGeneratorProps> = ({
       className="email-tab-content"
     >
       {typeof quotaRemaining === 'number' && (
-        <p style={{ marginBottom: 12, fontSize: '0.88rem', color: blocked ? '#B91C1C' : '#475569' }}>
-          Hạn mức Email/CV AI: <strong>{quotaRemaining}</strong>
-          {typeof quotaLimit === 'number' ? ` / ${quotaLimit}` : ''} còn lại tháng này
-          {blocked
-            ? quotaLimit === 0
-              ? ' — Gói Free không hỗ trợ. Nâng cấp để mở khóa.'
-              : ' — Quota exceeded. Nâng cấp hoặc đợi chu kỳ mới.'
-            : ''}
-        </p>
+        <div className={`email-quota-banner ${blocked ? 'blocked' : ''}`}>
+          <Sparkles size={16} />
+          <span>
+            Hạn mức Email/CV AI: <strong>{quotaRemaining}</strong>
+            {typeof quotaLimit === 'number' ? ` / ${quotaLimit}` : ''} còn lại tháng này
+            {blocked
+              ? quotaLimit === 0
+                ? ' — Gói Free không hỗ trợ. Nâng cấp để mở khóa.'
+                : ' — Quota exceeded. Nâng cấp hoặc đợi chu kỳ mới.'
+              : ''}
+          </span>
+        </div>
       )}
       <form onSubmit={onGenerateEmail} className="email-form">
         <div className="form-two-col">

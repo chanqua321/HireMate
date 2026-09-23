@@ -447,6 +447,10 @@
 
 .other-cvs-header {
   margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
 }
 
 .other-cvs-header h4 {
@@ -459,6 +463,17 @@
 .other-cvs-subhint {
   font-size: 0.8rem;
   color: #64748b;
+}
+
+.other-cvs-count-badge {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: #0284c7;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .empty-other-cvs-box {
@@ -490,6 +505,36 @@
 .empty-add-btn:hover {
   background: #0284c7;
   color: #ffffff;
+}
+
+/* Scrollable container for Other CVs: locks height to ~2 rows (4 CVs) so web layout doesn't expand endlessly */
+.other-cvs-scroll-box {
+  max-height: 440px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 6px 8px 2px;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+.other-cvs-scroll-box::-webkit-scrollbar {
+  width: 6px;
+}
+
+.other-cvs-scroll-box::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 999px;
+}
+
+.other-cvs-scroll-box::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.other-cvs-scroll-box::-webkit-scrollbar-thumb:hover {
+  background: #0284c7;
 }
 
 .multi-cv-cards-grid {
@@ -597,6 +642,80 @@
   gap: 8px;
   padding-top: 10px;
   border-top: 1px solid #f1f5f9;
+}
+
+.cv-item-footer-actions-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+  width: 100%;
+}
+
+.cv-item-primary-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-weight: 750;
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1.5px solid transparent;
+  white-space: nowrap;
+}
+
+.cv-item-primary-btn.activate-btn {
+  background: #f0f9ff;
+  color: #0284c7;
+  border-color: #bae6fd;
+}
+
+.cv-item-primary-btn.activate-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+  transform: translateY(-1px);
+}
+
+.cv-item-primary-btn.analyze-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #03bfff 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.22);
+}
+
+.cv-item-primary-btn.analyze-btn:hover {
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35);
+  transform: translateY(-1px);
+}
+
+.cv-item-tools-bar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.cv-item-tools-bar .cv-item-secondary-btns {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 5px;
+}
+
+.cv-item-tools-bar .icon-detail-btn,
+.cv-item-tools-bar .icon-delete-btn {
+  flex: 1;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cv-item-analyze-btn {
