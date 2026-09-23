@@ -449,23 +449,23 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
           </div>
         </div>
       ) : (
-        <div className="empty-other-cvs-box" style={{ marginBottom: 16 }}>
-          <FileText size={30} color="#94A3B8" />
-          <p>
-            <strong>No Active CV</strong> — chưa có CV được kích hoạt trên server.
-          </p>
-          <p style={{ fontSize: '0.85rem', color: '#64748B' }}>
-            Tải CV lên và bấm &quot;Kích hoạt&quot; để chọn hồ sơ phỏng vấn.
-          </p>
+        <div className=''>
         </div>
       )}
 
       <div className="other-cvs-section">
         <div className="other-cvs-header">
-          <h4>Các CV khác trong kho ({otherCvs.length})</h4>
-          <span className="other-cvs-subhint">
-            Nhấn &quot;Kích hoạt&quot; để dùng CV này cho phỏng vấn &amp; so khớp JD.
-          </span>
+          <div>
+            <h4>Các CV khác trong kho ({otherCvs.length})</h4>
+            <span className="other-cvs-subhint">
+              Nhấn &quot;Chọn làm CV phỏng vấn&quot; để kích hoạt hồ sơ phỏng vấn &amp; so khớp JD.
+            </span>
+          </div>
+          {otherCvs.length > 4 && (
+            <span className="other-cvs-count-badge">
+              Cuộn để xem đủ {otherCvs.length} CV
+            </span>
+          )}
         </div>
 
         {otherCvs.length === 0 ? (
@@ -481,52 +481,63 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
             </button>
           </div>
         ) : (
-          <div className="multi-cv-cards-grid">
-            {otherCvs.map((cv) => (
-              <div key={cv.id} className="cv-item-card">
-                <div className="cv-item-header">
-                  <div className="cv-item-title-row">
-                    <FileText size={17} color="#64748B" />
-                    <span className="cv-item-title" title={cv.title}>
-                      {cv.title}
-                    </span>
+          <div className="other-cvs-scroll-box">
+            <div className="multi-cv-cards-grid">
+              {otherCvs.map((cv) => (
+                <div key={cv.id} className="cv-item-card">
+                  <div className="cv-item-header">
+                    <div className="cv-item-title-row">
+                      <FileText size={17} color="#64748B" />
+                      <span className="cv-item-title" title={cv.title}>
+                        {cv.title}
+                      </span>
+                    </div>
+                    <div className="cv-item-score-badge">{cv.parseSucceeded ? `${cv.atsScore}/100 ATS` : 'Chưa chấm điểm'}</div>
                   </div>
-                  <div className="cv-item-score-badge">{cv.parseSucceeded ? `${cv.atsScore}/100 ATS` : 'Chưa chấm điểm'}</div>
+
+                  {renderMetaLine(cv)}
+
+                  <div className="cv-item-skills-preview">
+                    {cv.skills.slice(0, 4).map((s) => (
+                      <span key={s} className="cv-mini-chip">
+                        {s}
+                      </span>
+                    ))}
+                    {cv.skills.length > 4 && (
+                      <span className="cv-mini-chip-more">+{cv.skills.length - 4}</span>
+                    )}
+                  </div>
+
+                  <div className="cv-item-footer-actions-v2">
+                    {!cv.parseSucceeded && onAnalyzeCv ? (
+                      <button
+                        type="button"
+                        className="cv-item-primary-btn analyze-btn"
+                        onClick={() => void onAnalyzeCv(cv)}
+                        title="Chấm điểm và phân tích ATS cho CV này"
+                      >
+                        <RefreshCw size={14} />
+                        <span>Chấm điểm CV</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="cv-item-primary-btn activate-btn"
+                        onClick={() => onSelectActiveCv(cv)}
+                        title="Chọn và kích hoạt CV này làm hồ sơ phỏng vấn chính trên hệ thống"
+                      >
+                        <Check size={15} />
+                        <span>Chọn làm CV phỏng vấn</span>
+                      </button>
+                    )}
+
+                    <div className="cv-item-tools-bar">
+                      {renderSecondaryActions(cv, true)}
+                    </div>
+                  </div>
                 </div>
-
-                {renderMetaLine(cv)}
-
-                <div className="cv-item-skills-preview">
-                  {cv.skills.slice(0, 4).map((s) => (
-                    <span key={s} className="cv-mini-chip">
-                      {s}
-                    </span>
-                  ))}
-                  {cv.skills.length > 4 && (
-                    <span className="cv-mini-chip-more">+{cv.skills.length - 4}</span>
-                  )}
-                </div>
-
-                {!cv.parseSucceeded && onAnalyzeCv && (
-                  <button type="button" className="set-active-cv-btn cv-item-analyze-btn" onClick={() => void onAnalyzeCv(cv)} title="Thử chấm điểm CV">
-                    <RefreshCw size={14} /><span>Chấm điểm CV</span>
-                  </button>
-                )}
-                <div className="cv-item-footer-actions">
-                  <button
-                    type="button"
-                    className="set-active-cv-btn"
-                    onClick={() => onSelectActiveCv(cv)}
-                    title="Kích hoạt CV này làm hồ sơ phỏng vấn chính"
-                  >
-                    <Check size={14} />
-                    <span>Kích hoạt</span>
-                  </button>
-
-                  {renderSecondaryActions(cv, true)}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -29,17 +29,15 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {!isProUser && (
-          <button
-            type="button"
-            className="dashboard-guide-trigger-btn"
-            onClick={onOpenGuideModal}
-            title="Xem hướng dẫn tạo CV"
-          >
-            <BookOpen size={15} color="#0284c7" />
-            <span>Hướng dẫn (Tutorial)</span>
-          </button>
-        )}
+        <button
+          type="button"
+          className="dashboard-guide-trigger-btn"
+          onClick={onOpenGuideModal}
+          title="Xem hướng dẫn sử dụng & tạo CV"
+        >
+          <BookOpen size={15} color="#0284c7" />
+          <span>Hướng dẫn (Tutorial)</span>
+        </button>
 
         {isProUser ? (
           <div className="pro-member-pill">

@@ -140,17 +140,21 @@ export const JdMatcher: React.FC<JdMatcherProps> = ({
       className="match-tab-content"
     >
       {typeof quotaRemaining === 'number' && (
-        <p style={{ marginBottom: 12, fontSize: '0.88rem', color: blocked ? '#B91C1C' : '#475569' }}>
-          Hạn mức JD Match: <strong>{quotaRemaining}</strong>
-          {typeof quotaLimit === 'number' ? ` / ${quotaLimit}` : ''} còn lại tháng này
-          {blocked ? ` — ${upgradeHint}` : ''}
-        </p>
+        <div className={`match-quota-banner ${blocked ? 'blocked' : ''}`}>
+          <Sparkles size={16} />
+          <span>
+            Hạn mức JD Match: <strong>{quotaRemaining}</strong>
+            {typeof quotaLimit === 'number' ? ` / ${quotaLimit}` : ''} còn lại tháng này
+            {blocked ? ` — ${upgradeHint}` : ''}
+          </span>
+        </div>
       )}
 
       {noActiveCv && (
-        <p style={{ marginBottom: 12, color: '#B45309', fontSize: '0.9rem' }}>
-          Chưa có CV trong kho / Active CV. Confirm CV trước khi so khớp JD.
-        </p>
+        <div className="match-warning-banner">
+          <Folder size={16} />
+          <span>Chưa có CV nào được kích hoạt. Vui lòng kích hoạt một CV trong Kho CV trước khi so khớp JD.</span>
+        </div>
       )}
 
       <form
@@ -252,7 +256,7 @@ export const JdMatcher: React.FC<JdMatcherProps> = ({
           <div className="form-group" style={{ marginBottom: 12 }}>
             <label className="form-label">Tiêu đề JD (khi lưu)</label>
             <input
-              className="custom-form-select"
+              className="custom-form-input"
               value={jdTitle}
               onChange={(e) => setJdTitle(e.target.value)}
               placeholder="VD: Backend Intern — Công ty X"

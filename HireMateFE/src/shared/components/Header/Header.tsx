@@ -25,6 +25,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthRequiredModal } from '../AuthRequiredModal/AuthRequiredModal';
 import { SupportTicketModal } from '../SupportTicketModal/SupportTicketModal';
+import { CvRequiredModal } from '../CvRequiredModal/CvRequiredModal';
 import './css/Header.css';
 
 export const Header: React.FC = () => {
@@ -37,6 +38,7 @@ export const Header: React.FC = () => {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalFeature, setAuthModalFeature] = useState('Tính năng');
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
+  const [cvRequiredModalOpen, setCvRequiredModalOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => {
@@ -67,6 +69,16 @@ export const Header: React.FC = () => {
       setAuthModalFeature(featureName);
       setAuthModalOpen(true);
       if (mobileOpen) setMobileOpen(false);
+      return;
+    }
+
+    if (path === '/interview-setup') {
+      const activeCvId = localStorage.getItem('hm_active_cv_id');
+      if (!activeCvId) {
+        e.preventDefault();
+        setCvRequiredModalOpen(true);
+        if (mobileOpen) setMobileOpen(false);
+      }
     }
   };
 
@@ -568,6 +580,16 @@ export const Header: React.FC = () => {
       <SupportTicketModal
         isOpen={ticketModalOpen}
         onClose={() => setTicketModalOpen(false)}
+      />
+
+      {/* CV Required Modal */}
+      <CvRequiredModal
+        isOpen={cvRequiredModalOpen}
+        onClose={() => setCvRequiredModalOpen(false)}
+        onContinueAnyway={() => {
+          setCvRequiredModalOpen(false);
+          navigate('/interview-setup');
+        }}
       />
     </>
   );

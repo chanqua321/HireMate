@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, CheckCircle2, Eye, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Loader2, Plus, Sparkles, Trash2, UploadCloud, X, ChevronDown, Check, Search } from 'lucide-react';
 import { cvService, type CvTemplateDto, type CvWizardPayload } from '../../services/cv.service';
 import { CAREER_FIELD_OPTIONS, getRolesForField, isRoleSuggestedForField } from '../../data/careerFieldCatalog';
 import './CvWizardModal.css';
@@ -20,6 +20,8 @@ interface CvWizardModalProps {
   defaultRole?: string;
   templates?: CvTemplateDto[];
   initial?: Partial<CvWizardPayload>;
+  onSwitchToUpload?: () => void;
+  userCvCount?: number;
 }
 
 const emptyExp = (): Exp => ({ title: '', org: '', startDate: '', endDate: '', isCurrent: false, description: '', bulletPoints: [] });
@@ -47,14 +49,309 @@ const displayBirthDate = (value?: string): string => {
   return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : value || '';
 };
 
-const SectionNavigation = React.createContext<{ active: number; setActive: (value: number) => void }>({ active: 1, setActive: () => {} });
+interface CustomComboboxProps {
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+  placeholder?: string;
+  required?: boolean;
+}
 
-const Section: React.FC<{ n: number; title: string; filled?: boolean; incomplete?: boolean; optional?: boolean; id?: string; children: React.ReactNode }> = ({ n, title, filled, incomplete, optional, id, children }) => {
-  const { active, setActive } = React.useContext(SectionNavigation);
-  return <details id={id} data-section={n} className="cvb-section" open={active === n}>
-    <summary onClick={event => { event.preventDefault(); setActive(active === n ? 0 : n); }} aria-expanded={active === n}><span>{n}. {title}</span><em className={incomplete ? 'incomplete' : filled ? 'done' : ''}>{incomplete ? 'Cần bổ sung' : filled ? 'Đã điền' : optional ? 'Tùy chọn' : 'Chưa điền'}</em></summary>
-    <div className="cvb-section-body">{children}</div>
-  </details>;
+const CustomRoleCombobox: React.FC<CustomComboboxProps> = ({
+  value,
+  onChange,
+  options,
+  placeholder,
+  required,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  const filteredOptions = useMemo(() => {
+    if (!value.trim()) return options;
+    const lower = value.toLowerCase();
+    const matched = options.filter((opt) => opt.toLowerCase().includes(lower));
+    return matched.length > 0 ? matched : options;
+  }, [value, options]);
+
+  return (
+    <div className="custom-combobox-wrap" ref={containerRef}>
+      <div className="custom-combobox-input-row">
+        <input
+          ref={inputRef}
+          required={required}
+          type="text"
+          className="custom-combobox-input"
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setIsOpen(false);
+          }}
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          className={`custom-combobox-toggle ${isOpen ? 'open' : ''}`}
+          onClick={() => setIsOpen((prev) => !prev)}
+          title="Chọn gợi ý vị trí"
+        >
+          <ChevronDown size={17} />
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {isOpen && options.length > 0 && (
+          <motion.div
+            className="custom-dropdown-panel"
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: 0.12 }}
+          >
+            <div className="custom-dropdown-header">
+              <span>Gợi ý vị trí theo ngành:</span>
+            </div>
+            <div className="custom-dropdown-list">
+              {filteredOptions.map((opt) => {
+                const isSelected = opt.toLowerCase() === value.trim().toLowerCase();
+                return (
+                  <div
+                    key={opt}
+                    className={`custom-dropdown-item ${isSelected ? 'selected' : ''}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChange(opt);
+                      setIsOpen(false);
+                      inputRef.current?.blur();
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <span>{opt}</span>
+                    {isSelected && <Check size={15} color="#0284c7" />}
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+interface CustomSelectOption {
+  value: string;
+  label: string;
+  badge?: string;
+}
+
+interface CustomSelectProps {
+  value: string;
+  onChange: (val: string) => void;
+  options: CustomSelectOption[];
+  placeholder?: string;
+  searchable?: boolean;
+}
+
+const CustomSelect: React.FC<CustomSelectProps> = ({
+  value,
+  onChange,
+  options,
+  placeholder = '— Chọn —',
+  searchable = false,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  const selectedOption = options.find((o) => o.value === value);
+
+  const displayedOptions = useMemo(() => {
+    if (!searchable || !searchTerm.trim()) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [options, searchable, searchTerm]);
+
+  return (
+    <div className="custom-combobox-wrap" ref={containerRef}>
+      <button
+        type="button"
+        className={`custom-select-button ${isOpen ? 'open' : ''}`}
+        onClick={() => {
+          setIsOpen((prev) => !prev);
+          setSearchTerm('');
+        }}
+      >
+        <span className={selectedOption ? 'selected-text' : 'placeholder-text'}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown size={17} className={`select-chevron ${isOpen ? 'open' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            className="custom-dropdown-panel"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.16 }}
+          >
+            {searchable && (
+              <div className="custom-dropdown-search-wrap">
+                <Search size={14} color="#64748b" />
+                <input
+                  type="text"
+                  className="custom-dropdown-search"
+                  placeholder="Tìm kiếm nhanh..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            )}
+            <div className="custom-dropdown-list">
+              {displayedOptions.map((opt) => {
+                const isSelected = opt.value === value;
+                return (
+                  <div
+                    key={opt.value}
+                    className={`custom-dropdown-item ${isSelected ? 'selected' : ''}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChange(opt.value);
+                      setIsOpen(false);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="custom-dropdown-item-content">
+                      <span>{opt.label}</span>
+                      {opt.badge && <span className="custom-dropdown-badge">{opt.badge}</span>}
+                    </div>
+                    {isSelected && <Check size={15} color="#0284c7" />}
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const SectionNavigation = React.createContext<{
+  active: number;
+  setActive: (value: number) => void;
+  hasExistingCv: boolean;
+}>({ active: 1, setActive: () => {}, hasExistingCv: false });
+
+const Section: React.FC<{
+  n: number;
+  title: string;
+  stageName?: string;
+  filled?: boolean;
+  incomplete?: boolean;
+  optional?: boolean;
+  id?: string;
+  children: React.ReactNode;
+}> = ({ n, title, stageName, filled, incomplete, optional, id, children }) => {
+  const { active, setActive, hasExistingCv } = React.useContext(SectionNavigation);
+  const isMandatory = n >= 1 && n <= 3;
+  // Alert "❗ Chưa điền" chỉ xuất hiện khi user mới tạo account hoặc chưa có CV
+  const isMissing = !hasExistingCv && isMandatory && !filled;
+
+  return (
+    <details
+      id={id}
+      data-section={n}
+      className={`cvb-section ${isMissing ? 'cvb-section-attention' : filled ? 'cvb-section-done' : ''}`}
+      open={active === n}
+    >
+      <summary
+        onClick={(event) => {
+          event.preventDefault();
+          setActive(active === n ? 0 : n);
+        }}
+        aria-expanded={active === n}
+      >
+        <span className="cvb-section-title-wrap">
+          {isMissing ? (
+            <span className="cvb-alert-mark" title="Mục bắt buộc chưa hoàn thành">
+              ❗
+            </span>
+          ) : filled ? (
+            <span className="cvb-done-mark" title="Đã hoàn thành">
+              ✓
+            </span>
+          ) : null}
+          <span className="cvb-section-num-title">
+            {!hasExistingCv && stageName ? `${stageName}: ${title}` : `${n}. ${title}`}
+          </span>
+        </span>
+        <em
+          className={
+            incomplete
+              ? 'incomplete'
+              : filled
+              ? 'done'
+              : isMissing
+              ? 'attention'
+              : optional
+              ? 'optional'
+              : ''
+          }
+        >
+          {incomplete
+            ? '⚠️ Cần bổ sung'
+            : filled
+            ? '✓ Đã hoàn thành'
+            : isMissing
+            ? '❗ Chưa điền'
+            : isMandatory
+            ? 'Bắt buộc'
+            : optional
+            ? 'Tùy chọn'
+            : ''}
+        </em>
+      </summary>
+      <div className="cvb-section-body">{children}</div>
+    </details>
+  );
 };
 
 const Tags: React.FC<{ value: string[]; onChange: (v: string[]) => void; placeholder: string }> = ({ value, onChange, placeholder }) => {
@@ -65,7 +362,19 @@ const Tags: React.FC<{ value: string[]; onChange: (v: string[]) => void; placeho
 
 const ExperienceList: React.FC<{ items: Exp[]; label: string; onUpdate: (i:number,p:Partial<Exp>)=>void; onRemove:(i:number)=>void; onAdd:()=>void }> = ({items,label,onUpdate,onRemove,onAdd}) => <>{items.map((x,i)=><div className="cvb-record" key={i}><b>{label} ({i+1})</b><div className="cvb-grid"><label>Vị trí / Tên *<input value={x.title||''} onChange={e=>onUpdate(i,{title:e.target.value})}/></label><label>Tổ chức / Công ty *<input value={x.org||''} onChange={e=>onUpdate(i,{org:e.target.value})}/></label><label>Vai trò<input value={x.role||''} onChange={e=>onUpdate(i,{role:e.target.value})}/></label><label>Bắt đầu<input type="month" value={x.startDate||''} onChange={e=>onUpdate(i,{startDate:e.target.value})}/></label><label>Kết thúc<input type="month" disabled={x.isCurrent} value={x.endDate||''} onChange={e=>onUpdate(i,{endDate:e.target.value})}/></label></div><label className="cvb-check"><input type="checkbox" checked={!!x.isCurrent} onChange={e=>onUpdate(i,{isCurrent:e.target.checked})}/> Đang thực hiện</label><label>Mô tả<textarea value={x.description||''} onChange={e=>onUpdate(i,{description:e.target.value})}/></label><label>Thành tựu (mỗi dòng một ý)<textarea value={(x.bulletPoints||[]).join('\n')} onChange={e=>onUpdate(i,{bulletPoints:e.target.value.split('\n')})}/></label><button type="button" className="cvb-delete" onClick={()=>onRemove(i)}><Trash2 size={14}/> Xóa</button></div>)}<button type="button" className="cvb-add" onClick={onAdd}><Plus size={14}/> Thêm {label.toLowerCase()}</button></>;
 
-export const CvWizardModal: React.FC<CvWizardModalProps> = ({ isOpen, embedded = false, onClose, onSuccess, defaultIndustry = '', defaultRole = '', templates = [], initial = {} }) => {
+export const CvWizardModal: React.FC<CvWizardModalProps> = ({
+  isOpen,
+  embedded = false,
+  onClose,
+  onSuccess,
+  defaultIndustry = '',
+  defaultRole = '',
+  templates = [],
+  initial = {},
+  onSwitchToUpload,
+  userCvCount,
+}) => {
+  const hasExistingCv = typeof userCvCount === 'number' && userCvCount > 0;
   const [form, setForm] = useState<CvWizardPayload>({ fullName: '', university: '', major: '', graduationYear: 0, desiredIndustry: '', desiredPosition: '', experienceLevel: '' });
   const [birthDateText, setBirthDateText] = useState('');
   const [previewHtml, setPreviewHtml] = useState('');
@@ -81,6 +390,70 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({ isOpen, embedded =
   const roles = useMemo(() => getRolesForField(form.desiredIndustry), [form.desiredIndustry]);
   const optionalCount = [!!form.careerObjective || !!form.summary, !!form.experiences?.length, !!form.activities?.length, !!form.certifications?.length, !!form.skills?.length, !!form.hobbies?.length, !!form.references?.length, !!form.projects?.length].filter(Boolean).length;
   const set = <K extends keyof CvWizardPayload>(key: K, value: CvWizardPayload[K]) => setForm(prev => ({ ...prev, [key]: value }));
+
+  const section1Filled = Boolean(form.desiredIndustry?.trim() && form.desiredPosition?.trim());
+  const section2Filled = Boolean(form.fullName?.trim() && form.phone?.trim() && form.email?.trim());
+  const section3Filled = Boolean(form.educations?.length && form.educations.every(x => Boolean(x.institution?.trim())));
+  const mandatoryCount = (section1Filled ? 1 : 0) + (section2Filled ? 1 : 0) + (section3Filled ? 1 : 0);
+
+  const fillSampleData = () => {
+    setForm(prev => ({
+      ...prev,
+      desiredIndustry: 'Công nghệ thông tin',
+      desiredPosition: 'Lập trình viên Frontend',
+      displayName: 'CV Lập trình viên Frontend — 2026',
+      fullName: prev.fullName || 'Nguyễn Văn An',
+      phone: prev.phone || '0912345678',
+      email: prev.email || 'nguyenvanan.dev@gmail.com',
+      address: prev.address || 'Quận Cầu Giấy, Hà Nội',
+      careerObjective: 'Lập trình viên Frontend với nền tảng React & TypeScript vững chắc, mong muốn phát triển sản phẩm web hiệu năng cao và nâng cao kỹ năng thực chiến.',
+      summary: 'Chủ động, có tinh thần trách nhiệm cao, khả năng nghiên cứu công nghệ mới nhanh và phối hợp làm việc nhóm hiệu quả.',
+      educations: [
+        {
+          institution: 'Đại học Bách Khoa Hà Nội',
+          major: 'Công nghệ thông tin',
+          startDate: '2020-09',
+          endDate: '2024-06',
+          isCurrent: false,
+          gpa: '3.6/4.0',
+          description: 'Tốt nghiệp loại Giỏi chuyên ngành Kỹ thuật Phần mềm.'
+        }
+      ],
+      experiences: [
+        {
+          title: 'Frontend Developer Intern',
+          org: 'Công ty Cổ phần Công nghệ ABC',
+          role: 'Thực tập sinh Frontend',
+          startDate: '2023-06',
+          endDate: '2023-12',
+          isCurrent: false,
+          description: 'Tham gia xây dựng giao diện ứng dụng quản lý với React và TailwindCSS.',
+          bulletPoints: [
+            'Tối ưu thời gian tải trang ban đầu giảm 25%',
+            'Phát triển 15+ reusable UI components chuẩn Design System',
+            'Phối hợp cùng Backend tích hợp RESTful APIs và xử lý xác thực người dùng'
+          ]
+        }
+      ],
+      skills: ['React', 'TypeScript', 'JavaScript', 'HTML5/CSS3', 'Git', 'RESTful API', 'TailwindCSS'],
+      projects: [
+        {
+          name: 'Hệ thống Quản lý Bán hàng E-Commerce',
+          role: 'Frontend Lead',
+          period: '2023-09 — 2024-01',
+          url: 'https://github.com/example/ecommerce-app',
+          technologies: ['React', 'TypeScript', 'Redux Toolkit', 'Axios'],
+          description: 'Ứng dụng thương mại điện tử hỗ trợ tìm kiếm sản phẩm, giỏ hàng và thanh toán trực tuyến.',
+          bulletPoints: [
+            'Xây dựng luồng thanh toán giỏ hàng mượt mà với Redux',
+            'Đạt 95+ điểm Lighthouse về Accessibility & Performance'
+          ]
+        }
+      ]
+    }));
+    setBirthDateText('15/08/2002');
+    setError('');
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -205,33 +578,237 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({ isOpen, embedded =
 
   if (!isOpen) return null;
   return <AnimatePresence><div className={`cv-wizard-backdrop${previewHtml ? ' cvb-preview-backdrop' : embedded ? ' cvb-inline-backdrop' : ''}`}><motion.div className={`cv-wizard-modal cvb-modal${previewHtml ? ' cvb-preview-mode' : embedded ? ' cvb-inline-mode' : ''}`} initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }}>
-    <div className="wizard-modal-header"><div className="wizard-header-left">{previewHtml && <button type="button" className="wizard-back-btn cvb-top-back" disabled={busy} onClick={backToEdit}><ArrowLeft size={16}/> Quay lại chỉnh sửa</button>}<div className="wizard-icon-box"><Sparkles size={20}/></div><div><h3 className="wizard-title">{previewHtml ? 'Xem trước CV' : 'Tạo CV'}</h3><p className="wizard-subtitle">{previewHtml ? 'Kiểm tra toàn bộ CV trước khi xác nhận tạo.' : 'Điền thông tin một lần, xem trước rồi xác nhận tạo CV.'}</p></div></div>{(!embedded || previewHtml) && <button type="button" className="wizard-close-btn" disabled={busy} onClick={closeBuilder}><X size={18}/></button>}</div>
+    {(!embedded || previewHtml) && (
+      <div className="wizard-modal-header">
+        <div className="wizard-header-left">
+          {previewHtml && (
+            <button type="button" className="wizard-back-btn cvb-top-back" disabled={busy} onClick={backToEdit}>
+              <ArrowLeft size={16}/> Quay lại chỉnh sửa
+            </button>
+          )}
+          <div className="wizard-icon-box"><Sparkles size={20}/></div>
+          <div>
+            <h3 className="wizard-title">{previewHtml ? 'Xem trước CV' : 'Tạo CV'}</h3>
+            <p className="wizard-subtitle">{previewHtml ? 'Kiểm tra toàn bộ định dạng và AI tối ưu trước khi tạo.' : 'Điền thông tin một lần, xem trước rồi xác nhận tạo CV.'}</p>
+          </div>
+        </div>
+        <button type="button" className="wizard-close-btn" disabled={busy} onClick={closeBuilder}><X size={18}/></button>
+      </div>
+    )}
     {error && <div className="wizard-alert-error">{error}</div>}
-    {previewHtml ? <div className="cvb-preview-workspace"><div className="cvb-preview-document">{previewPdfUrl ? <iframe title="Xem trước CV PDF" src={previewPdfUrl}/> : <iframe sandbox="" title="Xem trước CV HTML" srcDoc={previewHtml}/>}</div>{aiPanelOpen && <aside className="cvb-ai-panel"><div className="cvb-ai-panel-heading"><div><strong>✨ AI cải thiện nội dung</strong><p>AI chỉ cải thiện nội dung CV, không thay đổi thông tin cá nhân. Bạn có thể xem lại trước khi áp dụng.</p></div><button type="button" onClick={() => setAiPanelOpen(false)} aria-label="Đóng AI panel"><X size={17}/></button></div><button type="button" className="cvb-ai-run" disabled={aiBusy || busy} onClick={() => void requestAiProposal()}>{aiBusy ? <Loader2 size={16} className="animate-spin"/> : <Sparkles size={16}/>} AI diễn đạt lại</button>{aiMessage && <p className="cvb-ai-message">{aiMessage}</p>}{aiProposal && <div className="cvb-ai-proposal"><strong>Nội dung đề xuất</strong>{proposalSections.length ? proposalSections.map((row, index) => <div className="cvb-ai-proposal-item" key={`${row.label}-${index}`}><b>{row.label}</b><p>{row.value}</p></div>) : <p>AI giữ nguyên nội dung hiện tại vì không có phần nào cần thay đổi.</p>}</div>}<div className="cvb-ai-decision"><button type="button" className="wizard-back-btn" onClick={() => { setAiProposal(null); setAiMessage(''); setAiPanelOpen(false); }}>Giữ nguyên</button><button type="button" className="wizard-submit-btn" disabled={!aiProposal || aiBusy || busy} onClick={() => void applyAiProposal()}>Áp dụng đề xuất</button></div></aside>}<div className="wizard-footer-actions cvb-preview-actions"><button type="button" className="wizard-back-btn" disabled={busy || aiBusy} onClick={backToEdit}><ArrowLeft size={16}/> Chỉnh sửa</button><button type="button" className="cvb-ai-action" disabled={busy || aiBusy} onClick={() => setAiPanelOpen(value => !value)}><Sparkles size={16}/> AI cải thiện nội dung</button><button type="button" className="wizard-submit-btn" disabled={busy || aiBusy} onClick={confirm}>{busy ? <Loader2 size={16} className="animate-spin"/> : <CheckCircle2 size={16}/>} Xác nhận tạo CV</button></div></div> : <div className="wizard-form-body cvb-body">
-      <div className="cvb-form-intro"><strong>Thông tin cần có</strong><span>Điền một lần để tạo CV. Các mục bổ sung có thể để sau.</span></div>
-      <SectionNavigation.Provider value={{ active: activeSection, setActive: setActiveSection }}>
-      <Section n={1} title="Thông tin CV" filled={!!form.desiredIndustry && !!form.desiredPosition}>
+    {previewHtml ? (
+      <div className="cvb-preview-workspace">
+        <div className="cvb-preview-document">
+          {previewPdfUrl ? (
+            <iframe title="Xem trước CV PDF" src={previewPdfUrl} />
+          ) : (
+            <iframe sandbox="" title="Xem trước CV HTML" srcDoc={previewHtml} />
+          )}
+        </div>
+        {aiPanelOpen && (
+          <aside className="cvb-ai-panel">
+            <div className="cvb-ai-panel-heading">
+              <div>
+                <strong>✨ AI cải thiện nội dung</strong>
+                <p>AI chỉ cải thiện nội dung CV, không thay đổi thông tin cá nhân. Bạn có thể xem lại trước khi áp dụng.</p>
+              </div>
+              <button type="button" onClick={() => setAiPanelOpen(false)} aria-label="Đóng AI panel">
+                <X size={17} />
+              </button>
+            </div>
+            <button
+              type="button"
+              className="cvb-ai-run"
+              disabled={aiBusy || busy}
+              onClick={() => void requestAiProposal()}
+            >
+              {aiBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              AI diễn đạt lại
+            </button>
+            {aiMessage && <p className="cvb-ai-message">{aiMessage}</p>}
+            {aiProposal && (
+              <div className="cvb-ai-proposal">
+                <strong>Nội dung đề xuất</strong>
+                {proposalSections.length ? (
+                  proposalSections.map((row, index) => (
+                    <div className="cvb-ai-proposal-item" key={`${row.label}-${index}`}>
+                      <b>{row.label}</b>
+                      <p>{row.value}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p>AI giữ nguyên nội dung hiện tại vì không có phần nào cần thay đổi.</p>
+                )}
+              </div>
+            )}
+            <div className="cvb-ai-decision">
+              <button
+                type="button"
+                className="wizard-back-btn"
+                onClick={() => {
+                  setAiProposal(null);
+                  setAiMessage('');
+                  setAiPanelOpen(false);
+                }}
+              >
+                Giữ nguyên
+              </button>
+              <button
+                type="button"
+                className="wizard-submit-btn"
+                disabled={!aiProposal || aiBusy || busy}
+                onClick={() => void applyAiProposal()}
+              >
+                Áp dụng đề xuất
+              </button>
+            </div>
+          </aside>
+        )}
+        <div className="wizard-footer-actions cvb-preview-actions">
+          <button type="button" className="wizard-back-btn" disabled={busy || aiBusy} onClick={backToEdit}>
+            <ArrowLeft size={16} /> Chỉnh sửa
+          </button>
+          <button
+            type="button"
+            className="cvb-ai-action"
+            disabled={busy || aiBusy}
+            onClick={() => setAiPanelOpen((value) => !value)}
+          >
+            <Sparkles size={16} /> AI cải thiện nội dung
+          </button>
+          <button type="button" className="wizard-submit-btn" disabled={busy || aiBusy} onClick={confirm}>
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+            Xác nhận tạo CV
+          </button>
+        </div>
+      </div>
+    ) : (
+      <div className="wizard-form-body cvb-body">
+        {/* Notification bar tiến độ hoàn thiện — chỉ xuất hiện khi user mới tạo account hoặc chưa có CV */}
+        {!hasExistingCv ? (
+          <div className="cvb-stepper-bar">
+            <div className="cvb-stepper-info">
+              <div className="cvb-stepper-label-row">
+                <span className="cvb-stepper-label">
+                  Tiến độ hoàn thiện: <strong>{mandatoryCount}/3 đợt bắt buộc</strong>
+                </span>
+                <span className="cvb-stepper-pct">{Math.round((mandatoryCount / 3) * 100)}%</span>
+              </div>
+              <div className="cvb-progress-track">
+                <div className="cvb-progress-bar" style={{ width: `${(mandatoryCount / 3) * 100}%` }} />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="cvb-quick-fill-btn"
+              onClick={fillSampleData}
+              title="Tự động điền dữ liệu mẫu để bạn thử nghiệm nhanh tính năng"
+            >
+              <Sparkles size={14} />
+              <span>Điền mẫu nhanh</span>
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+            <button
+              type="button"
+              className="cvb-quick-fill-btn"
+              onClick={fillSampleData}
+              title="Tự động điền dữ liệu mẫu để bạn thử nghiệm nhanh tính năng"
+            >
+              <Sparkles size={14} />
+              <span>Điền mẫu nhanh</span>
+            </button>
+          </div>
+        )}
+
+        <SectionNavigation.Provider value={{ active: activeSection, setActive: setActiveSection, hasExistingCv }}>
+        <Section n={1} title="Thông tin CV & Vị trí mục tiêu" stageName="Đợt 1" filled={section1Filled}>
         <div className="cvb-grid">
-          <label>Ngành nghề *<select required value={form.desiredIndustry} onChange={e => set('desiredIndustry', e.target.value)}>{!CAREER_FIELD_OPTIONS.includes(form.desiredIndustry) && <option value={form.desiredIndustry}>{form.desiredIndustry}</option>}{CAREER_FIELD_OPTIONS.map(x => <option key={x}>{x}</option>)}</select></label>
-          <label>Vị trí ứng tuyển *<input required list="cvb-roles" value={form.desiredPosition} onChange={e => set('desiredPosition', e.target.value)}/><datalist id="cvb-roles">{roles.map(x => <option key={x} value={x}/>)}</datalist>{form.desiredPosition && !isRoleSuggestedForField(form.desiredPosition, form.desiredIndustry) && <small>Vị trí cũ không thuộc gợi ý ngành này; dữ liệu vẫn được giữ.</small>}</label>
-          <label>Tên CV<input value={form.displayName || ''} onChange={e => set('displayName', e.target.value)} placeholder="VD: CV Backend Developer"/></label>
-          <label>Template<select value={form.templateId || ''} onChange={e => set('templateId', e.target.value || undefined)}>{templates.length === 0 && <option value="">CV Tiêu chuẩn HireMate</option>}{templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+          <label>
+            Ngành nghề *
+            <CustomSelect
+              value={form.desiredIndustry}
+              onChange={(val) => {
+                set('desiredIndustry', val);
+                const suggested = getRolesForField(val);
+                if (suggested.length > 0 && !form.desiredPosition) {
+                  set('desiredPosition', suggested[0]);
+                }
+              }}
+              options={CAREER_FIELD_OPTIONS.map((f) => ({ value: f, label: f }))}
+              searchable
+              placeholder="Chọn ngành nghề"
+            />
+          </label>
+          <label>
+            Vị trí ứng tuyển *
+            <CustomRoleCombobox
+              required
+              value={form.desiredPosition}
+              onChange={(val) => set('desiredPosition', val)}
+              options={roles}
+              placeholder="VD: Lập trình viên Frontend"
+            />
+            {form.desiredPosition && !isRoleSuggestedForField(form.desiredPosition, form.desiredIndustry) && (
+              <small>Vị trí tùy chỉnh (ngoài danh mục gợi ý mặc định).</small>
+            )}
+          </label>
+          <label>
+            Tên hiển thị CV
+            <input
+              value={form.displayName || ''}
+              onChange={(e) => set('displayName', e.target.value)}
+              placeholder="VD: CV Frontend Developer — 2026"
+            />
+          </label>
+          <label>
+            Mẫu giao diện CV (Template)
+            <CustomSelect
+              value={form.templateId || ''}
+              onChange={(val) => set('templateId', val || undefined)}
+              options={
+                templates.length === 0
+                  ? [{ value: '', label: 'CV Tiêu chuẩn HireMate (Modern)', badge: 'Chuẩn ATS' }]
+                  : templates.map((t) => ({
+                      value: t.id,
+                      label: t.name,
+                      badge: t.isSystemTemplate ? 'Chuẩn ATS' : undefined,
+                    }))
+              }
+              placeholder="Chọn mẫu template"
+            />
+          </label>
         </div>
       </Section>
-      <Section n={2} title="Thông tin cá nhân" filled={!!form.fullName && !!form.phone && !!form.email}>
+      <Section n={2} title="Thông tin cá nhân" stageName="Đợt 2" filled={!!form.fullName && !!form.phone && !!form.email}>
         <div className="cvb-grid">
           <label>Họ và tên *<input required value={form.fullName} onChange={e => set('fullName', e.target.value)}/></label>
           <label>Số điện thoại *<input required type="tel" value={form.phone || ''} onChange={e => set('phone', e.target.value)}/></label>
           <label>Email *<input required type="email" value={form.email || ''} onChange={e => set('email', e.target.value)}/></label>
           <label>Địa chỉ<input value={form.address || ''} onChange={e => set('address', e.target.value)}/></label>
           <label>Ngày sinh (DD/MM/YYYY)<input type="text" inputMode="numeric" autoComplete="bday" placeholder="DD/MM/YYYY" maxLength={10} value={birthDateText} onChange={e => { const text = e.target.value.replace(/[^\d/-]/g, '').slice(0, 10); setBirthDateText(text); set('dateOfBirth', parseBirthDate(text) || ''); }} onBlur={() => { const iso = parseBirthDate(birthDateText); if (iso) setBirthDateText(displayBirthDate(iso)); }}/></label>
-          <label>Giới tính<select value={form.gender || ''} onChange={e => set('gender', e.target.value)}><option value="">Để trống</option><option>Nam</option><option>Nữ</option><option>Khác</option></select></label>
+          <label>
+            Giới tính
+            <CustomSelect
+              value={form.gender || ''}
+              onChange={(val) => set('gender', val)}
+              options={[
+                { value: '', label: 'Để trống' },
+                { value: 'Nam', label: 'Nam' },
+                { value: 'Nữ', label: 'Nữ' },
+                { value: 'Khác', label: 'Khác' },
+              ]}
+              placeholder="Chọn giới tính"
+            />
+          </label>
           <label>LinkedIn<input type="url" placeholder="https://linkedin.com/in/..." value={form.linkedIn || ''} onChange={e => set('linkedIn', e.target.value)}/></label>
           <label>GitHub<input type="url" placeholder="https://github.com/..." value={form.gitHub || ''} onChange={e => set('gitHub', e.target.value)}/></label>
           <label>Ảnh đại diện<input type="file" accept="image/*" onChange={e => avatar(e.target.files?.[0])}/></label>
         </div>
       </Section>
-      <Section n={3} id="cvb-education" title="Học vấn *" filled={!!form.educations?.length && form.educations.every(x => !!x.institution?.trim())}>
+      <Section n={3} id="cvb-education" title="Học vấn *" stageName="Đợt 3" filled={!!form.educations?.length && form.educations.every(x => !!x.institution?.trim())}>
         {(form.educations || []).map((x, i) => <div className="cvb-record" key={i}>
           <b>Học vấn ({i + 1})</b>
           <div className="cvb-grid">
@@ -259,7 +836,17 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({ isOpen, embedded =
       <Section n={11} title="Dự án" filled={!!form.projects?.length} incomplete={form.projects?.some(x => !x.name?.trim())} optional>{(form.projects || []).map((x,i)=><div className="cvb-record" key={i}><b>Dự án ({i+1})</b><div className="cvb-grid"><label>Tên dự án *<input value={x.name||''} onChange={e=>updateArray<Project>('projects',i,{name:e.target.value})}/></label><label>Vai trò<input value={x.role||''} onChange={e=>updateArray<Project>('projects',i,{role:e.target.value})}/></label><label>Thời gian<input value={x.period||''} onChange={e=>updateArray<Project>('projects',i,{period:e.target.value})}/></label><label>URL<input value={x.url||''} onChange={e=>updateArray<Project>('projects',i,{url:e.target.value})}/></label></div><label>Công nghệ<input value={(x.technologies||[]).join(', ')} onChange={e=>updateArray<Project>('projects',i,{technologies:e.target.value.split(',').map(v=>v.trim()).filter(Boolean)})}/></label><label>Mô tả<textarea value={x.description||''} onChange={e=>updateArray<Project>('projects',i,{description:e.target.value})}/></label><label>Thành tựu (mỗi dòng một ý)<textarea value={(x.bulletPoints||[]).join('\n')} onChange={e=>updateArray<Project>('projects',i,{bulletPoints:e.target.value.split('\n')})}/></label><button type="button" className="cvb-delete" onClick={()=>remove('projects',i)}><Trash2 size={14}/> Xóa</button></div>)}<button type="button" className="cvb-add" onClick={()=>set('projects',[...(form.projects||[]),emptyProject()])}><Plus size={14}/> Thêm dự án</button></Section>
       </div>
       </SectionNavigation.Provider>
-      <div className="wizard-footer-actions"><button type="button" className="wizard-cancel-btn" onClick={closeBuilder}>{embedded ? 'Kho CV' : 'Hủy'}</button><button type="button" className="wizard-submit-btn" disabled={busy} onClick={preview}>{busy ? <Loader2 size={16} className="animate-spin"/> : <Eye size={16}/>} Xem trước CV với dữ liệu hiện tại</button></div>
-    </div>}
-  </motion.div></div></AnimatePresence>;
+      <div className="wizard-footer-actions">
+        <button type="button" className="wizard-cancel-btn" onClick={closeBuilder}>
+          {embedded ? (typeof userCvCount === 'number' ? `Mở Kho CV (${userCvCount})` : 'Kho CV') : 'Hủy'}
+        </button>
+        <button type="button" className="wizard-submit-btn cvb-primary-action-btn" disabled={busy} onClick={preview}>
+          {busy ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+          <span>Xem trước & Tối ưu bằng AI</span>
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    </div>
+  )}
+</motion.div></div></AnimatePresence>;
 };
