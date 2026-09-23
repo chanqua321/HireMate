@@ -68,6 +68,31 @@ function formatAnalysisSummary(a?: AnswerAnalysis | null): string {
   return lines.join('\n');
 }
 
+const TypewriterText: React.FC<{ text: string; animate: boolean; onTick: () => void }> = ({ text, animate, onTick }) => {
+  const [displayed, setDisplayed] = useState(animate ? '' : text);
+
+  useEffect(() => {
+    if (!animate) {
+      setDisplayed(text);
+      return;
+    }
+    let i = 0;
+    // We increment by 1-2 chars at a time so it feels like natural typing
+    const interval = setInterval(() => {
+      setDisplayed(text.substring(0, i));
+      i += 1;
+      onTick();
+      if (i > text.length) {
+        setDisplayed(text);
+        clearInterval(interval);
+      }
+    }, 15);
+    return () => clearInterval(interval);
+  }, [text, animate]);
+
+  return <span style={{ whiteSpace: 'pre-wrap' }}>{displayed}</span>;
+};
+
 export const InterviewRoom: React.FC = () => {
   const { profile, interviewConfig, saveLastResult } = useApp();
   const navigate = useNavigate();
@@ -358,9 +383,19 @@ export const InterviewRoom: React.FC = () => {
     };
   }, []);
 
+  const scrollToBottom = useCallback(() => {
+    if (chatEndRef.current) {
+      const parent = chatEndRef.current.parentElement;
+      if (parent) {
+        // Prevent aggressive smooth scrolling during fast typing which can cause jitter
+        parent.scrollTo({ top: parent.scrollHeight, behavior: 'auto' });
+      }
+    }
+  }, []);
+
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, isSubmitting, scrollToBottom]);
 
   const calculateRealisticScore = (answersList: string[]): InterviewResult => {
     const validAnswers = answersList.filter(
@@ -968,7 +1003,13 @@ export const InterviewRoom: React.FC = () => {
                         </div>
                       )}
 
-                      <div className="msg-text-content">{msg.text}</div>
+                      <div className="msg-text-content">
+                        <TypewriterText 
+                          text={msg.text} 
+                          animate={idx === messages.length - 1 && msg.sender === 'ai'} 
+                          onTick={scrollToBottom} 
+                        />
+                      </div>
                     </div>
                   ) : (
                     <div className="msg-bubble-user">
@@ -977,6 +1018,33 @@ export const InterviewRoom: React.FC = () => {
                   )}
                 </motion.div>
               ))}
+
+              {isSubmitting && (
+                <motion.div
+                  key="loading-indicator"
+                  className="chat-msg ai"
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="msg-bubble-ai">
+                    <div className="msg-ai-header">
+                      <div className="msg-ai-author">
+                        <Bot size={17} />
+                        <span>Cố vấn AI HireMate</span>
+                      </div>
+                    </div>
+                    <div className="msg-text-content">
+                      <div className="typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </AnimatePresence>
             <div ref={chatEndRef} />
           </div>

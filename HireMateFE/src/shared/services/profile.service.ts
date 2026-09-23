@@ -73,7 +73,6 @@ export const profileService = {
     if (Array.isArray(raw.hobbies)) payload.hobbies = raw.hobbies;
     if (Array.isArray(raw.skills)) {
       payload.skills = raw.skills;
-      if (!payload.hobbies) payload.hobbies = raw.skills;
     }
     if (Array.isArray(raw.experiences)) payload.experiences = raw.experiences;
     if (Array.isArray(raw.projects)) payload.projects = raw.projects;

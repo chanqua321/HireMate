@@ -53,7 +53,6 @@ export const OnboardingProfile: React.FC = () => {
       education: education.trim(),
       bio: bio.trim(),
       skills,
-      hobbies: skills,
     });
 
     if (localStorage.getItem('hm_access_token')) {
@@ -62,7 +61,6 @@ export const OnboardingProfile: React.FC = () => {
         await onboardingService.savePersonal({
           fullName: finalName,
           bio: bio.trim(),
-          hobbies: skills,
         });
       } catch (e) {
         // Fallback gracefully
