@@ -4,7 +4,7 @@ services:
     image: caddy:2
     networks:
       default:
-        ipv4_address: 172.30.10.2
+        ipv4_address: 172.30.10.254
     restart: unless-stopped
     environment:
       API_HOST: ${API_HOST:?Set public API hostname}
@@ -62,7 +62,7 @@ services:
       EmailSettings__FrontendUrl: ${FRONTEND_URL:-https://hiremate-v2.vercel.app}
       EmailSettings__ApiPublicUrl: ${API_PUBLIC_URL:?Set public HTTPS API URL}
       Swagger__Enabled: "false"
-      ReverseProxy__Address: 172.30.10.2
+      ReverseProxy__Address: 172.30.10.254
       SeedAdmin__Password: ${ADMIN_PASSWORD:?Set unique initial admin password}
     ports:
       - 127.0.0.1:5080:8080
@@ -83,3 +83,4 @@ networks:
     ipam:
       config:
         - subnet: 172.30.10.0/24
+          ip_range: 172.30.10.0/25
