@@ -1,0 +1,85 @@
+name: hiremate
+services:
+  proxy:
+    image: caddy:2
+    networks:
+      default:
+        ipv4_address: 172.30.10.2
+    restart: unless-stopped
+    environment:
+      API_HOST: ${API_HOST:?Set public API hostname}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - proxy_config:/config
+    depends_on:
+      - api
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set database password}
+      MSSQL_MEMORY_LIMIT_MB: "1536"
+    volumes:
+      - database:/var/opt/mssql
+    healthcheck:
+      test: [CMD-SHELL, '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Server=db,1433;Database=HireMateDB;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true
+      Jwt__Key: ${JWT_KEY:?Set JWT signing key}
+      Jwt__Issuer: HireMate
+      Jwt__Audience: HireMate
+      FileStorage__Provider: PersistentVolume
+      FileStorage__RootPath: /data/cv
+      Cors__Origins__0: ${FRONTEND_URL:-https://hiremate-v2.vercel.app}
+      EmailSettings__FrontendUrl: ${FRONTEND_URL:-https://hiremate-v2.vercel.app}
+      EmailSettings__ApiPublicUrl: ${API_PUBLIC_URL:?Set public HTTPS API URL}
+      Swagger__Enabled: "false"
+      ReverseProxy__Address: 172.30.10.2
+      SeedAdmin__Password: ${ADMIN_PASSWORD:?Set unique initial admin password}
+    ports:
+      - 127.0.0.1:5080:8080
+    volumes:
+      - cvs:/data/cv
+    depends_on:
+      db: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+volumes:
+  certificates:
+  proxy_config:
+  database:
+  cvs:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24

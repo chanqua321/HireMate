@@ -1,0 +1,4 @@
+.env
+known_hosts
+*.pem
+*.tar.gz

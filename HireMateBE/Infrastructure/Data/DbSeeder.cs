@@ -649,7 +649,11 @@ public static class DbSeeder
             };
             // The deployment/demo password intentionally differs from the normal registration policy.
             // Hash it only for a new account; never replace an existing Admin password.
-            candidate.PasswordHash = users.PasswordHasher.HashPassword(candidate, "12345");
+            var seedPassword = Environment.GetEnvironmentVariable("SeedAdmin__Password");
+            if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Production"
+                && (string.IsNullOrWhiteSpace(seedPassword) || seedPassword.Length < 16))
+                throw new InvalidOperationException("Production requires a unique SeedAdmin__Password of at least 16 characters.");
+            candidate.PasswordHash = users.PasswordHasher.HashPassword(candidate, seedPassword ?? "12345");
             try
             {
                 var created = await users.CreateAsync(candidate);

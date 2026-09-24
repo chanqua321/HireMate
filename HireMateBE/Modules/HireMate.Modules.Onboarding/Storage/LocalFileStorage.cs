@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace HireMate.Modules.Onboarding.Storage;
 
-/// <summary>Local development/test provider; never register this for production.</summary>
+/// <summary>Private filesystem storage. Production registration requires PersistentVolumeStorage mount validation.</summary>
 public sealed class LocalFileStorage : IFileStorageService
 {
     private static readonly Regex NewKey = new(

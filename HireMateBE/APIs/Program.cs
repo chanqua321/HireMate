@@ -15,23 +15,35 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using HireMate.Modules.Onboarding.Storage;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    if (IPAddress.TryParse(builder.Configuration["ReverseProxy:Address"], out var proxyAddress))
+        options.KnownProxies.Add(proxyAddress);
+});
 
-// Local is intentionally development-only. Production must not silently write user files
-// to an ephemeral container; register an object-storage provider before deployment.
+// Production requires an explicitly configured persistent Linux volume.
 var fileStorageProvider = builder.Configuration["FileStorage:Provider"];
+var fileStorageRoot = builder.Configuration["FileStorage:RootPath"];
 if (builder.Environment.IsProduction())
-    throw new InvalidOperationException(
-        $"Production file storage provider is not configured (FileStorage:Provider={fileStorageProvider ?? "missing"}). " +
-        "An object-storage implementation is required before deployment.");
+{
+    if (!string.Equals(fileStorageProvider, "PersistentVolume", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("Production requires FileStorage:Provider=PersistentVolume and a dedicated mount.");
+    builder.Services.AddSingleton<IFileStorageService>(PersistentVolumeStorage.Create(
+        fileStorageRoot, builder.Environment.ContentRootPath));
+}
+else
+{
 if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Testing"))
     throw new InvalidOperationException("File storage is only configured for Development/Testing.");
 if (!string.IsNullOrWhiteSpace(fileStorageProvider) && !fileStorageProvider.Equals("Local", StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException($"Unsupported FileStorage:Provider '{fileStorageProvider}'.");
-var fileStorageRoot = builder.Configuration["FileStorage:RootPath"];
 if (string.IsNullOrWhiteSpace(fileStorageRoot))
     fileStorageRoot = Path.Combine(builder.Environment.ContentRootPath, "private-files");
 if (!Path.IsPathFullyQualified(fileStorageRoot))
@@ -40,6 +52,7 @@ builder.Services.AddSingleton<IFileStorageService>(new LocalFileStorage(
     fileStorageRoot,
     Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads", "cv"),
     Path.Combine(builder.Environment.ContentRootPath, "private-uploads", "cv")));
+}
 
 // Cloud hosts (Render/Railway) inject PORT
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -227,6 +240,7 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+app.UseForwardedHeaders();
 
 await DbSeeder.SeedAsync(app.Services, app.Environment.IsDevelopment());
 
@@ -256,5 +270,6 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.Run();
 

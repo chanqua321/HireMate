@@ -8,6 +8,7 @@ RUN dotnet publish APIs/APIs.csproj -c Release --no-restore -o /app/publish /p:U
 # Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
+ENV TZ=Asia/Ho_Chi_Minh
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080

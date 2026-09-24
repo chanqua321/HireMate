@@ -4,6 +4,7 @@
     # Oracle Ampere (ARM) needs amd64 emulation for SQL Server
     platform: linux/amd64
     environment:
+      TZ: Asia/Ho_Chi_Minh
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
     ports:
@@ -23,6 +24,7 @@
     ports:
       - "5080:8080"
     environment:
+      TZ: Asia/Ho_Chi_Minh
       ASPNETCORE_ENVIRONMENT: Production
       PORT: "8080"
       ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HireMateDB;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true"

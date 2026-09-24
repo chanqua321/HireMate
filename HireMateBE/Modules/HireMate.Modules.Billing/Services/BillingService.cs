@@ -100,7 +100,7 @@ public class BillingService(
                 if (string.Equals(currentCode, targetCode, StringComparison.OrdinalIgnoreCase))
                 {
                     return new ServiceResult(Const.FAIL_CREATE_CODE,
-                        $"Bạn đang dùng gói {currentName} (còn hạn đến {(snap.PlanExpiresAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "hết kỳ")}). Không thể mua lại cùng gói — hãy nâng cấp lên gói cao hơn hoặc đợi hết hạn để gia hạn/đổi gói.");
+                        $"Bạn đang dùng gói {currentName} (còn hạn đến {((snap.PlanExpiresAt.HasValue ? VietnamTime.FromUtc(snap.PlanExpiresAt.Value).ToString("dd/MM/yyyy") : null) ?? "hết kỳ")}). Không thể mua lại cùng gói — hãy nâng cấp lên gói cao hơn hoặc đợi hết hạn để gia hạn/đổi gói.");
                 }
 
                 var isDowngrade = targetRank < currentRank || plan.PriceVnd < currentPrice;
@@ -743,11 +743,11 @@ public class BillingService(
     {
         for (var i = 0; i < 6; i++)
         {
-            var num = $"HM-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
+            var num = $"HM-{VietnamTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
             var exists = await uow.InvoiceRepository.GetQueryable().AnyAsync(x => x.InvoiceNumber == num);
             if (!exists) return num;
         }
-        return $"HM-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
+        return $"HM-{VietnamTime.Now:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
     }
 
     private async Task<IServiceResult> ActivateFreeAsync(UserAccount user, Guid userId, SubscriptionPlan plan)

@@ -39,6 +39,10 @@ static void Check(bool condition, string name)
     Console.WriteLine($"PASS: {name}");
 }
 
+Check(VietnamTime.FromUtc(new DateTime(2026, 9, 24, 18, 0, 0, DateTimeKind.Utc))
+    == new DateTime(2026, 9, 25, 1, 0, 0), "Vietnam business date crosses midnight at UTC+7");
+Check(VietnamTime.FromUtc(new DateTime(2026, 9, 24, 18, 0, 0, DateTimeKind.Unspecified))
+    == new DateTime(2026, 9, 25, 1, 0, 0), "Database UTC timestamps without Kind convert to Vietnam time");
 await AdminSeedSmoke.RunAsync(Check);
 await FileStorageSmoke.RunAsync(Check);
 await CvUploadSmoke.RunAsync(Check);
