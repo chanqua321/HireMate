@@ -64,7 +64,42 @@ export interface PatchTicketDto {
   status: string;
 }
 
+export interface AdminQuestion {
+  id: string;
+  content: string;
+  language: 'vi' | 'en';
+  industry: string | null;
+  roleHint: string | null;
+  category: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  seniority: string | null;
+  hint: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string | null;
+}
+
+export type AdminQuestionInput = Pick<AdminQuestion,
+  'content' | 'language' | 'industry' | 'roleHint' | 'category' | 'difficulty' | 'seniority' | 'hint' | 'isActive'>;
+
 export const adminService = {
+  async getQuestions(filters: Record<string, string> = {}): Promise<ApiResponse<AdminQuestion[]>> {
+    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value)).toString();
+    return apiClient.get<AdminQuestion[]>(`/Admin/questions${query ? `?${query}` : ''}`);
+  },
+  async getQuestion(id: string): Promise<ApiResponse<AdminQuestion>> {
+    return apiClient.get<AdminQuestion>(`/Admin/questions/${id}`);
+  },
+  async createQuestion(input: AdminQuestionInput): Promise<ApiResponse<AdminQuestion>> {
+    return apiClient.post<AdminQuestion>('/Admin/questions', input);
+  },
+  async updateQuestion(id: string, input: AdminQuestionInput): Promise<ApiResponse<AdminQuestion>> {
+    return apiClient.put<AdminQuestion>(`/Admin/questions/${id}`, input);
+  },
+  async setQuestionActive(id: string, isActive: boolean): Promise<ApiResponse<AdminQuestion>> {
+    return apiClient.patch<AdminQuestion>(`/Admin/questions/${id}/status`, { isActive });
+  },
   // Analytics
   async getAnalytics(): Promise<ApiResponse<AdminAnalytics>> {
     return apiClient.get<AdminAnalytics>('/Admin/analytics');

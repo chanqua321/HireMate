@@ -46,6 +46,7 @@ interface MultiCvHubProps {
   onDownloadCv?: (cv: UserCvCard) => void;
   templates?: CvTemplateDto[];
   onRenameCv?: (cv: UserCvCard, displayName: string) => void | Promise<void>;
+  onEditCv?: (cv: UserCvCard) => void | Promise<void>;
   onChangeCvTemplate?: (cv: UserCvCard, templateId: string) => void | Promise<void>;
   onSaveAsTemplate?: (cv: UserCvCard) => void | Promise<void>;
 }
@@ -72,6 +73,7 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
   onDownloadCv,
   templates = [],
   onRenameCv,
+  onEditCv,
   onChangeCvTemplate,
   onSaveAsTemplate,
 }) => {
@@ -115,6 +117,12 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
 
   const renderSecondaryActions = (cv: UserCvCard, compact = false) => (
     <div className={compact ? 'cv-item-secondary-btns' : 'cv-extra-actions'}>
+      {onEditCv && cv.source === 'Wizard' && (
+        <button type="button" className={compact ? 'icon-detail-btn' : 'action-btn-detail'} onClick={() => void onEditCv(cv)} title="Chỉnh sửa nội dung CV">
+          <Pencil size={compact ? 15 : 16} />
+          {!compact && <span>Chỉnh sửa CV</span>}
+        </button>
+      )}
       <button
         type="button"
         className={compact ? 'icon-detail-btn' : 'action-btn-detail'}
@@ -262,7 +270,7 @@ export const MultiCvHub: React.FC<MultiCvHubProps> = ({
                   onFileUpload(e, uploadDisplayName.trim() || undefined);
                   setUploadDisplayName('');
                 }}
-                accept=".pdf,.docx,.doc"
+                accept=".pdf,.docx"
                 style={{ display: 'none' }}
               />
               <div className="dropzone-icon-circle">

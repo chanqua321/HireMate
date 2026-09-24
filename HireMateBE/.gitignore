@@ -25,6 +25,8 @@ deploy/oracle/*.pem
 
 ## Uploads
 **/wwwroot/uploads/
+**/private-uploads/
+**/private-files/
 
 ## OS
 .DS_Store

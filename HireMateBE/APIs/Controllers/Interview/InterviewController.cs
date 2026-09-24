@@ -25,6 +25,10 @@ public class InterviewController(IInterviewService interviewService) : HireMateC
     public async Task<IActionResult> GetQuestions(Guid id)
         => this.FromService(await interviewService.GetQuestionsAsync(UserId, id));
 
+    [HttpGet("sessions/{id:guid}/language")]
+    public async Task<IActionResult> Language(Guid id)
+        => this.FromService(await interviewService.GetLanguageAsync(UserId, id));
+
     [HttpPost("sessions/{id:guid}/answers")]
     public async Task<IActionResult> SubmitAnswer(Guid id, [FromBody] SubmitAnswerDto dto)
         => this.FromService(await interviewService.SubmitAnswerAsync(UserId, id, dto));
@@ -82,8 +86,4 @@ public class InterviewController(IInterviewService interviewService) : HireMateC
             durationSec));
     }
 
-    [HttpGet("question-bank")]
-    [Authorize(Roles = AppRoles.Authenticated)]
-    public async Task<IActionResult> QuestionBank()
-        => this.FromService(await interviewService.GetQuestionBankAsync());
 }

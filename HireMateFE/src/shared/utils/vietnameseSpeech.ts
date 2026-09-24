@@ -36,12 +36,7 @@ export function getAvailableVietnameseVoice(): SpeechSynthesisVoice | null {
         l.startsWith('vi') ||
         n.includes('vietnam') ||
         n.includes('tiếng việt') ||
-        n.includes('vietnamese') ||
-        n.includes('hoaimy') ||
-        n.includes('namminh') ||
-        n.includes('mai') ||
-        n.includes(' an') ||
-        n.includes('an ')
+        n.includes('vietnamese')
       );
     }) ||
     null

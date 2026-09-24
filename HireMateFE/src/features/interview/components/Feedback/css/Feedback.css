@@ -373,3 +373,64 @@
     padding: 24px 20px;
   }
 }
+
+/* Explainable interview feedback */
+.feedback-explain-page { color: #0f172a; }
+.feedback-state { min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+.feedback-explain-hero, .feedback-explain-card {
+  background: #fff; border: 1px solid #dce7f3; border-radius: 18px;
+  box-shadow: 0 5px 22px rgba(15, 23, 42, .04);
+}
+.feedback-explain-hero { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 30px; margin: 20px 0; }
+.feedback-explain-hero > div:first-child { min-width: 0; flex: 1; }
+.feedback-explain-hero h1 { font-size: clamp(1.4rem, 3vw, 2rem); margin: 0 0 10px; overflow-wrap: anywhere; }
+.feedback-explain-hero p { line-height: 1.65; color: #475569; margin: 0 0 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-explain-score { flex: 0 0 145px; text-align: center; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 16px; padding: 20px 12px; }
+.feedback-explain-score strong { font-size: 2.5rem; line-height: 1; color: #0369a1; }
+.feedback-explain-score span { color: #64748b; font-weight: 600; }
+.feedback-explain-score small { display: block; margin-top: 8px; color: #334155; font-weight: 700; }
+.feedback-explain-card { padding: 24px; margin: 18px 0; min-width: 0; }
+.feedback-explain-card h2 { font-size: 1.1rem; margin: 0 0 18px; }
+.feedback-explain-card h3 { font-size: .95rem; margin: 0 0 12px; overflow-wrap: anywhere; }
+.feedback-explain-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.feedback-explain-columns.single { grid-template-columns: minmax(0, 1fr); }
+.feedback-explain-columns > .feedback-explain-card { margin: 0; }
+.feedback-dimension-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.feedback-dimension { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
+.feedback-dimension span { min-width: 0; overflow-wrap: anywhere; }
+.feedback-dimension strong { color: #0369a1; font-size: 1.1rem; }
+.feedback-explain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.feedback-explain-list li { display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
+.feedback-explain-list svg { flex: 0 0 auto; color: #0284c7; margin-top: 3px; }
+.feedback-explain-list p { margin: 4px 0; }
+.feedback-explain-list small, .feedback-empty { color: #64748b; line-height: 1.55; }
+.feedback-evidence-group + .feedback-evidence-group { border-top: 1px solid #e2e8f0; padding-top: 18px; margin-top: 18px; }
+.feedback-evidence-item { padding: 12px 14px; background: #f8fafc; border-radius: 10px; margin: 10px 0; min-width: 0; overflow-wrap: anywhere; }
+.feedback-evidence-item > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.feedback-evidence-item blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid #38bdf8; color: #334155; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-evidence-item p { margin: 8px 0 0; color: #475569; line-height: 1.5; }
+.feedback-status { display: inline-block; color: #075985; background: #e0f2fe; padding: 3px 8px; border-radius: 999px; font-size: .76rem; font-weight: 700; }
+.feedback-answer-list { display: grid; gap: 16px; }
+.feedback-answer-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; min-width: 0; }
+.feedback-answer-text, .feedback-answer-comment { color: #475569; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-answer-dimensions { margin-top: 16px; }
+.feedback-answer-dimensions h4, .feedback-follow-up h4 { margin: 0 0 10px; }
+.feedback-answer-dimension { padding: 10px 0; border-top: 1px solid #edf2f7; min-width: 0; }
+.feedback-answer-dimension > div { display: flex; justify-content: space-between; gap: 12px; }
+.feedback-answer-dimension strong, .feedback-answer-dimension p { overflow-wrap: anywhere; }
+.feedback-answer-dimension b { color: #0369a1; flex: 0 0 auto; }
+.feedback-answer-dimension small { display: block; color: #64748b; margin-top: 4px; }
+.feedback-answer-dimension p { color: #475569; margin: 7px 0; line-height: 1.5; }
+.feedback-answer-tip { display: flex; gap: 8px; color: #7c5a13; background: #fffbeb; padding: 10px; border-radius: 9px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-follow-up { background: #eff6ff; padding: 14px; border-radius: 10px; margin-top: 14px; overflow-wrap: anywhere; }
+.feedback-follow-up p { margin: 0; line-height: 1.5; }
+.feedback-star-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; min-width: 0; overflow-wrap: anywhere; }
+.feedback-star-item > div { display: flex; justify-content: space-between; gap: 10px; color: #0369a1; }
+.feedback-star-item p { line-height: 1.5; margin: 9px 0 0; }
+.feedback-star-item small { display: block; color: #475569; line-height: 1.5; margin-top: 8px; }
+@media (max-width: 700px) {
+  .feedback-explain-columns { grid-template-columns: 1fr; }
+  .feedback-explain-hero { flex-direction: column-reverse; align-items: stretch; padding: 20px; }
+  .feedback-explain-score { flex: auto; align-self: flex-start; min-width: 130px; }
+  .feedback-explain-card { padding: 18px; }
+}

@@ -308,6 +308,8 @@
   gap: 20px;
   align-items: start;
 }
+.room-main-layout.single { grid-template-columns: minmax(0, 1fr); }
+.room-speech-error { margin: 0 0 12px; padding: 10px 14px; border: 1px solid #fbd38d; border-radius: 10px; background: #fffbeb; color: #92400e; font-size: .85rem; }
 
 /* Chat & Stage */
 .room-chat-panel {

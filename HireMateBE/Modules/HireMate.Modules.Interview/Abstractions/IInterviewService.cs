@@ -9,6 +9,7 @@ public interface IInterviewService
     Task<IServiceResult> BuildContextAsync(Guid userId, BuildInterviewContextDto dto);
     Task<IServiceResult> CreateSessionAsync(Guid userId, CreateInterviewSessionDto dto);
     Task<IServiceResult> GetQuestionsAsync(Guid userId, Guid sessionId);
+    Task<IServiceResult> GetLanguageAsync(Guid userId, Guid sessionId);
     Task<IServiceResult> SubmitAnswerAsync(Guid userId, Guid sessionId, SubmitAnswerDto dto);
     Task<IServiceResult> CompleteAsync(Guid userId, Guid sessionId);
     Task<IServiceResult> GetFeedbackAsync(Guid userId, Guid sessionId);
@@ -27,6 +28,5 @@ public interface IInterviewService
         Guid? questionId,
         string? questionText,
         int durationSec);
-    Task<IServiceResult> GetQuestionBankAsync();
 }
 

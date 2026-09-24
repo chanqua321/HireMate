@@ -16,6 +16,7 @@ export const interviewService = {
     jobDescription?: string;
     jobDescriptionId?: string;
     cvDocumentId?: string;
+    language?: 'vi' | 'en';
   }): Promise<ApiResponse<any>> {
     return apiClient.post('/Interview/build-context', payload);
   },
@@ -30,6 +31,7 @@ export const interviewService = {
       jobDescriptionId: config.jobDescriptionId || undefined,
       cvDocumentId: config.cvDocumentId || undefined,
       contextJson: config.contextJson || undefined,
+      language: config.language || undefined,
     };
     return apiClient.post<InterviewSessionSummary>('/Interview/sessions', payload);
   },
@@ -48,6 +50,10 @@ export const interviewService = {
 
   async getQuestions(sessionId: string): Promise<ApiResponse<InterviewQuestionItem[]>> {
     return apiClient.get<InterviewQuestionItem[]>(`/Interview/sessions/${sessionId}/questions`);
+  },
+
+  async getLanguage(sessionId: string): Promise<ApiResponse<{ language: 'vi' | 'en'; locale: string }>> {
+    return apiClient.get(`/Interview/sessions/${sessionId}/language`);
   },
 
   async submitAnswer(sessionId: string, dto: SubmitAnswerDto): Promise<ApiResponse<import('../types').SubmitAnswerResult>> {
@@ -93,7 +99,4 @@ export const interviewService = {
     return apiClient.post('/Interview/suggested-answer', dto);
   },
 
-  async getQuestionBank(): Promise<ApiResponse<any[]>> {
-    return apiClient.get('/Interview/question-bank', { skipAuth: true });
-  },
 };

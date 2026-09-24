@@ -17,7 +17,8 @@ public class OpenAiCompatibleAiClient(
     private readonly AiOptions _options = options.Value;
     private readonly ILogger<OpenAiCompatibleAiClient> _logger = logger;
 
-    public async Task<AiCompletionResult> CompleteAsync(string systemPrompt, string userPrompt, CancellationToken ct = default, int? maxOutputChars = null)
+    public async Task<AiCompletionResult> CompleteAsync(string systemPrompt, string userPrompt,
+        CancellationToken ct = default, int? maxOutputChars = null, JsonElement? responseSchema = null)
     {
         var providerLabel = string.IsNullOrWhiteSpace(_options.Provider) ? "openai" : _options.Provider.ToLowerInvariant();
         var inputChars = systemPrompt.Length + userPrompt.Length;
@@ -56,6 +57,13 @@ public class OpenAiCompatibleAiClient(
                     // JSON extraction workloads — avoid default medium reasoning burning the completion budget.
                     ["reasoning_effort"] = "none"
                 };
+                if (responseSchema.HasValue)
+                    ((Dictionary<string, object?>)payload)["response_format"] = new
+                    {
+                        type = "json_schema",
+                        json_schema = new { name = "hiremate_interview_evaluation", strict = true,
+                            schema = responseSchema.Value }
+                    };
                 _logger.LogDebug(
                     "OpenAI chat/completions model={Model} max_completion_tokens={Max} reasoning_effort=none messages={Count}",
                     model, maxOut, messages.Length);
@@ -70,6 +78,13 @@ public class OpenAiCompatibleAiClient(
                     ["temperature"] = 0.4,
                     ["max_tokens"] = maxOut
                 };
+                if (responseSchema.HasValue)
+                    ((Dictionary<string, object?>)payload)["response_format"] = new
+                    {
+                        type = "json_schema",
+                        json_schema = new { name = "hiremate_interview_evaluation", strict = true,
+                            schema = responseSchema.Value }
+                    };
                 _logger.LogDebug(
                     "OpenAI chat/completions model={Model} max_tokens={Max} temperature=0.4 messages={Count}",
                     model, maxOut, messages.Length);
@@ -88,12 +103,29 @@ public class OpenAiCompatibleAiClient(
             }
 
             var json = await response.Content.ReadFromJsonAsync<ChatResponse>(cancellationToken: cts.Token);
-            var content = json?.Choices?.FirstOrDefault()?.Message?.Content?.Trim();
+            var choice = json?.Choices?.FirstOrDefault();
+            if (responseSchema.HasValue
+                && string.Equals(choice?.FinishReason, "length", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("{Provider} response stopped at max tokens", providerLabel);
+                return AiCompletionResult.Fail(providerLabel, inputChars);
+            }
+            var content = choice?.Message?.Content?.Trim();
             if (string.IsNullOrWhiteSpace(content))
                 return AiCompletionResult.Fail(providerLabel, inputChars);
 
+            // A partial JSON object can accidentally parse as a valid but incomplete analysis.
+            // Reject an over-budget response intact; never slice it into another payload.
             if (maxOutputChars is > 0 && content.Length > maxOutputChars.Value)
+            {
+                if (responseSchema.HasValue)
+                {
+                    _logger.LogWarning("{Provider} evaluation output exceeded character limit ({Length}>{Limit})",
+                        providerLabel, content.Length, maxOutputChars.Value);
+                    return AiCompletionResult.Fail(providerLabel, inputChars);
+                }
                 content = TruncatePreservingJson(content, maxOutputChars.Value);
+            }
 
             return new AiCompletionResult
             {
@@ -122,7 +154,7 @@ public class OpenAiCompatibleAiClient(
                || m.StartsWith("o4", StringComparison.Ordinal);
     }
 
-    /// <summary>Avoid cutting mid-JSON when enforcing char budget (breaks JD Match / analysis parsers).</summary>
+    // Preserve the existing behavior for non-evaluation AI calls.
     private static string TruncatePreservingJson(string content, int max)
     {
         if (content.Length <= max) return content;
@@ -137,10 +169,7 @@ public class OpenAiCompatibleAiClient(
                 using var _ = JsonDocument.Parse(candidate);
                 return candidate;
             }
-            catch
-            {
-                // try earlier closing brace
-            }
+            catch (JsonException) { }
         }
         return slice;
     }
@@ -155,6 +184,9 @@ public class OpenAiCompatibleAiClient(
     {
         [JsonPropertyName("message")]
         public Msg? Message { get; set; }
+
+        [JsonPropertyName("finish_reason")]
+        public string? FinishReason { get; set; }
     }
 
     private sealed class Msg
@@ -174,7 +206,8 @@ public class GeminiAiClient(
     private readonly AiOptions _options = options.Value;
     private readonly ILogger<GeminiAiClient> _logger = logger;
 
-    public async Task<AiCompletionResult> CompleteAsync(string systemPrompt, string userPrompt, CancellationToken ct = default, int? maxOutputChars = null)
+    public async Task<AiCompletionResult> CompleteAsync(string systemPrompt, string userPrompt,
+        CancellationToken ct = default, int? maxOutputChars = null, JsonElement? responseSchema = null)
     {
         var inputChars = systemPrompt.Length + userPrompt.Length;
 
@@ -204,11 +237,12 @@ public class GeminiAiClient(
                         parts = new[] { new { text = userPrompt } }
                     }
                 },
-                generationConfig = new
-                {
-                    temperature = 0.4,
-                    maxOutputTokens = AiLength.ToMaxTokens(maxOutputChars)
-                }
+                generationConfig = responseSchema.HasValue
+                    ? (object)new { temperature = 0.4,
+                        maxOutputTokens = AiLength.ToMaxTokens(maxOutputChars),
+                        responseMimeType = "application/json" }
+                    : new { temperature = 0.4,
+                        maxOutputTokens = AiLength.ToMaxTokens(maxOutputChars) }
             };
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -223,8 +257,15 @@ public class GeminiAiClient(
             }
 
             using var doc = JsonDocument.Parse(raw);
-            var text = doc.RootElement
-                .GetProperty("candidates")[0]
+            var candidate = doc.RootElement.GetProperty("candidates")[0];
+            if (responseSchema.HasValue
+                && candidate.TryGetProperty("finishReason", out var finishReason)
+                && string.Equals(finishReason.GetString(), "MAX_TOKENS", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Gemini response stopped at max tokens");
+                return AiCompletionResult.Fail("gemini", inputChars);
+            }
+            var text = candidate
                 .GetProperty("content")
                 .GetProperty("parts")[0]
                 .GetProperty("text")
@@ -235,7 +276,15 @@ public class GeminiAiClient(
                 return AiCompletionResult.Fail("gemini", inputChars);
 
             if (maxOutputChars is > 0 && text.Length > maxOutputChars.Value)
+            {
+                if (responseSchema.HasValue)
+                {
+                    _logger.LogWarning("Gemini evaluation output exceeded character limit ({Length}>{Limit})",
+                        text.Length, maxOutputChars.Value);
+                    return AiCompletionResult.Fail("gemini", inputChars);
+                }
                 text = text[..maxOutputChars.Value];
+            }
 
             return new AiCompletionResult
             {

@@ -37,7 +37,8 @@ public interface IAiQuotaService
     Task<bool> IsVoiceAllowedAsync(UserAccount user);
 
     Task<AiQuotaSnapshot> GetSnapshotAsync(UserAccount user);
-    Task<IServiceResult?> EnsureCanCallAsync(UserAccount user, int estimatedInputChars);
+    Task<IServiceResult?> EnsureCanCallAsync(UserAccount user, int estimatedInputChars,
+        int? estimatedOutputChars = null);
     /// <summary>Chặn tính năng trả phí khi gói hết hạn hoặc chưa nâng cấp.</summary>
     Task<IServiceResult?> RequireActivePlanAsync(UserAccount user, int minRank = 1);
     Task<AiCompletionResult> CompleteAndLogAsync(
@@ -46,7 +47,8 @@ public interface IAiQuotaService
         string userPrompt,
         string kind,
         Guid? refId = null,
-        string settingKey = SettingKeys.AiMaxOutputChars);
+        string settingKey = SettingKeys.AiMaxOutputChars,
+        JsonElement? responseSchema = null);
 
     /// <summary>UTC calendar month key shared by all feature quotas (yyyy-MM).</summary>
     string CurrentPeriodKey();
@@ -73,6 +75,9 @@ public class AiQuotaService(
     ISystemConfigService config,
     UserManager<UserAccount> users) : IAiQuotaService
 {
+    // Evaluation needs a complete evidence JSON. This changes only its per-call buffer;
+    // plan entitlements and monthly character budgets remain unchanged.
+    public const int InterviewEvaluationMaxOutputChars = 4000;
     public string CurrentPeriodKey()
     {
         var now = DateTime.UtcNow;
@@ -175,12 +180,13 @@ public class AiQuotaService(
                 : "Tính năng này chỉ dành cho gói Tiêu chuẩn và Cao cấp.");
     }
 
-    public async Task<IServiceResult?> EnsureCanCallAsync(UserAccount user, int estimatedInputChars)
+    public async Task<IServiceResult?> EnsureCanCallAsync(UserAccount user, int estimatedInputChars,
+        int? estimatedOutputChars = null)
     {
         var snap = await GetSnapshotAsync(user);
         if (snap.MonthlyBudget <= 0)
             return null;
-        var estimate = estimatedInputChars + snap.MaxOutputChars;
+        var estimate = estimatedInputChars + (estimatedOutputChars ?? snap.MaxOutputChars);
         if (snap.UsedChars + estimate <= snap.MonthlyBudget)
             return null;
         return new ServiceResult(Const.FAIL_QUOTA_CODE,
@@ -193,12 +199,16 @@ public class AiQuotaService(
         string userPrompt,
         string kind,
         Guid? refId = null,
-        string settingKey = SettingKeys.AiMaxOutputChars)
+        string settingKey = SettingKeys.AiMaxOutputChars,
+        JsonElement? responseSchema = null)
     {
         var snap = await GetSnapshotAsync(user);
         var kindMax = await config.GetIntAsync(settingKey, snap.MaxOutputChars);
-        var maxOut = Math.Min(snap.MaxOutputChars, kindMax);
-        var result = await ai.CompleteAsync(systemPrompt, userPrompt, maxOutputChars: maxOut);
+        var maxOut = kind == "interview_answer_analysis"
+            ? InterviewEvaluationMaxOutputChars
+            : Math.Min(snap.MaxOutputChars, kindMax);
+        var result = await ai.CompleteAsync(systemPrompt, userPrompt,
+            maxOutputChars: maxOut, responseSchema: responseSchema);
 
         // Chỉ ghi AiUsage khi có kết quả hợp lệ — failed AI không trừ char budget
         if (!string.IsNullOrWhiteSpace(result.Content) && !result.UsedFallback)

@@ -10,7 +10,7 @@ import {
   aiService,
 } from '../../../../shared/services';
 import type { QuotaUsage } from '../../../../shared/services/ai.service';
-import type { CvTemplateDto } from '../../../../shared/services/cv.service';
+import type { CvTemplateDto, CvWizardPayload } from '../../../../shared/services/cv.service';
 import { careerService } from '../../../../shared/services/career.service';
 import { onboardingService, ensureInterviewReady } from '../../../onboarding/api/onboarding.service';
 import { dashboardService } from '../../api/dashboard.service';
@@ -173,6 +173,7 @@ export const Dashboard: React.FC = () => {
 
   // Multi-CV Hub State
   const [userCvs, setUserCvs] = useState<UserCvCard[]>([]);
+  const [editingCv, setEditingCv] = useState<{ id: string; initial: Partial<CvWizardPayload> } | null>(null);
   const [activeCvId, setActiveCvId] = useState<string>('');
   const [selectedCvForDetail, setSelectedCvForDetail] = useState<UserCvCard | null>(null);
   const [cvDetailModalOpen, setCvDetailModalOpen] = useState<boolean>(false);
@@ -825,6 +826,33 @@ export const Dashboard: React.FC = () => {
       setTimeout(() => setToastMsg(null), 3500);
     }
   };
+
+  const handleEditCv = async (cv: UserCvCard) => {
+    try {
+      const res = await cvService.getCvForEdit(cv.id);
+      if (!res.ok || !res.data?.content) throw new Error(res.message || 'Không tải được nội dung CV.');
+      setEditingCv({ id: cv.id, initial: {
+        ...res.data.content,
+        displayName: res.data.displayName,
+        templateId: res.data.templateId || undefined,
+      } });
+      handleTabChange('manual');
+    } catch (err: any) {
+      setToastMsg(err?.message || 'Không mở được CV để chỉnh sửa.');
+    }
+  };
+
+  const handleWizardUpdated = async (updated: any) => {
+    try {
+      const res = await cvService.listCvs();
+      if (res.ok && Array.isArray(res.data)) {
+        setUserCvs(res.data.map(parseCvDocumentFromBackend));
+        return;
+      }
+    } catch { /* The edit was saved; use its response when refreshing the list fails. */ }
+    setUserCvs(prev => prev.map(cv => cv.id === updated.id
+      ? parseCvDocumentFromBackend({ ...updated, isActive: cv.isActive }) : cv));
+  };
   /** Activate CV từ PostCvSuccessModal rồi navigate vào interview-setup */
   const handleActivateAndInterview = async (cv: CvItemDto) => {
     if (!cv.id) return;
@@ -1154,9 +1182,9 @@ export const Dashboard: React.FC = () => {
               <button
                 type="button"
                 className={`segmented-tab-btn ${activeTab === 'manual' ? 'active' : ''}`}
-                onClick={() => handleTabChange('manual')}
+                onClick={() => { setEditingCv(null); handleTabChange('manual'); }}
               >
-                <span>Tạo CV</span>
+                <span>Tạo CV mới</span>
               </button>
 
               <button
@@ -1191,14 +1219,16 @@ export const Dashboard: React.FC = () => {
           {/* Keep the single builder mounted across tabs so a draft is not lost. */}
           <div style={{ display: activeTab === 'manual' ? 'block' : 'none' }}>
             {cvBuilderReady ? <CvWizardModal
+              key={editingCv?.id || 'create'}
               embedded
               isOpen
-              onClose={() => handleTabChange('scan')}
-              onSuccess={handleWizardCreated}
+              onClose={() => { setEditingCv(null); handleTabChange('scan'); }}
+              onSuccess={editingCv ? handleWizardUpdated : handleWizardCreated}
+              editingCvId={editingCv?.id}
               defaultIndustry={field}
               defaultRole={role}
               templates={cvTemplates}
-              initial={cvBuilderInitial}
+              initial={editingCv?.initial || cvBuilderInitial}
               onSwitchToUpload={() => {
                 handleTabChange('scan');
                 setShowAddCvForm(true);
@@ -1248,6 +1278,7 @@ export const Dashboard: React.FC = () => {
               }}
               templates={cvTemplates}
               onRenameCv={handleRenameCv}
+              onEditCv={handleEditCv}
               onChangeCvTemplate={handleChangeCvTemplate}
               onSaveAsTemplate={handleSaveAsTemplate}
             />

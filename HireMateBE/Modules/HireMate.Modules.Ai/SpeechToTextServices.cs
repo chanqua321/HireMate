@@ -20,9 +20,12 @@ public sealed class OpenAiWhisperSpeechToTextService(
         Stream audio,
         string fileName,
         string contentType,
+        string language,
         CancellationToken ct = default)
     {
         const string provider = "openai-whisper";
+        if (language is not ("vi" or "en"))
+            return SpeechToTextResult.Fail(provider, "VOICE_LANGUAGE_INVALID");
         if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.ApiKey))
             return SpeechToTextResult.Fail(provider, "STT chưa được cấu hình");
 
@@ -40,7 +43,7 @@ public sealed class OpenAiWhisperSpeechToTextService(
             var safeName = string.IsNullOrWhiteSpace(fileName) ? "voice.webm" : Path.GetFileName(fileName);
             content.Add(streamContent, "file", safeName);
             content.Add(new StringContent("whisper-1"), "model");
-            content.Add(new StringContent("vi"), "language");
+            content.Add(new StringContent(language), "language");
             content.Add(new StringContent("json"), "response_format");
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "audio/transcriptions")
@@ -90,9 +93,12 @@ public sealed class GeminiSpeechToTextService(
         Stream audio,
         string fileName,
         string contentType,
+        string language,
         CancellationToken ct = default)
     {
         const string provider = "gemini-stt";
+        if (language is not ("vi" or "en"))
+            return SpeechToTextResult.Fail(provider, "VOICE_LANGUAGE_INVALID");
         if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.ApiKey))
             return SpeechToTextResult.Fail(provider, "STT chưa được cấu hình");
 
@@ -123,7 +129,7 @@ public sealed class GeminiSpeechToTextService(
                             },
                             new
                             {
-                                text = "Transcribe this interview answer audio to plain Vietnamese text only. " +
+                                text = $"Transcribe this interview answer audio to plain {(language == "en" ? "English" : "Vietnamese")} text only. " +
                                        "Do not add commentary, labels, or quotation marks. If silent, return an empty string."
                             }
                         }

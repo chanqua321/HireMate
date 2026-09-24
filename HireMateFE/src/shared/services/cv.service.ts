@@ -182,6 +182,14 @@ export const cvService = {
     return apiClient.get<CvItemDto>(`/Cv/${id}`);
   },
 
+  async getCvForEdit(id: string): Promise<ApiResponse<{ id: string; displayName: string; templateId: string | null; content: CvWizardPayload }>> {
+    return apiClient.get(`/Cv/${id}/edit`);
+  },
+
+  async updateCv(id: string, dto: CvWizardPayload): Promise<ApiResponse<CvItemDto>> {
+    return apiClient.put<CvItemDto>(`/Cv/${id}`, dto);
+  },
+
   /** Đổi DisplayName only (BE: PUT /Cv/{id}/name). */
   async renameCv(id: string, displayName: string): Promise<ApiResponse<CvItemDto>> {
     return apiClient.put<CvItemDto>(`/Cv/${id}/name`, { displayName });

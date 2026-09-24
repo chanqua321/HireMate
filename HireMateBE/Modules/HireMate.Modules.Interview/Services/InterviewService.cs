@@ -1,5 +1,6 @@
 using HireMate.Modules.Ai;
 using HireMate.Modules.Interview.Abstractions;
+using HireMate.Modules.Onboarding.Cv;
 using HireMate.BuildingBlocks;
 
 using Common;
@@ -52,10 +53,16 @@ public class InterviewService(
             return await CvInterviewGateFailAsync(userId, "Cần CV đã phân tích thành công làm ngữ cảnh phỏng vấn");
 
         var cvFacts = ReadCvInterviewFacts(cv);
-        var position = FirstAvailable(cvFacts.Position, dto.Position, profile?.DesiredPosition);
-        var industry = FirstAvailable(cvFacts.Industry, dto.Industry, profile?.DesiredIndustry);
+        var position = FirstAvailable(dto.Position, cvFacts.Position, profile?.DesiredPosition);
+        var industry = FirstAvailable(profile?.DesiredIndustry, cvFacts.Industry, dto.Industry);
+        var roleError = ValidateRole(industry, position);
+        if (roleError != null) return roleError;
         var jdText = await ResolveJdTextAsync(userId, dto.JobDescriptionId, dto.JobDescription);
-        var context = await BuildPersonalizedProfileAsync(user, profile, cv, position, industry, jdText, dto.JobDescriptionId);
+        if (dto.JobDescriptionId.HasValue && jdText == null)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy JD");
+        if (CvLanguage.Resolve(dto.Language, cv.ExtractedText, jdText) == null)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Không xác định được ngôn ngữ CV/JD. Vui lòng chọn tiếng Việt hoặc English.");
+        var context = await BuildPersonalizedProfileAsync(user, profile, cv, position, industry, jdText, dto.JobDescriptionId, dto.Language);
         // Không trừ interview quota; không gọi AI (heuristic) — không trừ AI char
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, context);
     }
@@ -103,26 +110,30 @@ public class InterviewService(
         if (cv == null)
             return await CvInterviewGateFailAsync(userId, "Cần CV đã phân tích thành công trước khi luyện phỏng vấn");
 
-        // Text sessions consume at creation. Voice sessions reserve only when voice actually starts.
-        if (!isVoice)
-        {
-            var consumeBlock = await _aiQuota.TryConsumeFeatureAsync(user, AiQuotaFeature.Interview);
-            if (consumeBlock != null)
-                return consumeBlock;
-        }
-
         var qCount = dto.QuestionCount is int qc and > 0
             ? Math.Clamp(qc, 3, PlanTier.QuestionsPerSession(planCode))
             : PlanTier.QuestionsPerSession(planCode);
 
         var cvFacts = ReadCvInterviewFacts(cv);
-        var industry = FirstAvailable(cvFacts.Industry, dto.Industry, profile?.DesiredIndustry);
-        var position = FirstAvailable(cvFacts.Position, dto.Position, profile?.DesiredPosition);
+        var industry = FirstAvailable(profile?.DesiredIndustry, cvFacts.Industry, dto.Industry);
+        var position = FirstAvailable(dto.Position, cvFacts.Position, profile?.DesiredPosition);
+        var roleError = ValidateRole(industry, position);
+        if (roleError != null) return roleError;
 
         var jdText = await ResolveJdTextAsync(userId, dto.JobDescriptionId, dto.JobDescription);
+        if (dto.JobDescriptionId.HasValue && jdText == null)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy JD");
 
+        // Validate owned CV/JD and normalized input before consuming a session.
+        if (CvLanguage.Resolve(dto.Language, cv.ExtractedText, jdText) == null)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Không xác định được ngôn ngữ CV/JD. Vui lòng chọn tiếng Việt hoặc English.");
         // Rebuild from the resolved CV: a stale client context may describe another CV/role.
-        var contextObj = await BuildPersonalizedProfileAsync(user, profile, cv, position, industry, jdText, dto.JobDescriptionId);
+        var contextObj = await BuildPersonalizedProfileAsync(user, profile, cv, position, industry, jdText, dto.JobDescriptionId, dto.Language);
+        if (!isVoice)
+        {
+            var consumeBlock = await _aiQuota.TryConsumeFeatureAsync(user, AiQuotaFeature.Interview);
+            if (consumeBlock != null) return consumeBlock;
+        }
 
         var session = new InterviewSession
         {
@@ -189,14 +200,16 @@ public class InterviewService(
 
         if (existing.Count > 0)
         {
-            var reuse = existing.Select(a => new InterviewQuestionDto
+            var pending = existing.FirstOrDefault(a => !a.Skipped && string.IsNullOrWhiteSpace(a.AnswerText));
+            var pendingCategory = pending == null ? string.Empty : await ResolveQuestionCategoryAsync(pending);
+            var reuse = pending == null ? new List<InterviewQuestionDto>() : new List<InterviewQuestionDto> { new()
             {
-                QuestionId = a.QuestionId ?? Guid.Empty,
-                OrderIndex = a.OrderIndex,
-                Content = a.QuestionText,
+                QuestionId = pending.QuestionId ?? Guid.Empty,
+                OrderIndex = pending.OrderIndex,
+                Content = pending.QuestionText,
                 Hint = null,
-                Category = string.Empty
-            }).ToList();
+                Category = pendingCategory
+            } };
             return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, reuse);
         }
 
@@ -205,27 +218,44 @@ public class InterviewService(
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy người dùng");
 
         var contextJson = await LoadContextPayloadAsync(userId, sessionId);
-        var generated = await GeneratePersonalizedQuestionsAsync(user, session, contextJson);
-        if (generated.Count < session.QuestionCount)
-        {
-            var picked = await PickQuestionsAsync(session.Industry, session.Position, session.QuestionCount, userId);
-            var startIndex = generated.Count;
-            var additions = picked.Where(q => generated.All(g => !string.Equals(g.Content, q.Content, StringComparison.OrdinalIgnoreCase)))
-                .Take(session.QuestionCount - generated.Count).Select((q, i) => new InterviewQuestionDto
+        var language = ReadContextLanguage(contextJson);
+        if (language == null)
+            return new ServiceResult(Const.FAIL_READ_CODE, "Thiếu ngôn ngữ phỏng vấn; vui lòng chọn lại ngôn ngữ ở bước thiết lập.");
+        var previouslyAsked = ReadPreviousQuestions(contextJson);
+        // Bank is the first candidate source; AI fills only the remaining slots.
+        var generated = new List<InterviewQuestionDto>();
+        var seniority = ReadContextSeniority(contextJson);
+        var initialBank = await PickQuestionsAsync(session.Industry, session.Position,
+            session.QuestionCount, language, seniority, userId);
+        generated.AddRange(initialBank.Where(q => previouslyAsked.All(previous => !SameQuestion(previous, q.Content)))
+            .Select((q, i) => new InterviewQuestionDto
             {
-                QuestionId = q.Id,
-                OrderIndex = startIndex + i,
-                Content = q.Content,
-                Hint = q.Hint,
-                Category = q.Category
-            }).ToList();
-            generated.AddRange(additions);
-        }
-
+                QuestionId = q.Id, OrderIndex = i, Content = q.Content,
+                Hint = q.Hint, Category = q.Category
+            }));
+        if (generated.Count < session.QuestionCount)
+            generated.AddRange((await GeneratePersonalizedQuestionsAsync(user, session, contextJson, generated))
+                .Where(q => generated.All(g => !SameQuestion(g.Content, q.Content))
+                    && previouslyAsked.All(previous => !SameQuestion(previous, q.Content)))
+                .DistinctBy(q => string.Join(' ', q.Content.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries)))
+                .Take(session.QuestionCount - generated.Count));
         if (generated.Count < session.QuestionCount)
         {
-            var additions = BuildCvAlignedFallbackQuestions(session, contextJson)
-                .Where(q => generated.All(g => !string.Equals(g.Content, q.Content, StringComparison.OrdinalIgnoreCase)))
+            var bank = await PickQuestionsAsync(session.Industry, session.Position, session.QuestionCount,
+                language, seniority, userId);
+            generated.AddRange(bank.Where(q => generated.All(g => !SameQuestion(g.Content, q.Content))
+                    && previouslyAsked.All(previous => !SameQuestion(previous, q.Content)))
+                .Take(session.QuestionCount - generated.Count)
+                .Select(q => new InterviewQuestionDto
+                {
+                    QuestionId = q.Id, Content = q.Content, Hint = q.Hint, Category = q.Category
+                }));
+        }
+        if (generated.Count < session.QuestionCount)
+        {
+            var additions = BuildCvAlignedFallbackQuestions(session, contextJson, language)
+                .Where(q => generated.All(g => !SameQuestion(g.Content, q.Content))
+                    && previouslyAsked.All(previous => !SameQuestion(previous, q.Content)))
                 .Take(session.QuestionCount - generated.Count).ToList();
             generated.AddRange(additions);
         }
@@ -244,6 +274,7 @@ public class InterviewService(
                 QuestionId = q.QuestionId == Guid.Empty ? null : q.QuestionId,
                 OrderIndex = i,
                 QuestionText = q.Content,
+                QuestionCategory = q.Category,
                 Skipped = false,
                 DurationSec = 0
             };
@@ -262,7 +293,19 @@ public class InterviewService(
         session.QuestionCount = result.Count;
         await _unitOfWork.SaveChangesAsync();
 
-        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, result);
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, result.Take(1).ToList());
+    }
+
+    public async Task<IServiceResult> GetLanguageAsync(Guid userId, Guid sessionId)
+    {
+        var session = await GetOwnedSessionAsync(userId, sessionId);
+        if (session == null)
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy phiên phỏng vấn");
+        var language = ReadContextLanguage(await LoadContextPayloadAsync(userId, sessionId));
+        if (language == null)
+            return new ServiceResult(Const.FAIL_READ_CODE, "Phiên phỏng vấn thiếu ngôn ngữ đã chọn");
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG,
+            new { language, locale = language == "en" ? "en-US" : "vi-VN" });
     }
 
     public async Task<IServiceResult> SubmitAnswerAsync(Guid userId, Guid sessionId, SubmitAnswerDto dto)
@@ -361,7 +404,8 @@ public class InterviewService(
             {
                 var upcoming = await _unitOfWork.InterviewAnswerRepository.GetQueryable()
                     .FirstOrDefaultAsync(a => a.SessionId == sessionId && a.OrderIndex == dto.OrderIndex + 1);
-                if (upcoming != null && string.IsNullOrWhiteSpace(upcoming.AnswerText) && !upcoming.IsFollowUp)
+                if (upcoming != null && upcoming.QuestionId == null
+                    && string.IsNullOrWhiteSpace(upcoming.AnswerText) && !upcoming.IsFollowUp)
                 {
                     upcoming.QuestionId = null;
                     upcoming.QuestionText = Truncate(analysisDto.NextQuestionContent, 1000);
@@ -398,7 +442,8 @@ public class InterviewService(
                             SessionId = sessionId,
                             OrderIndex = nextIndex,
                             QuestionText = fu,
-                            QuestionCategory = "Follow-up",
+                            // Preserve the parent rubric; IsFollowUp tracks the question's role.
+                            QuestionCategory = category,
                             IsFollowUp = true,
                             Skipped = false,
                             DurationSec = 0
@@ -458,35 +503,17 @@ public class InterviewService(
         if (answers.Count == 0)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Chưa có câu trả lời để chấm điểm");
 
-        var structured = StructuredFeedbackBuilder.Build(session, answers);
+        var feedbackLanguage = ReadContextLanguage(await LoadContextPayloadAsync(userId, sessionId));
+        var structured = StructuredFeedbackBuilder.Build(session, answers, feedbackLanguage ?? "vi");
         var (s, t, a, r, clarity) = StructuredFeedbackBuilder.DeriveStarAndClarity(answers);
 
-        // Legacy sessions without per-answer analysis: STAR heuristic only (does not invent per-answer scores).
-        if (!answers.Any(x => x.AnalysisAvailable))
+        // AI may write narrative only; the persisted score is always computed from
+        // validated per-answer evidence and the centralized category weights.
+        if (structured.OverallScore.HasValue)
         {
-            var heur = StarHeuristicScorer.Score(answers);
-            s = heur.S;
-            t = heur.T;
-            a = heur.A;
-            r = heur.R;
-            clarity = heur.Clarity;
-            structured.OverallScore ??= heur.Overall;
-            if (string.IsNullOrWhiteSpace(structured.Summary) || structured.Summary.Contains("Chưa đủ dữ liệu"))
-                structured.Summary = heur.FeedbackSummary;
-        }
-
-        // One AI call for the concise STAR report.
-        await EnrichFeedbackNarrativeAsync(user, session.Id, structured, answers);
-
-        if (structured.CoachReport is { } coachReport)
-        {
-            structured.OverallScore = coachReport.Summary.OverallScore;
-            structured.Summary = coachReport.Summary.Headline;
-            s = coachReport.Scores.Situation;
-            t = coachReport.Scores.Task;
-            a = coachReport.Scores.Action;
-            r = coachReport.Scores.Result;
-            clarity = coachReport.Scores.Clarity;
+            await EnrichFeedbackNarrativeAsync(user, session.Id, structured, answers);
+            if (structured.CoachReport is { } coachReport)
+                structured.Summary = coachReport.Summary.Headline;
         }
 
         session.OverallScore = structured.OverallScore;
@@ -521,9 +548,7 @@ public class InterviewService(
                 session.ClarityScore,
                 session.FeedbackSummary,
                 strengths = structured.Strengths.Select(x => x.Area).ToList(),
-                weaknesses = structured.Weaknesses.Count > 0
-                    ? structured.Weaknesses.Select(x => x.Area).ToList()
-                    : ExtractWeaknessHints(session.FeedbackSummary),
+                weaknesses = structured.Weaknesses.Select(x => x.Area).ToList(),
                 skillGaps = structured.SkillGaps.Select(x => x.Area).ToList(),
                 evidenceGaps = structured.EvidenceGaps.Count,
                 readiness = session.OverallScore
@@ -549,7 +574,8 @@ public class InterviewService(
         if (feedback == null)
         {
             var answers = session.Answers.OrderBy(a => a.OrderIndex).ToList();
-            feedback = StructuredFeedbackBuilder.Build(session, answers);
+            var feedbackLanguage = ReadContextLanguage(await LoadContextPayloadAsync(userId, sessionId));
+            feedback = StructuredFeedbackBuilder.Build(session, answers, feedbackLanguage ?? "vi");
             feedback.Summary ??= session.FeedbackSummary;
         }
 
@@ -623,6 +649,10 @@ public class InterviewService(
         if (session.Status is "Completed" or "Abandoned")
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Phiên phỏng vấn đã kết thúc");
 
+        var voiceLanguage = ReadContextLanguage(await LoadContextPayloadAsync(userId, sessionId));
+        if (voiceLanguage == null)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Phiên Voice thiếu ngôn ngữ; hãy tạo lại phiên.");
+
         // Idempotent: already started → no second consume
         if (session.VoiceStartedAt != null)
         {
@@ -634,6 +664,8 @@ public class InterviewService(
                 voiceStartedAt = session.VoiceStartedAt,
                 voiceExpiresAt = expiresAlready,
                 maxMinutes = PlanTier.VoiceMaxMinutes,
+                language = voiceLanguage,
+                locale = voiceLanguage == "en" ? "en-US" : "vi-VN",
                 idempotent = true
             });
         }
@@ -678,6 +710,8 @@ public class InterviewService(
             voiceStartedAt = session.VoiceStartedAt,
             voiceExpiresAt = expires,
             maxMinutes = PlanTier.VoiceMaxMinutes,
+            language = voiceLanguage,
+            locale = voiceLanguage == "en" ? "en-US" : "vi-VN",
             idempotent = false
         });
     }
@@ -742,7 +776,10 @@ public class InterviewService(
                 new { errorCode = "VOICE_AUDIO_INVALID" });
 
         buffer.Position = 0;
-        var stt = await _speechToText.TranscribeAsync(buffer, fileName, contentType);
+        var voiceLanguage = ReadContextLanguage(await LoadContextPayloadAsync(userId, sessionId));
+        if (voiceLanguage == null)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Thiếu ngôn ngữ phỏng vấn; hãy tạo lại phiên Voice.");
+        var stt = await _speechToText.TranscribeAsync(buffer, fileName, contentType, voiceLanguage);
         // Audio is not persisted; buffer disposed by await using (do not SetLength —
         // Whisper StreamContent disposes the stream, which makes SetLength throw).
 
@@ -928,27 +965,6 @@ public class InterviewService(
     }
 
 
-    public async Task<IServiceResult> GetQuestionBankAsync()
-    {
-        var list = await _unitOfWork.QuestionRepository.GetQueryable()
-            .AsNoTracking()
-            .Where(q => q.IsActive)
-            .OrderBy(q => q.Category)
-            .ThenBy(q => q.Content)
-            .Select(q => new
-            {
-                id = q.Id,
-                cat = q.Category,
-                q = q.Content,
-                hint = q.Hint ?? string.Empty,
-                industry = q.Industry,
-                difficulty = q.Difficulty
-            })
-            .ToListAsync();
-
-        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
-    }
-
     private static readonly JsonSerializerOptions FeedbackJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -968,6 +984,12 @@ public class InterviewService(
     {
         try
         {
+            if (!feedback.OverallScore.HasValue) return;
+            var language = ReadContextLanguage(await LoadContextPayloadAsync(user.Id, sessionId));
+            if (language is not ("vi" or "en")) return;
+            var hasStar = answers.Any(a => InterviewEvaluationPolicy.WeightedScore(a).HasValue
+                && a.StarScore.HasValue);
+            var starScores = StructuredFeedbackBuilder.DeriveStarAndClarity(answers);
             var input = new
             {
                 date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
@@ -987,12 +1009,15 @@ public class InterviewService(
                 })
             };
 
-            var system = """
-Bạn là Cố vấn Phỏng vấn AI HireMate. Dựa trên câu hỏi và câu trả lời thực tế, đánh giá toàn buổi theo STAR. Trả về DUY NHẤT JSON hợp lệ, không markdown, không thêm field:
-{"summary":{"overall_score":0,"headline":"","date":"YYYY-MM-DD"},"scores":{"situation":0,"task":0,"action":0,"result":0,"clarity":0},"star_analysis":{"situation":{"score":0,"issue":"","advice":""},"task":{"score":0,"issue":"","advice":""},"action":{"score":0,"issue":"","advice":""},"result":{"score":0,"issue":"","advice":""}}}
-Mọi điểm là số nguyên 0-100. overall_score phản ánh toàn bộ câu trả lời. Điểm mỗi star_analysis phải trùng với scores tương ứng. date lấy đúng từ input.
-Chỉ nhận xét những gì câu trả lời cung cấp; không bịa thành tích, KPI, dự án hoặc công nghệ. Với câu hỏi không phù hợp STAR, tránh phạt vì thiếu bối cảnh/nhiệm vụ giả định. Nếu thiếu bằng chứng, nêu rõ thiếu thông tin thay vì suy đoán.
-Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi phần STAR chỉ có issue và advice ngắn, thực chiến. Nếu điểm >70, issue là một lời khen ngắn, advice để chuỗi rỗng. Không dùng ngôi thứ ba hay từ nội bộ như 'ứng viên', 'gợi ý đào sâu'. Không giải thích dài dòng định nghĩa STAR.
+            var system = $"""
+You are HireMate AI Coach. Write narrative only; do not calculate or output any score.
+Return ONLY JSON with exactly headline,date,star_analysis.
+headline: one concise sentence grounded in supplied answers; date: copy input date.
+star_analysis: null if STAR is not applicable. Otherwise an object with exactly
+situation,task,action,result; each has exactly issue and advice (short strings).
+Only describe answer evidence. Never invent projects, metrics, skills or claims.
+Missing evidence is not proof of dishonesty. Do not penalize technical definitions for missing STAR.
+Use {(language == "en" ? "English" : "Vietnamese")} and address the candidate directly.
 """;
             var userPrompt = JsonSerializer.Serialize(input, FeedbackJsonOptions);
 
@@ -1009,7 +1034,8 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
             var json = ExtractJsonObject(ai.Content);
             if (json == null) return;
 
-            var report = TryParseCoachReport(json, input.date);
+            var report = TryParseCoachReport(json, input.date, feedback.OverallScore.Value,
+                starScores, hasStar);
             if (report == null) return;
             feedback.CoachReport = report;
             feedback.AiSummaryAvailable = true;
@@ -1020,59 +1046,69 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
         }
     }
 
-    private static CoachReportDto? TryParseCoachReport(string content, string expectedDate)
+    private static CoachReportDto? TryParseCoachReport(string content, string expectedDate,
+        int backendOverall, (int? S, int? T, int? A, int? R, int? Clarity) backendScores,
+        bool hasStar)
     {
         try
         {
             using var document = JsonDocument.Parse(content);
             var root = document.RootElement;
-            if (!root.TryGetProperty("summary", out var summary)
-                || !root.TryGetProperty("scores", out var scores)
+            if (root.ValueKind != JsonValueKind.Object || root.EnumerateObject().Count() != 3
+                || !root.TryGetProperty("headline", out var headlineElement)
+                || !root.TryGetProperty("date", out var dateElement)
                 || !root.TryGetProperty("star_analysis", out var analysis)) return null;
 
-            static int? Score(JsonElement item, string name) =>
-                item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
-                && value.TryGetInt32(out var score) && score is >= 0 and <= 100 ? score : null;
             static string? Text(JsonElement item, string name) =>
                 item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
                     ? value.GetString()?.Trim() : null;
-            static CoachStarItemDto? Star(JsonElement parent, string name, int expected)
+            static CoachStarItemDto? Star(JsonElement parent, string name)
             {
                 if (!parent.TryGetProperty(name, out var item) || item.ValueKind != JsonValueKind.Object
-                    || Score(item, "score") != expected) return null;
+                    || item.EnumerateObject().Count() != 2) return null;
                 var issue = Text(item, "issue");
                 var advice = Text(item, "advice");
                 if (string.IsNullOrWhiteSpace(issue) || advice == null) return null;
                 if (issue.Contains("ứng viên", StringComparison.OrdinalIgnoreCase)
                     || advice.Contains("ứng viên", StringComparison.OrdinalIgnoreCase)) return null;
-                return new CoachStarItemDto { Score = expected, Issue = Truncate(issue, 300), Advice = Truncate(advice, 400) };
+                return new CoachStarItemDto { Issue = Truncate(issue, 300), Advice = Truncate(advice, 400) };
             }
-
-            var overall = Score(summary, "overall_score");
-            var headline = Text(summary, "headline");
-            var date = Text(summary, "date");
-            var situation = Score(scores, "situation");
-            var task = Score(scores, "task");
-            var action = Score(scores, "action");
-            var result = Score(scores, "result");
-            var clarity = Score(scores, "clarity");
-            if (overall == null || string.IsNullOrWhiteSpace(headline)
-                || !DateOnly.TryParseExact(date, "yyyy-MM-dd", out _)
-                || date != expectedDate
-                || situation == null || task == null || action == null || result == null || clarity == null)
+            var headline = headlineElement.ValueKind == JsonValueKind.String
+                ? headlineElement.GetString()?.Trim() : null;
+            var date = dateElement.ValueKind == JsonValueKind.String
+                ? dateElement.GetString()?.Trim() : null;
+            if (string.IsNullOrWhiteSpace(headline) || headline.Length > 300
+                || date != expectedDate || !DateOnly.TryParseExact(date, "yyyy-MM-dd", out _)
+                || headline.Contains("ứng viên", StringComparison.OrdinalIgnoreCase))
                 return null;
+            CoachStarAnalysisDto? starAnalysis = null;
+            if (hasStar)
+            {
+                if (analysis.ValueKind != JsonValueKind.Object
+                    || analysis.EnumerateObject().Count() != 4) return null;
+                var s = Star(analysis, "situation");
+                var t = Star(analysis, "task");
+                var a = Star(analysis, "action");
+                var r = Star(analysis, "result");
+                if (s == null || t == null || a == null || r == null) return null;
+                s.Score = backendScores.S; t.Score = backendScores.T;
+                a.Score = backendScores.A; r.Score = backendScores.R;
+                starAnalysis = new CoachStarAnalysisDto
+                { Situation = s, Task = t, Action = a, Result = r };
+            }
+            else if (analysis.ValueKind != JsonValueKind.Null) return null;
 
-            var s = Star(analysis, "situation", situation.Value);
-            var t = Star(analysis, "task", task.Value);
-            var a = Star(analysis, "action", action.Value);
-            var r = Star(analysis, "result", result.Value);
-            if (s == null || t == null || a == null || r == null) return null;
-            if (headline.Contains("ứng viên", StringComparison.OrdinalIgnoreCase)) return null;
             return new CoachReportDto
             {
-                Summary = new CoachReportSummaryDto { OverallScore = overall.Value, Headline = Truncate(headline, 300), Date = date! },
-                Scores = new CoachReportScoresDto { Situation = situation.Value, Task = task.Value, Action = action.Value, Result = result.Value, Clarity = clarity.Value },
-                StarAnalysis = new CoachStarAnalysisDto { Situation = s, Task = t, Action = a, Result = r }
+                Summary = new CoachReportSummaryDto
+                    { OverallScore = backendOverall, Headline = headline, Date = date! },
+                Scores = new CoachReportScoresDto
+                {
+                    Situation = backendScores.S, Task = backendScores.T,
+                    Action = backendScores.A, Result = backendScores.R,
+                    Clarity = backendScores.Clarity
+                },
+                StarAnalysis = starAnalysis
             };
         }
         catch (JsonException) { return null; }
@@ -1120,8 +1156,6 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
         if (start < 0 || end <= start) return null;
         return content[start..(end + 1)];
     }
-
-    private static int ClampInt(int n) => Math.Max(0, Math.Min(100, n));
 
     private async Task<int> CountCompletedThisMonthAsync(Guid userId)
         => await CountSessionsThisMonthAsync(userId);
@@ -1216,6 +1250,22 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
     private static string FirstAvailable(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 
+    private static IServiceResult? ValidateRole(string industry, string position)
+    {
+        if (string.IsNullOrWhiteSpace(position))
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Vui lòng chọn vị trí phỏng vấn");
+        if (string.IsNullOrWhiteSpace(industry) || CareerFieldCatalog.GetRoles(industry).Count == 0)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Ngành nghề không hợp lệ; vui lòng cập nhật hồ sơ CV");
+        if (CareerFieldCatalog.IsSuggestedRole(position, industry)) return null;
+        // A position explicitly catalogued in another field is a mismatch. Unknown text is a custom role.
+        var knownElsewhere = CareerFieldCatalog.IndustryRoles
+            .Where(pair => !pair.Key.Equals(industry, StringComparison.OrdinalIgnoreCase))
+            .Any(pair => pair.Value.Any(role => role.Equals(position, StringComparison.OrdinalIgnoreCase)));
+        return knownElsewhere
+            ? new ServiceResult(Const.FAIL_CREATE_CODE, "Vị trí không thuộc ngành nghề đã chọn")
+            : null;
+    }
+
     private static CvInterviewFacts ReadCvInterviewFacts(CvDocument cv)
     {
         var wizard = !string.IsNullOrWhiteSpace(cv.WizardAnswersJson);
@@ -1282,7 +1332,8 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
         string position,
         string? industry,
         string? jobDescription,
-        Guid? jobDescriptionId = null)
+        Guid? jobDescriptionId = null,
+        string? selectedLanguage = null)
     {
         var cvFacts = ReadCvInterviewFacts(cv);
         var skills = cvFacts.HasCvContent ? cvFacts.Skills : ParseJsonStringList(profile?.SkillsJson);
@@ -1299,6 +1350,14 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
 
         var learning = await CareerMemoryLearningService.LoadLearningBundleAsync(
             _unitOfWork, user.Id, CareerMemoryThresholds.LoadTake);
+
+        var recentAnswers = await _unitOfWork.InterviewAnswerRepository.GetQueryable().AsNoTracking()
+            .Where(answer => answer.Session != null && answer.Session.UserId == user.Id)
+            .OrderByDescending(answer => answer.Session!.StartedAt)
+            .ThenByDescending(answer => answer.OrderIndex)
+            .Take(12)
+            .Select(answer => new { answer.QuestionText, answer.AnswerText })
+            .ToListAsync();
 
         var careerLearning = new
         {
@@ -1380,6 +1439,16 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
 
         return new
         {
+            interviewLanguage = CvLanguage.Resolve(selectedLanguage, cv.ExtractedText, jobDescription),
+            detectedCvLanguage = CvLanguage.Detect(cv.ExtractedText).Language,
+            seniority = NormalizeSeniority(cvFacts.HasCvContent ? cvFacts.ExperienceLevel : profile?.ExperienceLevel),
+            yearsOfExperience = (int?)null,
+            questionDifficulty = NormalizeSeniority(cvFacts.HasCvContent ? cvFacts.ExperienceLevel : profile?.ExperienceLevel),
+            interviewMode = "Personalized",
+            previousQuestions = recentAnswers.Select(answer => answer.QuestionText)
+                .Where(value => !string.IsNullOrWhiteSpace(value)).ToArray(),
+            previousAnswers = recentAnswers.Select(answer => answer.AnswerText)
+                .Where(value => !string.IsNullOrWhiteSpace(value)).ToArray(),
             candidateExperienceLevel = cvFacts.HasCvContent ? cvFacts.ExperienceLevel : profile?.ExperienceLevel,
             bio = cvFacts.HasCvContent ? cvFacts.Bio : profile?.Bio,
             graduationYear = cvFacts.HasCvContent ? cvFacts.GraduationYear : profile?.GraduationYear,
@@ -1404,6 +1473,14 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
             },
             evidenceNeedsValidation = projectNames,
             relevantExperience = experiences,
+            cvEvidence = new
+            {
+                explicitSkills = skills,
+                explicitExperience = experiences,
+                projectEvidence = projects,
+                educationEvidence = new { university, major },
+                certificationEvidence = certifications
+            },
             roleSpecificRequirements = positionTokens.Take(12),
             behavioralAreas = new[] { "STAR storytelling", "Teamwork", "Conflict handling" },
             technicalAreas = matched.Count > 0 ? matched.Take(6) : skills.Take(6),
@@ -1469,8 +1546,7 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
         {
             var jd = await _unitOfWork.JobDescriptionRepository.GetQueryable().AsNoTracking()
                 .FirstOrDefaultAsync(j => j.Id == jobDescriptionId && j.UserId == userId && !j.IsArchived);
-            if (jd != null)
-                return jd.Content;
+            return jd?.Content;
         }
         return string.IsNullOrWhiteSpace(pasted) ? null : pasted.Trim();
     }
@@ -1516,10 +1592,70 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
         return ev?.PayloadJson;
     }
 
-    private async Task<List<InterviewQuestionDto>> GeneratePersonalizedQuestionsAsync(
-        UserAccount user, InterviewSession session, string? contextJson)
+    private static string? ReadContextLanguage(string? payload)
     {
-        var count = Math.Max(3, session.QuestionCount);
+        try
+        {
+            using var document = JsonDocument.Parse(payload ?? "{}");
+            if (document.RootElement.TryGetProperty("context", out var context)
+                && context.TryGetProperty("interviewLanguage", out var value))
+            {
+                var language = value.GetString();
+                if (language is "vi" or "en") return language;
+            }
+        }
+        catch (JsonException) { }
+        return null;
+    }
+
+    private static List<string> ReadPreviousQuestions(string? payload)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payload ?? "{}");
+            if (document.RootElement.TryGetProperty("context", out var context)
+                && context.TryGetProperty("previousQuestions", out var questions)
+                && questions.ValueKind == JsonValueKind.Array)
+                return questions.EnumerateArray()
+                    .Where(value => value.ValueKind == JsonValueKind.String)
+                    .Select(value => value.GetString()!)
+                    .Take(12).ToList();
+        }
+        catch (JsonException) { }
+        return [];
+    }
+
+    private static string? ReadContextSeniority(string? payload)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payload ?? "{}");
+            if (document.RootElement.TryGetProperty("context", out var context)
+                && context.TryGetProperty("seniority", out var value)
+                && value.ValueKind == JsonValueKind.String)
+                return value.GetString();
+        }
+        catch (JsonException) { }
+        return null;
+    }
+
+    private static bool SameQuestion(string first, string second)
+    {
+        static HashSet<string> Words(string value) => value.ToLowerInvariant()
+            .Split([' ', ',', '.', '?', '!', ':', ';', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(word => word.Length > 2).ToHashSet();
+        var a = Words(first);
+        var b = Words(second);
+        return a.Count > 0 && b.Count > 0
+            && (a.SetEquals(b) || (double)a.Intersect(b).Count() / Math.Min(a.Count, b.Count) >= 0.85);
+    }
+
+    private async Task<List<InterviewQuestionDto>> GeneratePersonalizedQuestionsAsync(
+        UserAccount user, InterviewSession session, string? contextJson,
+        IReadOnlyList<InterviewQuestionDto> selectedQuestions)
+    {
+        var count = session.QuestionCount - selectedQuestions.Count;
+        if (count <= 0) return [];
         var learning = await CareerMemoryLearningService.LoadLearningBundleAsync(
             _unitOfWork, user.Id, CareerMemoryThresholds.LoadTake);
 
@@ -1538,11 +1674,16 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
         var hasMemory = memoryHints.weaknesses.Count + memoryHints.skillGaps.Count
             + memoryHints.evidenceGaps.Count + memoryHints.strengths.Count > 0;
 
-        // Soft JD personalization from context JSON if present (jdMatchContext).
+        var language = ReadContextLanguage(contextJson);
+        if (language == null) return [];
+        // The normalized, owned session context is the sole input to dynamic generation.
         var system =
-            "You are a hiring interviewer. Generate personalized interview questions in Vietnamese based on the candidate CV context and target role. " +
+            $"You are a hiring interviewer. Generate personalized interview questions in {(language == "en" ? "English" : "Vietnamese")} based on the candidate CV context and target role. " +
             "Return JSON array of objects with keys: content, category, hint. " +
             "The resolved interview CV is the source of truth for target position, industry, education major, skills and experience. " +
+            "Choose role fundamentals first, then CV-grounded, JD-specific, seniority-appropriate, behavioral and evidence-validation questions. " +
+            "ExplicitSkill is not ExplicitExperience: ask whether and where the skill was used; never claim production experience from a skill alone. " +
+            "Distinguish a JD requirement from proven CV experience. Do not treat Career Memory as a fact about the candidate. " +
             "Make most questions directly relevant to that position and major; use only skills, projects or experience evidenced in that CV or the supplied job description. " +
             "Do not invent qualifications or ask technical trivia for another role or major. Compact. " +
             "Career memory is a SOFT signal only — prefer targeting 1–2 known weaknesses/evidence gaps when relevant to position/JD/CV, " +
@@ -1551,7 +1692,8 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
             "(e.g. containerization if Docker listed) — do not treat as proven skill gaps; phrase as exploration.";
 
         var userPrompt =
-            $"Target position: {session.Position}\nIndustry: {session.Industry}\nCount: {count}\n" +
+            $"Target position: {session.Position}\nIndustry: {session.Industry}\nLanguage: {language}\nCount: {count}\n" +
+            $"Already selected questions (do not repeat): {JsonSerializer.Serialize(selectedQuestions.Select(q => q.Content))}\n" +
             $"CareerMemory (titles only):\n{JsonSerializer.Serialize(memoryHints)}\n" +
             (hasMemory
                 ? "Prefer probing measurable Result / evidence / known skill gaps when natural; keep most questions role-aligned.\n"
@@ -1638,42 +1780,67 @@ Xưng Tôi hoặc Cố vấn, gọi Bạn. Headline một câu ngắn. Mỗi ph�
         var unavailable = new AnswerAnalysisDto { AnalysisAvailable = false };
         try
         {
-            var isTechnical = category.Contains("Technical", StringComparison.OrdinalIgnoreCase)
-                || category.Contains("Problem", StringComparison.OrdinalIgnoreCase);
-            var isBehavioral = category.Contains("Behavioral", StringComparison.OrdinalIgnoreCase)
-                || category.Contains("Experience", StringComparison.OrdinalIgnoreCase)
-                || category.Contains("Project", StringComparison.OrdinalIgnoreCase);
-
-            var system = """
-Bạn là Cố vấn Phỏng vấn AI HireMate: chuyên nghiệp, thân thiện, đánh giá câu trả lời vừa rồi và đề xuất câu hỏi tiếp theo phù hợp vị trí, chuyên ngành trong CV của phiên này.
-Trả về DUY NHẤT một JSON hợp lệ, đúng cấu trúc và không thêm field:
-{"scores":{"relevance":0,"completeness":0,"communication":0,"cv_consistency":0},"feedback":{"status":"good","comment":"","star_tip":null},"next_question":{"question_number":2,"content":"","hint":""}}
-Mỗi điểm là số nguyên 0-100. relevance: đúng trọng tâm câu hỏi; completeness: đủ bối cảnh, hành động, kết quả khi phù hợp; communication: mạch lạc, rõ tiếng Việt; cv_consistency: khớp bằng chứng trong CV, không suy đoán mâu thuẫn khi CV thiếu chi tiết.
-status chỉ là good, needs_improvement hoặc invalid (quá ngắn hay lạc đề). comment 1-2 câu tiếng Việt nhận xét trực tiếp, xưng Tôi hoặc Cố vấn và gọi Bạn; nêu điều làm tốt và điều cần bổ sung cụ thể. Không dùng ngôi thứ ba hoặc từ nội bộ như 'ứng viên', 'cần yêu cầu ứng viên', 'gợi ý đào sâu'.
-Không giải thích định nghĩa STAR. Nếu thiếu thành phần quan trọng, nhất là kết quả/số liệu, star_tip là một mẹo dưới 15 từ; nếu đủ thì null.
-next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chuyên ngành/CV, không bịa kỹ năng, dự án hay kinh nghiệm. hint là một gợi ý ngắn cho Bạn. Không lặp lại câu hỏi vừa rồi.
+            var language = ReadContextLanguage(contextJson);
+            if (language is not ("vi" or "en")) return unavailable;
+            var applicable = InterviewEvaluationPolicy.Weights(category, answer.QuestionText);
+            var system = $"""
+You are HireMate's interview evaluator. Return ONLY compact JSON with exactly these root keys:
+dimensions,evidenceStatus,cvQuote,star,feedback,followUp.
+dimensions has exactly these keys: {string.Join(",", applicable.Keys)}. Each value has exactly
+score (integer 0-100), confidence (number 0-1), status (evidence status enum),
+evidence (1-3 EXACT quotes of 8-120 characters from Answer, no ellipsis),
+reason (short explanation).
+No other dimension. Quotes must appear verbatim in Answer and support that dimension.
+High scores require a reason explaining why the quoted evidence satisfies the rubric.
+If evidence is thin, lower confidence or score; never invent support or reward keyword lists.
+Different wording with the same substance should receive similar scores.
+{InterviewEvaluationPolicy.RubricInstruction}
+evidenceStatus must be Verified, StrongEvidence, WeakEvidence, MissingEvidence, NeedsValidation
+or CvInconsistency. Missing CV mention is NeedsValidation, not contradiction or dishonesty.
+Verified means a substantive claim is corroborated, not merely that a quote exists.
+Incorrect or off-topic answers cannot be Verified or StrongEvidence.
+cvQuote is null except explicit CvInconsistency, then quote the contradictory CV text verbatim.
+star is null unless STAR is an applicable dimension; then exactly four booleans:
+situation,task,action,result. Mark a component true only when Answer actually provides it.
+feedback has exactly status (good|needs_improvement|invalid), comment and starTip (string or null).
+followUp is null unless a concrete gap needs clarification; then exactly trigger and reason.
+trigger: EvidenceGap|TechnicalGap|WeakSTAR|MissingResult|UnclearRole|CvInconsistency|LowConfidence.
+Use TechnicalGap only for a material gap (technicalKnowledge or completeness below 60).
+Do not trigger EvidenceGap when evidenceStatus is Verified or StrongEvidence.
+Do not invent facts, scores, evidence, experience or answer keys. Do not score by answer length,
+keyword count, CV/JD copying, accent, age, gender, name or background. Judge substance.
+Use {language} for all prose: {(language == "en" ? "English" : "Vietnamese")}.
+Keep JSON short enough to fit the response limit. No overall score.
 """;
-
+            var previous = await _unitOfWork.InterviewAnswerRepository.GetQueryable()
+                .AsNoTracking().Where(a => a.SessionId == session.Id && a.OrderIndex < answer.OrderIndex
+                    && !a.Skipped && a.AnswerText != null)
+                .OrderByDescending(a => a.OrderIndex).Take(3)
+                .Select(a => new { a.QuestionText, a.AnswerText }).ToListAsync();
             var userPrompt =
                 $"Position: {session.Position}\nIndustry: {session.Industry}\nCategory: {category}\n" +
-                $"IsTechnicalHint: {isTechnical}\nIsBehavioralHint: {isBehavioral}\n" +
-                $"Current question number: {answer.OrderIndex + 1}\nNext question number: {answer.OrderIndex + 2}\n" +
                 $"Question: {answer.QuestionText}\nAnswer: {answer.AnswerText}\n" +
-                $"CV context: {Truncate(contextJson ?? "{}", 5000)}";
+                $"Previous answers: {Truncate(JsonSerializer.Serialize(previous), 2000)}\n" +
+                $"CV/JD/profile context: {Truncate(contextJson ?? "{}", 5000)}";
 
-            var block = await _aiQuota.EnsureCanCallAsync(user, system.Length + Math.Min(userPrompt.Length, 10000));
+            var block = await _aiQuota.EnsureCanCallAsync(user,
+                system.Length + Math.Min(userPrompt.Length, 10000),
+                AiQuotaService.InterviewEvaluationMaxOutputChars);
             if (block != null)
                 return unavailable;
 
             var clipped = userPrompt.Length > 10000 ? userPrompt[..10000] : userPrompt;
             var ai = await _aiQuota.CompleteAndLogAsync(
-                user, system, clipped, "interview_answer_analysis", session.Id, SettingKeys.AiInterviewMaxOutputChars);
+                user, system, clipped, "interview_answer_analysis", session.Id,
+                SettingKeys.AiInterviewMaxOutputChars,
+                InterviewEvaluationPolicy.ResponseSchema(category, answer.QuestionText));
 
             // Do not fabricate scores when AI is unavailable — AnalysisAvailable must stay false.
             if (ai.UsedFallback || string.IsNullOrWhiteSpace(ai.Content))
                 return unavailable;
 
-            var parsed = TryParseCoachAnalysis(ai.Content, answer.OrderIndex + 2);
+            var parsed = InterviewEvaluationPolicy.TryParse(
+                ai.Content, category, answer.QuestionText, answer.AnswerText ?? "", contextJson);
             return parsed ?? unavailable;
         }
         catch
@@ -1682,253 +1849,16 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
         }
     }
 
-    private static AnswerAnalysisDto HeuristicAnalysis(InterviewAnswer answer, string category)
+    private static string? NormalizeSeniority(string? value)
     {
-        var text = answer.AnswerText ?? "";
-        var len = text.Trim().Length;
-        var gap = LooksLikeEvidenceGap(text);
-        var isTechnical = category.Contains("Technical", StringComparison.OrdinalIgnoreCase)
-            || category.Contains("Problem", StringComparison.OrdinalIgnoreCase);
-        var isBehavioral = !isTechnical;
-
-        var status = gap
-            ? (len < 80 ? EvidenceStatus.MissingEvidence : EvidenceStatus.WeakEvidence)
-            : EvidenceStatus.StrongEvidence;
-
-        var needsFollowUp = gap || len < 180;
-        return new AnswerAnalysisDto
-        {
-            AnalysisAvailable = true,
-            Relevance = len < 40 ? 40 : Math.Min(90, 55 + len / 40),
-            Completeness = len < 100 ? 45 : Math.Min(88, 50 + len / 50),
-            TechnicalKnowledge = isTechnical ? (len < 120 ? 50 : 70) : null,
-            ProblemSolving = category.Contains("Problem", StringComparison.OrdinalIgnoreCase)
-                ? (gap ? 45 : 70) : null,
-            Communication = Math.Min(90, 50 + len / 30),
-            StarScore = isBehavioral ? (gap ? 55 : 72) : null,
-            StarSituation = isBehavioral ? true : null,
-            StarTask = isBehavioral ? (len > 80) : null,
-            StarAction = isBehavioral ? (len > 120) : null,
-            StarResult = isBehavioral ? (!gap && len > 200) : null,
-            CvConsistency = 80,
-            EvidenceStatus = status,
-            EvidenceJson = JsonSerializer.Serialize(new
-            {
-                status,
-                claim = Truncate(text, 200),
-                missing = gap ? new[] { "specific action", "measurable result" } : Array.Empty<string>(),
-                validationNote = gap
-                    ? "Thiếu bằng chứng cụ thể — không kết luận CV giả."
-                    : (string?)null
-            }),
-            FollowUpReason = needsFollowUp
-                ? (gap ? "MissingEvidence — cần action/result cụ thể" : "Câu trả lời còn ngắn")
-                : null,
-            EvidenceGap = gap,
-            NeedsFollowUp = needsFollowUp
-        };
-    }
-
-    private static AnswerAnalysisDto? TryParseCoachAnalysis(string content, int expectedNextNumber)
-    {
-        try
-        {
-            var json = ExtractJsonObject(content);
-            if (json == null) return null;
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            if (!root.TryGetProperty("scores", out var scores) || scores.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty("feedback", out var feedback) || feedback.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty("next_question", out var next) || next.ValueKind != JsonValueKind.Object)
-                return null;
-
-            static int? Score(JsonElement element, string key) =>
-                element.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Number
-                    && value.TryGetInt32(out var number) && number is >= 0 and <= 100 ? number : null;
-            static string? Text(JsonElement element, string key) =>
-                element.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
-                    ? value.GetString()?.Trim() : null;
-
-            var relevance = Score(scores, "relevance");
-            var completeness = Score(scores, "completeness");
-            var communication = Score(scores, "communication");
-            var consistency = Score(scores, "cv_consistency");
-            var status = Text(feedback, "status");
-            var comment = Text(feedback, "comment");
-            var tip = Text(feedback, "star_tip");
-            var question = Text(next, "content");
-            var hint = Text(next, "hint");
-            var hasNextNumber = next.TryGetProperty("question_number", out var numberElement)
-                && numberElement.ValueKind == JsonValueKind.Number
-                && numberElement.TryGetInt32(out var suppliedNextNumber)
-                && suppliedNextNumber > 0;
-            if (!relevance.HasValue || !completeness.HasValue || !communication.HasValue || !consistency.HasValue
-                || status is not ("good" or "needs_improvement" or "invalid")
-                || !hasNextNumber || string.IsNullOrWhiteSpace(question) || string.IsNullOrWhiteSpace(hint))
-                return null;
-
-            // Do not relay internal or third-person phrasing to the candidate.
-            if (string.IsNullOrWhiteSpace(comment)
-                || comment.Contains("ứng viên", StringComparison.OrdinalIgnoreCase)
-                || comment.Contains("gợi ý đào sâu", StringComparison.OrdinalIgnoreCase)
-                || !comment.Contains("Bạn", StringComparison.OrdinalIgnoreCase)
-                || (!comment.Contains("Tôi", StringComparison.OrdinalIgnoreCase)
-                    && !comment.Contains("Cố vấn", StringComparison.OrdinalIgnoreCase)))
-                comment = status switch
-                {
-                    "good" => "Tôi thấy Bạn trả lời đúng trọng tâm và rõ ràng. Bạn có thể nêu thêm kết quả cụ thể nếu có.",
-                    "needs_improvement" => "Tôi thấy Bạn đã nêu được ý chính. Bạn nên bổ sung hành động và kết quả cụ thể.",
-                    _ => "Tôi chưa thấy câu trả lời đi vào trọng tâm. Bạn hãy trả lời trực tiếp và nêu một ví dụ cụ thể."
-                };
-
-            if (!string.IsNullOrWhiteSpace(tip)
-                && (tip.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 15
-                    || tip.Contains("ứng viên", StringComparison.OrdinalIgnoreCase)))
-                tip = "Bạn hãy nêu kết quả cụ thể hoặc số liệu đạt được.";
-
-            var evidenceStatus = status switch
-            {
-                "good" => EvidenceStatus.StrongEvidence,
-                "invalid" => EvidenceStatus.MissingEvidence,
-                _ => EvidenceStatus.NeedsValidation
-            };
-            return new AnswerAnalysisDto
-            {
-                AnalysisAvailable = true,
-                Relevance = relevance,
-                Completeness = completeness,
-                Communication = communication,
-                CvConsistency = consistency,
-                FeedbackStatus = status,
-                FeedbackComment = comment,
-                StarTip = tip,
-                NextQuestionNumber = expectedNextNumber,
-                NextQuestionContent = question,
-                NextQuestionHint = hint,
-                EvidenceStatus = evidenceStatus,
-                EvidenceJson = JsonSerializer.Serialize(new { status = evidenceStatus }),
-                EvidenceGap = status != "good",
-                NeedsFollowUp = false
-            };
-        }
-        catch (JsonException) { return null; }
-    }
-
-    private static AnswerAnalysisDto? TryParseAnswerAnalysis(string content, string category)
-    {
-        try
-        {
-            var json = ExtractJsonObject(content);
-            if (json == null) return null;
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            int? ReadScore(string name)
-            {
-                if (!root.TryGetProperty(name, out var p) || p.ValueKind == JsonValueKind.Null)
-                    return null;
-                if (p.TryGetInt32(out var n)) return ClampInt(n);
-                return null;
-            }
-
-            bool? ReadBool(JsonElement el, string name)
-            {
-                if (!el.TryGetProperty(name, out var p) || p.ValueKind == JsonValueKind.Null)
-                    return null;
-                if (p.ValueKind == JsonValueKind.True) return true;
-                if (p.ValueKind == JsonValueKind.False) return false;
-                return null;
-            }
-
-            var isTechnical = category.Contains("Technical", StringComparison.OrdinalIgnoreCase)
-                || category.Contains("Problem", StringComparison.OrdinalIgnoreCase);
-            var isBehavioral = category.Contains("Behavioral", StringComparison.OrdinalIgnoreCase)
-                || category.Contains("Experience", StringComparison.OrdinalIgnoreCase)
-                || category.Contains("Project", StringComparison.OrdinalIgnoreCase);
-
-            int? tech = ReadScore("technicalKnowledge");
-            int? problem = ReadScore("problemSolving");
-            if (!isTechnical) tech = null;
-            if (!category.Contains("Problem", StringComparison.OrdinalIgnoreCase)
-                && !category.Contains("Technical", StringComparison.OrdinalIgnoreCase))
-                problem = null;
-
-            int? starScore = null;
-            bool? s = null, t = null, a = null, r = null;
-            if (root.TryGetProperty("star", out var starEl) && starEl.ValueKind == JsonValueKind.Object)
-            {
-                if (starEl.TryGetProperty("score", out var ss) && ss.ValueKind != JsonValueKind.Null && ss.TryGetInt32(out var sn))
-                    starScore = ClampInt(sn);
-                s = ReadBool(starEl, "situation");
-                t = ReadBool(starEl, "task");
-                a = ReadBool(starEl, "action");
-                r = ReadBool(starEl, "result");
-            }
-            if (!isBehavioral)
-            {
-                starScore = null;
-                s = t = a = r = null;
-            }
-
-            string? evidenceStatus = null;
-            string? evidenceJson = null;
-            if (root.TryGetProperty("evidence", out var ev) && ev.ValueKind == JsonValueKind.Object)
-            {
-                if (ev.TryGetProperty("status", out var st))
-                    evidenceStatus = EvidenceStatus.Normalize(st.GetString());
-                evidenceJson = ev.GetRawText();
-            }
-            evidenceStatus ??= EvidenceStatus.NeedsValidation;
-
-            var needsFollowUp = root.TryGetProperty("needsFollowUp", out var nf) && nf.ValueKind == JsonValueKind.True;
-            var followReason = root.TryGetProperty("followUpReason", out var fr) && fr.ValueKind == JsonValueKind.String
-                ? fr.GetString() : null;
-
-            // Only allow follow-up for valid evidence/STAR/technical reasons — not arbitrary low score
-            if (!needsFollowUp)
-            {
-                needsFollowUp = evidenceStatus is EvidenceStatus.MissingEvidence or EvidenceStatus.WeakEvidence
-                    or EvidenceStatus.NeedsValidation or EvidenceStatus.CvInconsistency
-                    || (isBehavioral && (a == false || r == false))
-                    || (isTechnical && (tech ?? 100) < 55);
-                followReason ??= evidenceStatus switch
-                {
-                    EvidenceStatus.MissingEvidence => "MissingEvidence — cần bằng chứng cụ thể",
-                    EvidenceStatus.WeakEvidence => "WeakEvidence — cần đào sâu action/result",
-                    EvidenceStatus.CvInconsistency => "CvInconsistency — làm rõ mâu thuẫn với hồ sơ",
-                    EvidenceStatus.NeedsValidation => "NeedsValidation — cần thẩm định claim",
-                    _ => isBehavioral && r == false ? "STAR gap — thiếu Result" : null
-                };
-            }
-
-            var evidenceGap = evidenceStatus is EvidenceStatus.MissingEvidence or EvidenceStatus.WeakEvidence
-                or EvidenceStatus.NeedsValidation;
-
-            return new AnswerAnalysisDto
-            {
-                AnalysisAvailable = true,
-                Relevance = ReadScore("relevance"),
-                Completeness = ReadScore("completeness"),
-                TechnicalKnowledge = tech,
-                ProblemSolving = problem,
-                Communication = ReadScore("communication"),
-                StarScore = starScore,
-                StarSituation = s,
-                StarTask = t,
-                StarAction = a,
-                StarResult = r,
-                CvConsistency = ReadScore("cvConsistency"),
-                EvidenceStatus = evidenceStatus,
-                EvidenceJson = evidenceJson,
-                FollowUpReason = followReason,
-                EvidenceGap = evidenceGap,
-                NeedsFollowUp = needsFollowUp
-            };
-        }
-        catch
-        {
-            return null;
-        }
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var level = value.Trim().ToLowerInvariant();
+        if (level.Contains("student") || level.Contains("sinh viên")) return "Student";
+        if (level.Contains("fresher") || level.Contains("mới tốt nghiệp")) return "Fresher";
+        if (level.Contains("junior")) return "Junior";
+        if (level.Contains("senior")) return "Senior";
+        if (level.Contains("mid") || level.Contains("middle")) return "Mid";
+        return null;
     }
 
     private static void ApplyAnalysisToAnswer(InterviewAnswer answer, AnswerAnalysisDto dto)
@@ -1977,7 +1907,14 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
         InterviewAnswer answer,
         AnswerAnalysisDto analysis)
     {
-        var system = "Generate one short Vietnamese follow-up interview question based on the analysis. Dig into missing evidence, STAR gaps, or unclear technical points. Never accuse fake CV or lying. Return plain text only.";
+        if (!analysis.NeedsFollowUp || string.IsNullOrWhiteSpace(analysis.FollowUpReason))
+            return null;
+        var language = ReadContextLanguage(await LoadContextPayloadAsync(user.Id, session.Id));
+        if (language is not ("vi" or "en")) return null;
+        var system = $"Generate exactly one short {(language == "en" ? "English" : "Vietnamese")} " +
+            "follow-up question resolving the stated gap in the actual answer. " +
+            "Do not assume experience, invent evidence, accuse dishonesty, or switch language. " +
+            "Return one plain question only.";
         var userPrompt =
             $"Position: {session.Position}\nQ: {answer.QuestionText}\nA: {answer.AnswerText}\n" +
             $"EvidenceStatus: {analysis.EvidenceStatus}\nReason: {analysis.FollowUpReason}\n" +
@@ -1987,7 +1924,9 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
         var ai = await _aiQuota.CompleteAndLogAsync(
             user, system, userPrompt, "interview_followup", session.Id, SettingKeys.AiInterviewMaxOutputChars);
         if (ai.UsedFallback || string.IsNullOrWhiteSpace(ai.Content)) return null;
-        return ai.Content.Trim().Trim('"');
+        var question = ai.Content.Trim().Trim('"');
+        return question.Length is >= 10 and <= 250 && question.EndsWith('?')
+            ? question : null;
     }
 
     private static List<string> ParseJsonStringList(string? json)
@@ -2049,7 +1988,7 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
     }
 
     private static List<InterviewQuestionDto> BuildCvAlignedFallbackQuestions(
-        InterviewSession session, string? contextJson)
+        InterviewSession session, string? contextJson, string language)
     {
         string? major = null;
         try
@@ -2067,11 +2006,23 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
         var role = session.Position;
         var field = session.Industry;
         var education = string.IsNullOrWhiteSpace(major) ? "chuyên ngành ghi trong CV" : $"chuyên ngành {major}";
-        var prompts = new[]
+        var prompts = language == "en" ? new[]
+        {
+            $"Which fundamentals are most important for the {role} role, and how would you apply them?",
+            $"Why are you interested in the {role} position in {field}?",
+            $"Which skill listed on your CV is relevant to {role}, and where have you practiced it?",
+            $"If your CV includes a relevant project or job, which part best demonstrates your fit for {role}?",
+            $"How would you approach a new problem in the {role} role?",
+            $"What have you learned from your studies that you would apply as a {role}?",
+            $"Which strengths and learning goals would you bring to this {role} role?",
+            $"How would you collaborate with teammates on a task in {field}?",
+            $"How would you verify your work before delivery as a {role}?",
+            $"What specific outcome would you aim for in your first months as a {role}?"
+        } : new[]
         {
             $"Kiến thức từ {education} giúp bạn chuẩn bị cho vị trí {role} như thế nào?",
             $"Vì sao bạn chọn ứng tuyển vị trí {role} trong lĩnh vực {field}?",
-            $"Hãy nêu một kỹ năng trong CV mà bạn sẽ dùng thường xuyên ở vị trí {role} và cách bạn đã rèn luyện kỹ năng đó.",
+            $"Nếu CV có kỹ năng phù hợp vị trí {role}, bạn đã rèn luyện kỹ năng đó ở đâu?",
             $"Nếu có dự án hoặc kinh nghiệm liên quan trong CV, phần nào thể hiện rõ nhất năng lực phù hợp với vị trí {role}?",
             $"Khi gặp một vấn đề mới trong công việc {role}, bạn sẽ tìm hiểu và giải quyết theo những bước nào?",
             $"Kiến thức nào của {education} bạn muốn áp dụng thêm trong công việc {role}?",
@@ -2093,12 +2044,17 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
         string industry,
         string position,
         int count,
+        string language,
+        string? seniority,
         Guid? userId = null)
     {
         var all = await _unitOfWork.QuestionRepository.GetQueryable()
             .AsNoTracking()
-            .Where(q => q.IsActive)
+            .Where(q => q.IsActive && q.Language == language)
             .ToListAsync();
+
+        all = all.Where(q => (string.IsNullOrWhiteSpace(q.Seniority) || q.Seniority == seniority)
+            && (seniority is not ("Student" or "Fresher") || q.Difficulty != "Hard")).ToList();
 
         var roleMatched = all.Where(q =>
                 (!string.IsNullOrEmpty(q.RoleHint) && position.Contains(q.RoleHint, StringComparison.OrdinalIgnoreCase))
@@ -2108,7 +2064,8 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
 
         var industryMatched = all.Where(q =>
                 string.Equals(q.Industry, industry, StringComparison.OrdinalIgnoreCase)
-                || q.Category.Equals("Hành vi (HR)", StringComparison.OrdinalIgnoreCase))
+                || q.Category.Equals("Hành vi (HR)", StringComparison.OrdinalIgnoreCase)
+                || (string.IsNullOrWhiteSpace(q.Industry) && string.IsNullOrWhiteSpace(q.RoleHint)))
             .ToList();
 
         // Never fill a shortage with unrelated roles or industries.
@@ -2150,16 +2107,21 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
             }
         }
 
+        int Specificity(Question question) =>
+            (string.Equals(question.RoleHint, position, StringComparison.OrdinalIgnoreCase) ? 4 : 0)
+            + (string.Equals(question.Industry, industry, StringComparison.OrdinalIgnoreCase) ? 2 : 0)
+            + (!string.IsNullOrWhiteSpace(question.Seniority) && question.Seniority == seniority ? 1 : 0);
+
         if (preferTokens.Count == 0)
-            return pool.OrderBy(_ => Guid.NewGuid()).Take(count).ToList();
+            return pool.OrderByDescending(Specificity).ThenBy(_ => Guid.NewGuid()).Take(count).ToList();
 
         var preferred = pool.Where(q =>
         {
             var text = (q.Content + " " + q.Category).ToLowerInvariant();
             return preferTokens.Any(t => text.Contains(t));
-        }).OrderBy(_ => Guid.NewGuid()).ToList();
+        }).OrderByDescending(Specificity).ThenBy(_ => Guid.NewGuid()).ToList();
 
-        var rest = pool.Except(preferred).OrderBy(_ => Guid.NewGuid()).ToList();
+        var rest = pool.Except(preferred).OrderByDescending(Specificity).ThenBy(_ => Guid.NewGuid()).ToList();
         // At most ~40% of questions from memory-preferred pool — soft signal.
         var preferTake = Math.Min(preferred.Count, Math.Max(1, count / 3));
         return preferred.Take(preferTake).Concat(rest).Take(count).ToList();
@@ -2230,7 +2192,11 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
             ClarityScore = s.ClarityScore,
             FeedbackSummary = s.FeedbackSummary,
             StructuredFeedback = TryDeserializeFeedback(s.StructuredFeedbackJson),
-            Answers = s.Answers.OrderBy(a => a.OrderIndex).Select(a => new InterviewAnswerViewDto
+            Answers = s.Answers.OrderBy(a => a.OrderIndex)
+                .Where(a => s.Status == "Completed" || a.Skipped || !string.IsNullOrWhiteSpace(a.AnswerText)
+                    || a.OrderIndex == s.Answers.Where(next => !next.Skipped && string.IsNullOrWhiteSpace(next.AnswerText))
+                        .OrderBy(next => next.OrderIndex).Select(next => next.OrderIndex).FirstOrDefault())
+                .Select(a => new InterviewAnswerViewDto
             {
                 Id = a.Id,
                 OrderIndex = a.OrderIndex,
@@ -2264,52 +2230,3 @@ next_question phải là một câu hỏi mới ngắn, phù hợp vị trí/chu
         return dto;
     }
 }
-
-public static class StarHeuristicScorer
-{
-    public static (int Overall, int S, int T, int A, int R, int Clarity, string FeedbackSummary) Score(
-        IReadOnlyList<InterviewAnswer> answers)
-    {
-        var total = Math.Max(1, answers.Count);
-        var answered = answers.Where(a => !a.Skipped && !string.IsNullOrWhiteSpace(a.AnswerText)).ToList();
-        var texts = answered.Select(a => a.AnswerText!.ToLowerInvariant()).ToList();
-        var joined = string.Join(" ", texts);
-        var avgLen = texts.Count > 0 ? texts.Average(t => t.Length) : 0;
-        var completion = answered.Count / (double)total;
-
-        var s = ScoreDimension(joined, avgLen, completion, ["bối cảnh", "situation", "khi đó", "thời điểm", "trong dự án", "lúc đó"], 4);
-        var t = ScoreDimension(joined, avgLen, completion, ["nhiệm vụ", "task", "trách nhiệm", "mục tiêu", "yêu cầu", "được giao"], 2);
-        var a = ScoreDimension(joined, avgLen, completion, ["hành động", "action", "tôi đã", "thực hiện", "triển khai", "xử lý", "phối hợp"], -2);
-        var r = ScoreDimension(joined, avgLen, completion, ["kết quả", "result", "đạt", "cải thiện", "%", "tăng", "giảm", "hoàn thành"], -4);
-        var clarity = ScoreClarity(texts, avgLen, completion);
-        var overall = (int)Math.Round((s + t + a + r + clarity) / 5.0);
-
-        return (overall, s, t, a, r, clarity, BuildFeedback(overall));
-    }
-
-    public static string BuildFeedback(int overall) =>
-        overall >= 80
-            ? "Kết quả xuất sắc! Bạn đã thể hiện rất tốt theo cấu trúc STAR."
-            : overall >= 65
-                ? "Khá tốt. Hãy bổ sung thêm chi tiết Action và Result để tăng điểm."
-                : "Cần cải thiện. Trả lời đầy đủ hơn theo Situation → Task → Action → Result.";
-
-    private static int ScoreDimension(string joined, double avgLen, double completion, string[] keywords, double bias)
-    {
-        var hits = keywords.Count(k => joined.Contains(k, StringComparison.Ordinal));
-        var baseScore = 32 + avgLen / 7.0 + completion * 26 + hits * 6 + bias;
-        return (int)Math.Round(Clamp(baseScore, 12, 98));
-    }
-
-    private static int ScoreClarity(List<string> texts, double avgLen, double completion)
-    {
-        if (texts.Count == 0) return 20;
-        var sentenceish = texts.Average(t => t.Count(c => c is '.' or '!' or '?' or '\n') + 1);
-        var baseScore = 36 + avgLen / 8.0 + completion * 22 + Math.Min(12, sentenceish * 2);
-        return (int)Math.Round(Clamp(baseScore, 12, 98));
-    }
-
-    private static double Clamp(double n, double lo, double hi) => Math.Max(lo, Math.Min(hi, n));
-}
-
-

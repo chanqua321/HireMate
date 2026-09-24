@@ -17,6 +17,10 @@ public class BuildInterviewContextDto
     public Guid? JobDescriptionId { get; set; }
 
     public Guid? CvDocumentId { get; set; }
+
+    /// <summary>Optional explicit interview language: vi or en. Otherwise detect from CV/JD.</summary>
+    [RegularExpression("^(vi|en)$")]
+    public string? Language { get; set; }
 }
 
 public class CreateInterviewSessionDto
@@ -44,6 +48,9 @@ public class CreateInterviewSessionDto
     public Guid? JobDescriptionId { get; set; }
 
     public Guid? CvDocumentId { get; set; }
+
+    [RegularExpression("^(vi|en)$")]
+    public string? Language { get; set; }
 
     /// <summary>Context từ build-context (optional). Server sẽ dựng lại nếu thiếu.</summary>
     public string? ContextJson { get; set; }
@@ -159,6 +166,18 @@ public class AnswerAnalysisDto
     public string? FollowUpReason { get; set; }
     public bool EvidenceGap { get; set; }
     public bool NeedsFollowUp { get; set; }
+    /// <summary>Validated per-dimension rubric evidence; stored in existing AnalysisJson.</summary>
+    public Dictionary<string, EvaluationDimensionDto> Dimensions { get; set; } = [];
+    public int? WeightedScore { get; set; }
+}
+
+public class EvaluationDimensionDto
+{
+    public int Score { get; set; }
+    public double Confidence { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public List<string> Evidence { get; set; } = [];
+    public string Reason { get; set; } = string.Empty;
 }
 
 public class StructuredFeedbackDto
@@ -182,23 +201,23 @@ public class CoachReportDto
 {
     public CoachReportSummaryDto Summary { get; set; } = new();
     public CoachReportScoresDto Scores { get; set; } = new();
-    public CoachStarAnalysisDto StarAnalysis { get; set; } = new();
+    public CoachStarAnalysisDto? StarAnalysis { get; set; }
 }
 
 public class CoachReportSummaryDto
 {
-    public int OverallScore { get; set; }
+    public int? OverallScore { get; set; }
     public string Headline { get; set; } = string.Empty;
     public string Date { get; set; } = string.Empty;
 }
 
 public class CoachReportScoresDto
 {
-    public int Situation { get; set; }
-    public int Task { get; set; }
-    public int Action { get; set; }
-    public int Result { get; set; }
-    public int Clarity { get; set; }
+    public int? Situation { get; set; }
+    public int? Task { get; set; }
+    public int? Action { get; set; }
+    public int? Result { get; set; }
+    public int? Clarity { get; set; }
 }
 
 public class CoachStarAnalysisDto
@@ -211,7 +230,7 @@ public class CoachStarAnalysisDto
 
 public class CoachStarItemDto
 {
-    public int Score { get; set; }
+    public int? Score { get; set; }
     public string Issue { get; set; } = string.Empty;
     public string Advice { get; set; } = string.Empty;
 }

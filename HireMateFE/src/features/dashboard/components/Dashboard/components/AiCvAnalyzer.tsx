@@ -137,7 +137,7 @@ export const AiCvAnalyzer: React.FC<AiCvAnalyzerProps> = ({
             type="file"
             ref={fileInputRef}
             onChange={onFileUploadAndAnalyze}
-            accept=".pdf,.docx,.doc"
+            accept=".pdf,.docx"
             style={{ display: 'none' }}
           />
 

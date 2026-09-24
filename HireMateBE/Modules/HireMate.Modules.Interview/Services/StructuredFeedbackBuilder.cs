@@ -11,10 +11,12 @@ public static class StructuredFeedbackBuilder
     private const int StrengthThreshold = 70;
     private const int WeakThreshold = 55;
 
-    public static StructuredFeedbackDto Build(InterviewSession session, IReadOnlyList<InterviewAnswer> answers)
+    public static StructuredFeedbackDto Build(InterviewSession session, IReadOnlyList<InterviewAnswer> answers,
+        string language = "vi")
     {
+        var en = language == "en";
         var analyzed = answers
-            .Where(a => !a.Skipped && a.AnalysisAvailable)
+            .Where(a => !a.Skipped && InterviewEvaluationPolicy.WeightedScore(a).HasValue)
             .OrderBy(a => a.OrderIndex)
             .ToList();
 
@@ -38,17 +40,18 @@ public static class StructuredFeedbackBuilder
             ? (int?)Math.Round(perAnswer.Average(x => x.Composite!.Value))
             : null;
 
-        var strengths = BuildStrengths(cat, analyzed);
-        var weaknesses = BuildWeaknesses(cat, analyzed);
-        var skillGaps = BuildSkillGaps(cat);
-        var evidenceGaps = BuildEvidenceGaps(analyzed);
-        var highlights = BuildHighlights(perAnswer);
-        var cvSummary = BuildCvConsistencySummary(analyzed, cat.CvConsistency);
-        var improvements = BuildImprovements(weaknesses, evidenceGaps, cat);
+        var strengths = BuildStrengths(cat, analyzed, en);
+        var weaknesses = BuildWeaknesses(cat, analyzed, en);
+        var skillGaps = BuildSkillGaps(cat, en);
+        var evidenceGaps = BuildEvidenceGaps(analyzed, en);
+        var highlights = BuildHighlights(perAnswer, en);
+        var cvSummary = BuildCvConsistencySummary(analyzed, cat.CvConsistency, en);
+        var improvements = BuildImprovements(weaknesses, evidenceGaps, cat, en);
 
         var summary = overall == null && analyzed.Count == 0
-            ? "Chưa đủ dữ liệu phân tích từng câu trả lời để tạo feedback đầy đủ."
-            : BuildDeterministicSummary(overall, strengths, weaknesses, evidenceGaps.Count);
+            ? T(en, "Chưa đủ dữ liệu phân tích từng câu trả lời để tạo feedback đầy đủ.",
+                "Not enough analyzed answers to produce a full report.")
+            : BuildDeterministicSummary(overall, strengths, weaknesses, evidenceGaps.Count, en);
 
         return new StructuredFeedbackDto
         {
@@ -69,33 +72,16 @@ public static class StructuredFeedbackBuilder
 
     public static (int? S, int? T, int? A, int? R, int? Clarity) DeriveStarAndClarity(IReadOnlyList<InterviewAnswer> answers)
     {
-        var withStar = answers.Where(a => a.AnalysisAvailable && (
-            a.StarHasSituation.HasValue || a.StarHasTask.HasValue || a.StarHasAction.HasValue
-            || a.StarHasResult.HasValue || a.StarScore.HasValue)).ToList();
-
-        int? Dim(Func<InterviewAnswer, bool?> getter)
-        {
-            var vals = withStar.Select(getter).Where(x => x.HasValue).Select(x => x!.Value ? 88 : 42).ToList();
-            if (vals.Count == 0)
-                return Avg(answers.Where(a => a.AnalysisAvailable).Select(a => a.StarScore));
-            return (int)Math.Round(vals.Average());
-        }
-
-        var clarity = Avg(answers.Where(a => a.AnalysisAvailable).Select(a => a.CommunicationScore));
-        return (Dim(a => a.StarHasSituation), Dim(a => a.StarHasTask), Dim(a => a.StarHasAction), Dim(a => a.StarHasResult), clarity);
+        // Presence flags are not numeric quality scores. Keep legacy STAR columns null
+        // until evidence-backed per-component numeric scores exist.
+        var clarity = Avg(answers.Where(a => InterviewEvaluationPolicy.WeightedScore(a).HasValue)
+            .Select(a => a.CommunicationScore));
+        return (null, null, null, null, clarity);
     }
 
     private static int? AnswerComposite(InterviewAnswer a)
     {
-        var parts = new List<int>();
-        if (a.RelevanceScore.HasValue) parts.Add(a.RelevanceScore.Value);
-        if (a.CompletenessScore.HasValue) parts.Add(a.CompletenessScore.Value);
-        if (a.CommunicationScore.HasValue) parts.Add(a.CommunicationScore.Value);
-        if (a.TechnicalKnowledgeScore.HasValue) parts.Add(a.TechnicalKnowledgeScore.Value);
-        if (a.ProblemSolvingScore.HasValue) parts.Add(a.ProblemSolvingScore.Value);
-        if (a.StarScore.HasValue) parts.Add(a.StarScore.Value);
-        if (parts.Count == 0) return null;
-        return (int)Math.Round(parts.Average());
+        return InterviewEvaluationPolicy.WeightedScore(a);
     }
 
     private static int? Avg(IEnumerable<int?> values)
@@ -104,7 +90,14 @@ public static class StructuredFeedbackBuilder
         return list.Count == 0 ? null : (int)Math.Round(list.Average());
     }
 
-    private static List<FeedbackItemDto> BuildStrengths(CategoryScoresDto cat, List<InterviewAnswer> analyzed)
+    private static string? QuoteFor(IEnumerable<InterviewAnswer> answers, string dimension) =>
+        answers.Select(answer => InterviewEvaluationPolicy.EvidenceQuote(answer, dimension))
+            .FirstOrDefault(quote => !string.IsNullOrWhiteSpace(quote));
+
+    private static string T(bool en, string vi, string english) => en ? english : vi;
+
+    private static List<FeedbackItemDto> BuildStrengths(CategoryScoresDto cat,
+        List<InterviewAnswer> analyzed, bool en)
     {
         var list = new List<FeedbackItemDto>();
         if (cat.Communication is >= StrengthThreshold)
@@ -112,8 +105,9 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "Communication",
-                Description = "Điểm giao tiếp trung bình cao — câu trả lời tương đối rõ ràng, mạch lạc.",
-                Evidence = $"Communication ≈ {cat.Communication}",
+                Description = T(en, "Điểm giao tiếp trung bình cao — câu trả lời tương đối rõ ràng, mạch lạc.",
+                    "Your answers are generally clear and well structured."),
+                Evidence = QuoteFor(analyzed, "communication"),
                 RelatedAnswerIds = analyzed.Where(a => a.CommunicationScore is >= StrengthThreshold).Select(a => a.Id).ToList()
             });
         }
@@ -124,9 +118,11 @@ public static class StructuredFeedbackBuilder
             {
                 Area = "STAR",
                 Description = strongResult > 0
-                    ? "Cấu trúc STAR khá vững, có câu trả lời nêu được Result cụ thể."
-                    : "Điểm STAR tổng thể tốt trên các câu hành vi/kinh nghiệm.",
-                Evidence = $"Star ≈ {cat.Star}",
+                    ? T(en, "Cấu trúc STAR khá vững, có câu trả lời nêu được Result cụ thể.",
+                        "Your STAR answers include a concrete result.")
+                    : T(en, "Điểm STAR tổng thể tốt trên các câu hành vi/kinh nghiệm.",
+                        "Your behavioral answers use a sound STAR structure."),
+                Evidence = QuoteFor(analyzed, "star"),
                 RelatedAnswerIds = analyzed.Where(a => a.StarScore is >= StrengthThreshold).Select(a => a.Id).ToList()
             });
         }
@@ -135,8 +131,9 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "Technical Knowledge",
-                Description = "Các câu technical được trả lời với mức kiến thức ổn định.",
-                Evidence = $"Technical ≈ {cat.Technical}",
+                Description = T(en, "Các câu technical được trả lời với mức kiến thức ổn định.",
+                    "Your technical answers show consistent knowledge."),
+                Evidence = QuoteFor(analyzed, "technicalKnowledge"),
                 RelatedAnswerIds = analyzed.Where(a => a.TechnicalKnowledgeScore.HasValue).Select(a => a.Id).ToList()
             });
         }
@@ -145,8 +142,11 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "Relevance",
-                Description = "Câu trả lời nhìn chung bám sát câu hỏi.",
-                Evidence = $"Relevance ≈ {cat.Relevance}"
+                Description = T(en, "Câu trả lời nhìn chung bám sát câu hỏi.",
+                    "Your answers generally address the questions directly."),
+                Evidence = QuoteFor(analyzed, "relevance"),
+                RelatedAnswerIds = analyzed.Where(a => a.RelevanceScore is >= StrengthThreshold)
+                    .Select(a => a.Id).ToList()
             });
         }
         if (list.Count == 0 && analyzed.Count > 0)
@@ -154,14 +154,16 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "General",
-                Description = "Không đủ dữ liệu vượt ngưỡng để xác định điểm mạnh nổi bật. Hãy luyện thêm với câu trả lời cụ thể hơn.",
+                Description = T(en, "Không đủ dữ liệu vượt ngưỡng để xác định điểm mạnh nổi bật. Hãy luyện thêm với câu trả lời cụ thể hơn.",
+                    "There is not enough evidence for a clear strength yet. Practice with more specific answers."),
                 Evidence = null
             });
         }
         return list;
     }
 
-    private static List<FeedbackItemDto> BuildWeaknesses(CategoryScoresDto cat, List<InterviewAnswer> analyzed)
+    private static List<FeedbackItemDto> BuildWeaknesses(CategoryScoresDto cat,
+        List<InterviewAnswer> analyzed, bool en)
     {
         var list = new List<FeedbackItemDto>();
         var missingResult = analyzed.Where(a => a.StarHasResult == false).ToList();
@@ -170,8 +172,9 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "STAR",
-                Description = "Thiếu Result đo lường được ở một số câu hành vi/kinh nghiệm.",
-                Evidence = $"{missingResult.Count} câu thiếu Result",
+                Description = T(en, "Thiếu Result đo lường được ở một số câu hành vi/kinh nghiệm.",
+                    "Some behavioral answers do not state a measurable result."),
+                Evidence = QuoteFor(missingResult, "star"),
                 RelatedAnswerIds = missingResult.Select(a => a.Id).ToList()
             });
         }
@@ -180,8 +183,10 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "Technical Knowledge",
-                Description = "Điểm technical trung bình thấp trên các câu technical đã phân tích.",
-                Evidence = $"Technical ≈ {cat.Technical}",
+                Description = T(en, "Điểm technical trung bình thấp trên các câu technical đã phân tích.",
+                    "Your analyzed technical answers need stronger conceptual accuracy."),
+                Evidence = QuoteFor(analyzed.Where(a => a.TechnicalKnowledgeScore is < WeakThreshold)
+                    .ToList(), "technicalKnowledge"),
                 RelatedAnswerIds = analyzed.Where(a => a.TechnicalKnowledgeScore.HasValue).Select(a => a.Id).ToList()
             });
         }
@@ -190,8 +195,10 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "Communication",
-                Description = "Giao tiếp còn hạn chế — cần cấu trúc rõ và ngắn gọn hơn.",
-                Evidence = $"Communication ≈ {cat.Communication}",
+                Description = T(en, "Giao tiếp còn hạn chế — cần cấu trúc rõ và ngắn gọn hơn.",
+                    "Structure your answers more clearly and concisely."),
+                Evidence = QuoteFor(analyzed.Where(a => a.CommunicationScore is < WeakThreshold)
+                    .ToList(), "communication"),
                 RelatedAnswerIds = analyzed.Where(a => a.CommunicationScore is < WeakThreshold).Select(a => a.Id).ToList()
             });
         }
@@ -202,8 +209,10 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "Evidence",
-                Description = "Một số câu trả lời thiếu bằng chứng cụ thể (action/result/metric) — không đồng nghĩa CV giả.",
-                Evidence = $"{gapAnswers.Count} câu Weak/Missing Evidence",
+                Description = T(en, "Một số câu trả lời thiếu bằng chứng cụ thể (action/result/metric) — không đồng nghĩa CV giả.",
+                    "Some answers lack concrete actions, results or metrics; this does not imply a false CV."),
+                Evidence = en ? $"{gapAnswers.Count} answers with weak/missing evidence"
+                    : $"{gapAnswers.Count} câu Weak/Missing Evidence",
                 RelatedAnswerIds = gapAnswers.Select(a => a.Id).ToList()
             });
         }
@@ -213,15 +222,17 @@ public static class StructuredFeedbackBuilder
             list.Add(new FeedbackItemDto
             {
                 Area = "CV Consistency",
-                Description = "Có mâu thuẫn rõ với thông tin hồ sơ đã lưu — cần làm rõ trong lần luyện tiếp theo.",
-                Evidence = $"{inconsistent.Count} câu CvInconsistency",
+                Description = T(en, "Có mâu thuẫn rõ với thông tin hồ sơ đã lưu — cần làm rõ trong lần luyện tiếp theo.",
+                    "A clear discrepancy with the saved CV needs clarification."),
+                Evidence = en ? $"{inconsistent.Count} answers with CV discrepancies"
+                    : $"{inconsistent.Count} câu CvInconsistency",
                 RelatedAnswerIds = inconsistent.Select(a => a.Id).ToList()
             });
         }
         return list;
     }
 
-    private static List<SkillGapDto> BuildSkillGaps(CategoryScoresDto cat)
+    private static List<SkillGapDto> BuildSkillGaps(CategoryScoresDto cat, bool en)
     {
         var gaps = new List<SkillGapDto>();
         void Add(string area, int? score, string desc)
@@ -229,15 +240,20 @@ public static class StructuredFeedbackBuilder
             if (score is < WeakThreshold)
                 gaps.Add(new SkillGapDto { Area = area, Score = score, Description = desc });
         }
-        Add("Communication", cat.Communication, "Cần cải thiện độ rõ ràng và cấu trúc câu trả lời.");
-        Add("STAR", cat.Star, "Cần luyện Situation → Task → Action → Result đầy đủ hơn.");
-        Add("Technical Knowledge", cat.Technical, "Cần củng cố kiến thức kỹ thuật liên quan vị trí.");
-        Add("Problem Solving", cat.ProblemSolving, "Cần trình bày rõ hơn cách phân tích và trade-off.");
-        Add("Completeness", cat.Completeness, "Câu trả lời còn thiếu thông tin cần thiết.");
+        Add("Communication", cat.Communication, T(en, "Cần cải thiện độ rõ ràng và cấu trúc câu trả lời.",
+            "Improve the clarity and structure of your answers."));
+        Add("STAR", cat.Star, T(en, "Cần luyện Situation → Task → Action → Result đầy đủ hơn.",
+            "Practice all four STAR elements in behavioral answers."));
+        Add("Technical Knowledge", cat.Technical, T(en, "Cần củng cố kiến thức kỹ thuật liên quan vị trí.",
+            "Strengthen the technical concepts relevant to this role."));
+        Add("Problem Solving", cat.ProblemSolving, T(en, "Cần trình bày rõ hơn cách phân tích và trade-off.",
+            "Explain your analysis and trade-offs more clearly."));
+        Add("Completeness", cat.Completeness, T(en, "Câu trả lời còn thiếu thông tin cần thiết.",
+            "Your answers omit essential information."));
         return gaps;
     }
 
-    private static List<EvidenceGapItemDto> BuildEvidenceGaps(List<InterviewAnswer> analyzed)
+    private static List<EvidenceGapItemDto> BuildEvidenceGaps(List<InterviewAnswer> analyzed, bool en)
     {
         return analyzed
             .Where(a => a.EvidenceStatus is EvidenceStatus.MissingEvidence or EvidenceStatus.WeakEvidence
@@ -246,11 +262,15 @@ public static class StructuredFeedbackBuilder
             {
                 var gap = a.EvidenceStatus switch
                 {
-                    EvidenceStatus.MissingEvidence => "Thiếu bằng chứng cụ thể để chứng minh claim.",
-                    EvidenceStatus.WeakEvidence => "Có đề cập trải nghiệm nhưng thiếu action/result/metric.",
-                    EvidenceStatus.NeedsValidation => "Thông tin cần thẩm định thêm so với hồ sơ.",
-                    EvidenceStatus.CvInconsistency => "Mâu thuẫn với dữ liệu Career Profile/CV đã biết.",
-                    _ => "Cần bổ sung evidence."
+                    EvidenceStatus.MissingEvidence => T(en, "Thiếu bằng chứng cụ thể để chứng minh claim.",
+                        "The claim needs concrete supporting evidence."),
+                    EvidenceStatus.WeakEvidence => T(en, "Có đề cập trải nghiệm nhưng thiếu action/result/metric.",
+                        "The experience lacks a concrete action, result or metric."),
+                    EvidenceStatus.NeedsValidation => T(en, "Thông tin cần thẩm định thêm so với hồ sơ.",
+                        "The claim needs further validation against the CV."),
+                    EvidenceStatus.CvInconsistency => T(en, "Mâu thuẫn với dữ liệu Career Profile/CV đã biết.",
+                        "The answer conflicts with the saved CV or profile."),
+                    _ => T(en, "Cần bổ sung evidence.", "More evidence is needed.")
                 };
                 string? suggestion = null;
                 if (!string.IsNullOrWhiteSpace(a.EvidenceJson))
@@ -261,7 +281,7 @@ public static class StructuredFeedbackBuilder
                         if (doc.RootElement.TryGetProperty("missing", out var m) && m.ValueKind == JsonValueKind.Array)
                         {
                             var parts = m.EnumerateArray().Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x));
-                            suggestion = "Bổ sung: " + string.Join(", ", parts);
+                            suggestion = T(en, "Bổ sung: ", "Add: ") + string.Join(", ", parts);
                         }
                         else if (doc.RootElement.TryGetProperty("validationNote", out var vn))
                             suggestion = vn.GetString();
@@ -281,7 +301,8 @@ public static class StructuredFeedbackBuilder
             }).ToList();
     }
 
-    private static AnswerHighlightsDto BuildHighlights(List<(InterviewAnswer Answer, int? Composite)> perAnswer)
+    private static AnswerHighlightsDto BuildHighlights(
+        List<(InterviewAnswer Answer, int? Composite)> perAnswer, bool en)
     {
         var ordered = perAnswer.OrderByDescending(x => x.Composite).ToList();
         AnswerHighlightItemDto Map((InterviewAnswer Answer, int? Composite) x, string note) => new()
@@ -296,45 +317,56 @@ public static class StructuredFeedbackBuilder
         return new AnswerHighlightsDto
         {
             Strong = ordered.Where(x => x.Composite is >= StrengthThreshold).Take(3)
-                .Select(x => Map(x, "Câu trả lời mạnh")).ToList(),
+                .Select(x => Map(x, T(en, "Câu trả lời mạnh", "Strong answer"))).ToList(),
             Weak = ordered.Where(x => x.Composite is < WeakThreshold).Take(3)
-                .Select(x => Map(x, "Câu trả lời yếu — cần cải thiện")).ToList(),
+                .Select(x => Map(x, T(en, "Câu trả lời yếu — cần cải thiện",
+                    "Weak answer — needs improvement"))).ToList(),
             NeedsImprovement = ordered
                 .Where(x => x.Composite is >= WeakThreshold and < StrengthThreshold)
                 .Take(3)
-                .Select(x => Map(x, "Có thể cải thiện thêm")).ToList()
+                .Select(x => Map(x, T(en, "Có thể cải thiện thêm", "Can be improved"))).ToList()
         };
     }
 
-    private static string BuildCvConsistencySummary(List<InterviewAnswer> analyzed, int? avg)
+    private static string BuildCvConsistencySummary(List<InterviewAnswer> analyzed, int? avg, bool en)
     {
         if (analyzed.Any(a => a.EvidenceStatus == EvidenceStatus.CvInconsistency))
-            return "Potential inconsistency — có mâu thuẫn rõ với hồ sơ; cần làm rõ (không suy diễn fake CV từ MissingEvidence).";
+            return T(en, "Potential inconsistency — có mâu thuẫn rõ với hồ sơ; cần làm rõ (không suy diễn fake CV từ MissingEvidence).",
+                "Potential inconsistency — clarify the explicit CV discrepancy; missing evidence alone does not imply dishonesty.");
         if (analyzed.Any(a => a.EvidenceStatus == EvidenceStatus.NeedsValidation))
-            return "Needs Validation — một số claim cần thẩm định thêm với CV/profile.";
+            return T(en, "Needs Validation — một số claim cần thẩm định thêm với CV/profile.",
+                "Needs validation — some claims require further comparison with the CV or profile.");
         if (avg is >= 70)
-            return "Consistent — câu trả lời nhìn chung nhất quán với hồ sơ.";
+            return T(en, "Consistent — câu trả lời nhìn chung nhất quán với hồ sơ.",
+                "Consistent — the analyzed answers generally align with the CV.");
         if (avg == null && analyzed.Count == 0)
-            return "Không đủ dữ liệu để đánh giá CV consistency.";
-        return "Không đủ bằng chứng rõ ràng — ưu tiên bổ sung evidence thay vì kết luận không trung thực.";
+            return T(en, "Không đủ dữ liệu để đánh giá CV consistency.",
+                "Not enough data to assess CV consistency.");
+        return T(en, "Không đủ bằng chứng rõ ràng — ưu tiên bổ sung evidence thay vì kết luận không trung thực.",
+            "Evidence is inconclusive; add support rather than assuming dishonesty.");
     }
 
     private static List<string> BuildImprovements(
         List<FeedbackItemDto> weaknesses,
         List<EvidenceGapItemDto> gaps,
-        CategoryScoresDto cat)
+        CategoryScoresDto cat, bool en)
     {
         var list = new List<string>();
         if (gaps.Any(g => g.Status is EvidenceStatus.MissingEvidence or EvidenceStatus.WeakEvidence))
-            list.Add("Thêm action cụ thể + kết quả đo được (%, thời gian, phạm vi) vào mỗi câu trả lời.");
+            list.Add(T(en, "Thêm action cụ thể + kết quả đo được (%, thời gian, phạm vi) vào mỗi câu trả lời.",
+                "Add a concrete action and measurable result to each relevant answer."));
         if (weaknesses.Any(w => w.Area == "STAR"))
-            list.Add("Luyện STAR đầy đủ: Situation → Task → Action → Result cho câu hành vi.");
+            list.Add(T(en, "Luyện STAR đầy đủ: Situation → Task → Action → Result cho câu hành vi.",
+                "Practice a complete Situation → Task → Action → Result for behavioral questions."));
         if (cat.Technical is < WeakThreshold)
-            list.Add("Ôn kiến thức kỹ thuật liên quan JD/vị trí và giải thích trade-off rõ hơn.");
+            list.Add(T(en, "Ôn kiến thức kỹ thuật liên quan JD/vị trí và giải thích trade-off rõ hơn.",
+                "Review the technical concepts for this role and explain trade-offs clearly."));
         if (cat.Communication is < WeakThreshold)
-            list.Add("Rút gọn câu trả lời, dùng cấu trúc 3–4 câu rõ ràng trước khi đào sâu.");
+            list.Add(T(en, "Rút gọn câu trả lời, dùng cấu trúc 3–4 câu rõ ràng trước khi đào sâu.",
+                "Start with a clear three- or four-sentence structure before adding detail."));
         if (list.Count == 0)
-            list.Add("Tiếp tục luyện với Active CV và JD cụ thể để giữ phong độ.");
+            list.Add(T(en, "Tiếp tục luyện với Active CV và JD cụ thể để giữ phong độ.",
+                "Keep practicing with your selected CV and a relevant job description."));
         return list;
     }
 
@@ -342,14 +374,24 @@ public static class StructuredFeedbackBuilder
         int? overall,
         List<FeedbackItemDto> strengths,
         List<FeedbackItemDto> weaknesses,
-        int evidenceGapCount)
+        int evidenceGapCount, bool en)
     {
-        var scorePart = overall.HasValue ? $"Điểm tổng hợp từ phân tích câu trả lời: {overall}/100. " : "";
-        var sPart = strengths.Count > 0 ? $"Điểm mạnh nổi bật: {string.Join(", ", strengths.Select(x => x.Area))}. " : "";
-        var wPart = weaknesses.Count > 0 ? $"Cần cải thiện: {string.Join(", ", weaknesses.Select(x => x.Area))}. " : "";
+        var scorePart = overall.HasValue ? T(en,
+            $"Điểm tổng hợp từ phân tích câu trả lời: {overall}/100. ",
+            $"Overall score from analyzed answers: {overall}/100. ") : "";
+        var sPart = strengths.Count > 0 ? T(en,
+            $"Điểm mạnh nổi bật: {string.Join(", ", strengths.Select(x => x.Area))}. ",
+            $"Strengths: {string.Join(", ", strengths.Select(x => x.Area))}. ") : "";
+        var wPart = weaknesses.Count > 0 ? T(en,
+            $"Cần cải thiện: {string.Join(", ", weaknesses.Select(x => x.Area))}. ",
+            $"Areas to improve: {string.Join(", ", weaknesses.Select(x => x.Area))}. ") : "";
         var ePart = evidenceGapCount > 0
-            ? $"Có {evidenceGapCount} điểm evidence cần bổ sung (không kết luận CV giả)."
-            : "Evidence nhìn chung ổn.";
+            ? T(en, $"Có {evidenceGapCount} điểm evidence cần bổ sung (không kết luận CV giả).",
+                $"{evidenceGapCount} evidence gaps need clarification; this does not imply a false CV.")
+            : overall is < WeakThreshold
+                ? T(en, "Điểm nội dung còn thấp; trích dẫn có mặt không chứng minh câu trả lời đúng.",
+                    "Content scores are low; a verified quote does not establish correctness.")
+            : T(en, "Evidence nhìn chung ổn.", "The analyzed answers show adequate evidence overall.");
         return scorePart + sPart + wPart + ePart;
     }
 }

@@ -2,6 +2,7 @@ using HireMate.Modules.Ai;
 using HireMate.Modules.Onboarding.Abstractions;
 using HireMate.BuildingBlocks;
 using HireMate.Modules.Onboarding.Cv;
+using HireMate.Modules.Onboarding.Storage;
 using System.Text;
 
 using Common;
@@ -12,6 +13,7 @@ using Infrastructure.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
@@ -23,16 +25,20 @@ public class CvService(
     IUnitOfWork uow,
     IAiQuotaService aiQuota,
     UserManager<UserAccount> users,
-    HireMateContext db) : ICvService
+    HireMateContext db,
+    IFileStorageService storage,
+    ILogger<CvService> logger) : ICvService
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> CreateGates = new();
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> EditGates = new();
 
     public async Task<IServiceResult> UploadAsync(
-        Guid userId, IFormFile file, string webRoot, string? displayName = null, Guid? templateId = null)
+        Guid userId, IFormFile file, string? displayName = null, Guid? templateId = null)
     {
         // T1.1 CV-first: không yêu cầu PlanSelectedAt trước khi nộp CV
-        if (file.Length == 0)
-            return new ServiceResult(Const.FAIL_CREATE_CODE, "File trống");
+        var validated = await CvUploadValidator.ValidateAsync(file);
+        if (!validated.IsValid)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, validated.Error!);
 
         string resolvedDisplay;
         if (!string.IsNullOrWhiteSpace(displayName))
@@ -49,44 +55,43 @@ public class CvService(
         if (templateId.HasValue && template == null)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy template");
 
-        var dir = Path.Combine(webRoot, "uploads", "cv", userId.ToString());
-        Directory.CreateDirectory(dir);
-        var stored = $"{Guid.NewGuid()}_{Path.GetFileName(file.FileName)}";
-        var path = Path.Combine(dir, stored);
-        await using (var stream = File.Create(path))
-            await file.CopyToAsync(stream);
-
-        var text = CvTextExtractor.ExtractFromFile(path, file.FileName);
+        var docId = Guid.NewGuid();
+        var key = CvStorageKeys.Original(userId, docId, Path.GetExtension(file.FileName).ToLowerInvariant());
+        var text = CvTextExtractor.ExtractFromBytes(validated.Bytes!, file.FileName);
+        await storage.SaveAsync(key, new MemoryStream(validated.Bytes!));
         var doc = new CvDocument
         {
-            Id = Guid.NewGuid(),
+            Id = docId,
             UserId = userId,
             Source = "Upload",
             FileName = file.FileName,
             DisplayName = resolvedDisplay,
             TemplateId = template?.Id ?? CvSystemTemplateIds.Modern01,
-            StoragePath = path,
+            StoragePath = key,
             ContentType = file.ContentType,
             FileSize = file.Length,
             ExtractedText = text,
             ParseSucceeded = false
         };
-        await uow.CvDocumentRepository.CreateAsync(doc);
-        await uow.CareerMemoryEventRepository.CreateAsync(new CareerMemoryEvent
+        try
         {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            EventType = "CvUploaded",
-            RefId = doc.Id,
-            PayloadJson = JsonSerializer.Serialize(new
+            await uow.CvDocumentRepository.CreateAsync(doc);
+            await uow.CareerMemoryEventRepository.CreateAsync(new CareerMemoryEvent
             {
-                doc.FileName,
-                doc.DisplayName,
-                doc.TemplateId,
-                hasText = CvTextExtractor.HasSelectableText(text)
-            })
-        });
-        await uow.SaveChangesAsync();
+                Id = Guid.NewGuid(), UserId = userId, EventType = "CvUploaded", RefId = doc.Id,
+                PayloadJson = JsonSerializer.Serialize(new
+                {
+                    doc.FileName, doc.DisplayName, doc.TemplateId,
+                    hasText = CvTextExtractor.HasSelectableText(text)
+                })
+            });
+            await uow.SaveChangesAsync();
+        }
+        catch
+        {
+            await DeleteAfterFailedCreateAsync(key);
+            throw;
+        }
 
         var msg = CvTextExtractor.HasSelectableText(text)
             ? Const.SUCCESS_CREATE_MSG
@@ -131,13 +136,13 @@ public class CvService(
         });
     }
 
-    public async Task<IServiceResult> CreateFromWizardAsync(Guid userId, CvWizardDto dto, string webRoot)
+    public async Task<IServiceResult> CreateFromWizardAsync(Guid userId, CvWizardDto dto)
     {
         var validation = ValidateWizardMinimum(dto);
         if (validation != null) return validation;
 
         if (string.IsNullOrWhiteSpace(dto.ClientRequestId))
-            return await CreateFromWizardCoreAsync(userId, dto, webRoot);
+            return await CreateFromWizardCoreAsync(userId, dto);
 
         var requestId = dto.ClientRequestId.Trim();
         var gateKey = $"{userId:N}:{requestId}";
@@ -154,7 +159,7 @@ public class CvService(
             if (existing != null)
                 return new ServiceResult(Const.SUCCESS_READ_CODE, "CV đã được tạo từ yêu cầu này", await MapAsync(existing));
 
-            return await CreateFromWizardCoreAsync(userId, dto, webRoot);
+            return await CreateFromWizardCoreAsync(userId, dto);
         }
         finally
         {
@@ -163,7 +168,7 @@ public class CvService(
         }
     }
 
-    private async Task<IServiceResult> CreateFromWizardCoreAsync(Guid userId, CvWizardDto dto, string webRoot)
+    private async Task<IServiceResult> CreateFromWizardCoreAsync(Guid userId, CvWizardDto dto)
     {
         // T1.1 CV-first: không yêu cầu PlanSelectedAt trước khi tạo CV wizard
         var answers = BuildAnswers(dto);
@@ -185,23 +190,18 @@ public class CvService(
         template ??= await GetSystemTemplateAsync(CvSystemTemplateIds.Modern01);
         var layout = CvLayoutDefinition.ParseOrDefault(template?.LayoutDefinitionJson, template?.LayoutKey);
 
-        var html = HireMateCvHtml.Render(answers, layout);
         var plain = HireMateCvHtml.ToPlainText(answers);
         var pdfBytes = HireMateCvPdf.Generate(answers, layout);
-        var dir = Path.Combine(webRoot, "uploads", "cv", userId.ToString());
-        Directory.CreateDirectory(dir);
         var fileName = $"HireMate-CV-{SanitizeFileName(answers.FullName)}-{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
-        var path = Path.Combine(dir, $"{Guid.NewGuid()}_{fileName}");
-        await File.WriteAllBytesAsync(path, pdfBytes);
-        // Giữ bản HTML phụ để debug / mở nhanh
-        var htmlPath = Path.ChangeExtension(path, ".html");
-        await File.WriteAllTextAsync(htmlPath, html);
+        var docId = Guid.NewGuid();
+        var key = CvStorageKeys.Generated(userId, docId);
+        await storage.SaveAsync(key, new MemoryStream(pdfBytes));
 
         var doc = new CvDocument
         {
-            Id = Guid.NewGuid(), UserId = userId, Source = "Wizard", FileName = fileName,
+            Id = docId, UserId = userId, Source = "Wizard", FileName = fileName,
             DisplayName = resolvedDisplay, TemplateId = template?.Id ?? CvSystemTemplateIds.Modern01,
-            StoragePath = path, ContentType = "application/pdf", FileSize = pdfBytes.Length,
+            StoragePath = key, ContentType = "application/pdf", FileSize = pdfBytes.Length,
             ExtractedText = plain, WizardAnswersJson = JsonSerializer.Serialize(answers), ParseSucceeded = false
         };
         try
@@ -219,7 +219,7 @@ public class CvService(
         }
         catch
         {
-            TryDeleteStorageFile(path);
+            await DeleteAfterFailedCreateAsync(key);
             throw;
         }
 
@@ -289,8 +289,9 @@ public class CvService(
 
         var snap = await aiQuota.GetSnapshotAsync(user);
         var maxOut = snap.MaxOutputChars;
-        var promptUser = $"Analyze this CV text:\n{doc.ExtractedText}{CvAnalysisParser.CompactPromptSuffix(maxOut)}";
-        var system = "You are a CV ATS analyzer for Vietnam students. Return JSON only with keys parseSucceeded, format, keywords, readability, professionalism, readinessScore, fitT1 (0-100 vs desired role in CV), extract{fullName,university,major,graduationYear,desiredIndustry,desiredPosition,experienceLevel,bio,skills,hobbies,experiences[{title,org,period,description}]}, suggestions (short array). Compact.";
+        var detectedLanguage = CvLanguage.Detect(doc.ExtractedText);
+        var promptUser = $"Detected CV language: {detectedLanguage.Language}; dominant: {detectedLanguage.Dominant ?? "unknown"}. This is a signal, not a fact. Raw CV text follows unchanged:\n{doc.ExtractedText}{CvAnalysisParser.CompactPromptSuffix(maxOut)}";
+        var system = "Analyze text-based Vietnamese, English, or mixed CVs with the same scoring criteria. Return JSON only, with fixed English keys: parseSucceeded, format, keywords, readability, professionalism, readinessScore, fitT1 (integer 0-100), extract{fullName,university,major,graduationYear,desiredIndustry,desiredPosition,experienceLevel,bio,skills[],hobbies[],experiences[{title,org,period,description}],education[],projects[],certifications[]}, suggestions[]. Recognize equivalent VI/EN section headings including Education/Học vấn, Work Experience/Kinh nghiệm làm việc, Skills/Kỹ năng, Projects/Dự án, Certifications/Chứng chỉ. Preserve all facts, dates, company/project/technology names and original data language. Do not translate or invent skills, experience, education, projects, certificates or a target role. Missing fields must be null or empty arrays. Suggestions may use the CV's dominant language. If evidence is insufficient, set parseSucceeded false; do not fabricate scores.";
 
         var quotaBlock = await aiQuota.EnsureCanCallAsync(user, system.Length + promptUser.Length);
         if (quotaBlock != null)
@@ -325,34 +326,28 @@ public class CvService(
         {
             parsed = JsonDocument.Parse(CvAnalysisParser.UnwrapJson(aiResult.Content));
         }
-        catch
+        catch (JsonException)
         {
-            // Soft-fail: vẫn lưu điểm heuristic + gợi ý để user sửa trước phỏng vấn
-            IServiceResult result;
-            try
-            {
-                result = await PersistHeuristicAnalyzeAsync(user, doc, null, aiResult.Content, aiResult.Provider,
-                    "AI trả JSON lỗi. Đã chấm sơ bộ — xem gợi ý và chỉnh CV rồi phân tích lại.");
-            }
-            catch
-            {
-                if (quotaReserved)
-                    await aiQuota.ReleaseFeatureAsync(user, AiQuotaFeature.CvAnalysis);
-                throw;
-            }
-            if (quotaReserved && !doc.ParseSucceeded)
+            if (quotaReserved)
                 await aiQuota.ReleaseFeatureAsync(user, AiQuotaFeature.CvAnalysis);
-            return result;
+            return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                "AI trả dữ liệu phân tích không hợp lệ. CV gốc được giữ nguyên; hãy thử lại.");
         }
 
         using (parsed)
         {
             var root = parsed.RootElement;
-            // Không fail cứng khi thiếu 1 điểm — dùng fallback để user vẫn nhận gợi ý
-            var format = CvAnalysisParser.ReadScoreOr(root, "format", 55);
-            var keywords = CvAnalysisParser.ReadScoreOr(root, "keywords", 55);
-            var readability = CvAnalysisParser.ReadScoreOr(root, "readability", 55);
-            var professionalism = CvAnalysisParser.ReadScoreOr(root, "professionalism", 55);
+            if (root.ValueKind != JsonValueKind.Object
+                || !CvAnalysisParser.TryReadScore(root, "format", out var format)
+                || !CvAnalysisParser.TryReadScore(root, "keywords", out var keywords)
+                || !CvAnalysisParser.TryReadScore(root, "readability", out var readability)
+                || !CvAnalysisParser.TryReadScore(root, "professionalism", out var professionalism))
+            {
+                if (quotaReserved)
+                    await aiQuota.ReleaseFeatureAsync(user, AiQuotaFeature.CvAnalysis);
+                return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                    "AI chưa trả đủ điểm phân tích hợp lệ. CV gốc được giữ nguyên; hãy thử lại.");
+            }
 
             var extract = CvAnalysisParser.ReadExtract(root);
             // Wizard: ưu tiên dữ liệu form đã nhập
@@ -363,25 +358,36 @@ public class CvService(
                     var wa = JsonSerializer.Deserialize<CvWizardAnswers>(doc.WizardAnswersJson);
                     if (wa != null)
                     {
-                        extract.FullName ??= wa.FullName;
-                        extract.University ??= wa.University;
-                        extract.Major ??= wa.Major;
-                        extract.GraduationYear ??= wa.GraduationYear;
-                        extract.DesiredIndustry ??= wa.DesiredIndustry;
-                        extract.DesiredPosition ??= wa.DesiredPosition;
-                        extract.ExperienceLevel ??= wa.ExperienceLevel;
-                        extract.Bio ??= wa.Bio;
-                        if (extract.Skills.Count == 0) extract.Skills = wa.Skills;
-                        if (extract.Experiences.Count == 0) extract.Experiences = wa.Experiences;
+                        extract.FullName = wa.FullName;
+                        extract.University = wa.University;
+                        extract.Major = wa.Major;
+                        extract.GraduationYear = wa.GraduationYear;
+                        extract.DesiredIndustry = wa.DesiredIndustry;
+                        extract.DesiredPosition = wa.DesiredPosition;
+                        extract.ExperienceLevel = wa.ExperienceLevel;
+                        extract.Bio = wa.Bio;
+                        extract.Skills = wa.Skills;
+                        extract.Experiences = wa.Experiences;
+                        extract.Education = wa.Educations.Select(e => e.Institution ?? string.Empty)
+                            .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+                        extract.Projects = wa.Projects.Select(p => p.Name ?? string.Empty)
+                            .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+                        extract.Certifications = wa.Certifications.Select(c => c.Name ?? string.Empty)
+                            .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
                     }
                 }
                 catch { /* ignore */ }
             }
 
             var parseOk = root.TryGetProperty("parseSucceeded", out var ps) && ps.ValueKind == JsonValueKind.True
-                          || CvAnalysisParser.ParseLooksComplete(extract);
-            if (doc.Source == "Wizard")
-                parseOk = true;
+                          && (CvAnalysisParser.ParseLooksComplete(extract) || doc.Source == "Wizard");
+            if (!parseOk)
+            {
+                if (quotaReserved)
+                    await aiQuota.ReleaseFeatureAsync(user, AiQuotaFeature.CvAnalysis);
+                return new ServiceResult(Const.FAIL_UPDATE_CODE,
+                    "CV chưa có đủ dữ liệu xác thực để chấm điểm. CV gốc được giữ nguyên; hãy kiểm tra nội dung và thử lại.");
+            }
 
             var suggestions = CvAnalysisParser.ReadSuggestions(root);
             if (suggestions.Count == 0)
@@ -397,7 +403,7 @@ public class CvService(
             if (CvAnalysisParser.TryReadScore(root, "fitT1", out var fit))
                 doc.FitT1Score = fit;
             else
-                doc.FitT1Score = doc.ReadinessScore;
+                doc.FitT1Score = null;
             doc.ParseSucceeded = parseOk;
             // Gắn suggestions vào JSON lưu DB để FE đọc
             try
@@ -406,10 +412,16 @@ public class CvService(
                 var dict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(enriched.RootElement.GetRawText())
                            ?? new Dictionary<string, JsonElement>();
                 dict["suggestions"] = JsonSerializer.SerializeToElement(suggestions);
+                dict["extract"] = JsonSerializer.SerializeToElement(extract, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
                 dict["format"] = JsonSerializer.SerializeToElement(format);
                 dict["keywords"] = JsonSerializer.SerializeToElement(keywords);
                 dict["readability"] = JsonSerializer.SerializeToElement(readability);
                 dict["professionalism"] = JsonSerializer.SerializeToElement(professionalism);
+                dict["detectedLanguage"] = JsonSerializer.SerializeToElement(detectedLanguage.Language);
+                dict["dominantLanguage"] = JsonSerializer.SerializeToElement(detectedLanguage.Dominant);
                 doc.AnalysisJson = JsonSerializer.Serialize(dict);
             }
             catch
@@ -462,81 +474,9 @@ public class CvService(
             if (quotaReserved && !parseOk)
                 await aiQuota.ReleaseFeatureAsync(user, AiQuotaFeature.CvAnalysis);
             return new ServiceResult(Const.SUCCESS_UPDATE_CODE,
-                parseOk
-                    ? "Đã phân tích CV. Xem gợi ý cải thiện trước khi luyện phỏng vấn."
-                    : "Đã chấm ATS. Hãy sửa theo gợi ý rồi phân tích lại trước khi phỏng vấn.",
+                "Đã phân tích CV. Xem gợi ý cải thiện trước khi luyện phỏng vấn.",
                 await MapAsync(doc, suggestions));
         }
-    }
-
-    private async Task<IServiceResult> PersistHeuristicAnalyzeAsync(
-        UserAccount user,
-        CvDocument doc,
-        CvExtractDraft? extract,
-        string? rawAi,
-        string? provider,
-        string message)
-    {
-        extract ??= new CvExtractDraft();
-        if (doc.Source == "Wizard" && !string.IsNullOrWhiteSpace(doc.WizardAnswersJson))
-        {
-            try
-            {
-                var wa = JsonSerializer.Deserialize<CvWizardAnswers>(doc.WizardAnswersJson);
-                if (wa != null)
-                {
-                    extract.FullName = wa.FullName;
-                    extract.University = wa.University;
-                    extract.Major = wa.Major;
-                    extract.GraduationYear = wa.GraduationYear;
-                    extract.DesiredIndustry = wa.DesiredIndustry;
-                    extract.DesiredPosition = wa.DesiredPosition;
-                    extract.ExperienceLevel = wa.ExperienceLevel;
-                    extract.Bio = wa.Bio;
-                    extract.Skills = wa.Skills;
-                    extract.Experiences = wa.Experiences;
-                }
-            }
-            catch { /* ignore */ }
-        }
-
-        var suggestions = CvAnalysisParser.BuildHeuristicSuggestions(extract, doc.Source);
-        var complete = CvAnalysisParser.ParseLooksComplete(extract) || doc.Source == "Wizard";
-        var baseScore = complete ? 68 : 42;
-        doc.FormatScore = baseScore;
-        doc.KeywordsScore = Math.Max(35, baseScore - 8 + Math.Min(extract.Skills.Count * 3, 20));
-        doc.ReadabilityScore = baseScore;
-        doc.ProfessionalismScore = baseScore - 5;
-        doc.ReadinessScore = Average(
-            doc.FormatScore ?? 0,
-            doc.KeywordsScore ?? 0,
-            doc.ReadabilityScore ?? 0,
-            doc.ProfessionalismScore ?? 0);
-        doc.FitT1Score = doc.ReadinessScore;
-        doc.ParseSucceeded = complete;
-        if (complete) doc.AnalyzedAt = DateTime.UtcNow;
-        doc.AiProvider = provider ?? "heuristic";
-        doc.AnalysisJson = JsonSerializer.Serialize(new
-        {
-            parseSucceeded = complete,
-            format = doc.FormatScore,
-            keywords = doc.KeywordsScore,
-            readability = doc.ReadabilityScore,
-            professionalism = doc.ProfessionalismScore,
-            readinessScore = doc.ReadinessScore,
-            fitT1 = doc.FitT1Score,
-            extract,
-            suggestions,
-            note = rawAi != null ? "ai_json_fallback" : "heuristic"
-        });
-
-        var profile = await GetOrCreateProfileAsync(user.Id);
-        if (profile.ConfirmedAt == null && !string.Equals(doc.Source, "Wizard", StringComparison.OrdinalIgnoreCase))
-            ApplyExtractIfEmpty(user, profile, extract);
-
-        await users.UpdateAsync(user);
-        await uow.SaveChangesAsync();
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, message, await MapAsync(doc, suggestions));
     }
 
     /// <summary>Mọi gói: trần analyze thành công theo tháng (Free 1, Standard 20, Premium 70). Không unlimited.</summary>
@@ -717,32 +657,206 @@ public class CvService(
             await tx.CommitAsync();
         }
 
-        // Xóa file sau khi DB commit — không đụng InterviewSession / CareerMemory
-        TryDeleteStorageFile(storagePath);
+        // The database commit precedes external storage deletion. A failed delete is visible
+        // and logged for operator cleanup; it cannot roll back the committed database change.
+        var storageKey = storage.ResolveExistingKey(storagePath, userId);
+        var cleanupFailed = false;
+        if (storageKey == null && !string.IsNullOrWhiteSpace(storagePath))
+        {
+            cleanupFailed = true;
+            logger.LogWarning("CV {CvId} had an unsafe or unavailable storage path; manual cleanup required", id);
+        }
+        else if (storageKey != null)
+        {
+            try
+            {
+                await storage.DeleteAsync(storageKey);
+                if (doc.Source == "Wizard" && Path.IsPathFullyQualified(storagePath))
+                {
+                    var sidecar = storage.ResolveExistingKey(Path.ChangeExtension(storagePath, ".html"), userId);
+                    if (sidecar != null) await storage.DeleteAsync(sidecar);
+                }
+            }
+            catch (Exception ex)
+            {
+                cleanupFailed = true;
+                logger.LogError(ex, "CV {CvId} database row deleted, storage cleanup failed for {StorageKey}", id, storageKey);
+            }
+        }
 
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đã xóa CV", new
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE,
+            cleanupFailed ? "Đã xóa CV; không thể dọn file lưu trữ, quản trị viên cần kiểm tra." : "Đã xóa CV", new
         {
             success = true,
             deletedCvDocumentId = id,
-            activeCvDocumentId = (Guid?)null
+            activeCvDocumentId = (Guid?)null,
+            storageCleanupRequired = cleanupFailed
         });
     }
 
-    private static void TryDeleteStorageFile(string? path)
+    public async Task<IServiceResult> GetEditAsync(Guid userId, Guid id)
     {
-        if (string.IsNullOrWhiteSpace(path)) return;
+        var doc = await uow.CvDocumentRepository.GetQueryable().AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId);
+        if (doc == null || doc.Source != "Wizard" || string.IsNullOrWhiteSpace(doc.WizardAnswersJson))
+            return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy CV có thể chỉnh sửa");
         try
         {
-            if (File.Exists(path))
-                File.Delete(path);
-            var htmlPath = Path.ChangeExtension(path, ".html");
-            if (!string.IsNullOrWhiteSpace(htmlPath) && File.Exists(htmlPath))
-                File.Delete(htmlPath);
+            var answers = JsonSerializer.Deserialize<CvWizardAnswers>(doc.WizardAnswersJson);
+            if (answers == null) throw new JsonException("Empty wizard answers");
+            return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new
+            {
+                id = doc.Id,
+                displayName = doc.DisplayName,
+                templateId = doc.TemplateId,
+                content = answers
+            });
         }
-        catch
+        catch (JsonException)
         {
-            // Không fail API nếu xóa file vật lý lỗi
+            return new ServiceResult(Const.FAIL_READ_CODE, "Không đọc được dữ liệu gốc của CV này.");
         }
+    }
+
+    public async Task<IServiceResult> UpdateAsync(Guid userId, Guid id, CvWizardDto dto)
+    {
+        var gateKey = $"{userId:N}:{id:N}";
+        var gate = EditGates.GetOrAdd(gateKey, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            var doc = await uow.CvDocumentRepository.GetQueryable()
+                .FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId);
+            if (doc == null || doc.Source != "Wizard" || string.IsNullOrWhiteSpace(doc.WizardAnswersJson))
+                return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy CV có thể chỉnh sửa");
+
+            var validation = ValidateWizardMinimum(dto);
+            if (validation != null) return validation;
+
+            CvWizardAnswers previousAnswers;
+            try
+            {
+                previousAnswers = JsonSerializer.Deserialize<CvWizardAnswers>(doc.WizardAnswersJson)
+                    ?? throw new JsonException("Empty wizard answers");
+            }
+            catch (JsonException)
+            {
+                return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không đọc được dữ liệu gốc của CV này.");
+            }
+
+            // Content edits never rename, switch templates, or alter the original create request key.
+            var answers = BuildAnswers(dto);
+            answers.ClientRequestId = previousAnswers.ClientRequestId;
+            var template = await ResolveUsableTemplateAsync(userId, doc.TemplateId);
+            if (doc.TemplateId.HasValue && template == null)
+                return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mẫu CV hiện tại không còn khả dụng. Hãy chọn lại mẫu trước khi sửa.");
+            var layout = CvLayoutDefinition.ParseOrDefault(template?.LayoutDefinitionJson, template?.LayoutKey);
+            byte[] pdfBytes;
+            try
+            {
+                pdfBytes = HireMateCvPdf.Generate(answers, layout);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not render edited CV {CvId}", id);
+                return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không tạo được PDF từ nội dung đã sửa. CV cũ được giữ nguyên.");
+            }
+
+            var key = CvStorageKeys.Generated(userId, id);
+            byte[]? oldPdf = null;
+            try
+            {
+                var oldKey = storage.ResolveExistingKey(doc.StoragePath, userId);
+                if (oldKey == key && await storage.ExistsAsync(key))
+                {
+                    await using var oldStream = await storage.OpenReadAsync(key);
+                    using var buffer = new MemoryStream();
+                    await oldStream.CopyToAsync(buffer);
+                    oldPdf = buffer.ToArray();
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not read prior PDF for CV edit {CvId}", id);
+                return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không đọc được PDF hiện tại. CV cũ được giữ nguyên.");
+            }
+            try
+            {
+                await storage.SaveAsync(key, new MemoryStream(pdfBytes));
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not store edited CV {CvId}", id);
+                return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không lưu được PDF đã sửa. CV cũ được giữ nguyên.");
+            }
+
+            try
+            {
+                doc.WizardAnswersJson = JsonSerializer.Serialize(answers);
+                doc.ExtractedText = HireMateCvHtml.ToPlainText(answers);
+                doc.StoragePath = key;
+                doc.ContentType = "application/pdf";
+                doc.FileSize = pdfBytes.Length;
+                // Existing analysis belongs to the previous content. Re-analysis remains an explicit operation.
+                doc.ParseSucceeded = false;
+                doc.FormatScore = null;
+                doc.KeywordsScore = null;
+                doc.ReadabilityScore = null;
+                doc.ProfessionalismScore = null;
+                doc.ReadinessScore = null;
+                doc.FitT1Score = null;
+                doc.AnalysisJson = null;
+                doc.AiProvider = null;
+                doc.AnalyzedAt = null;
+                await uow.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not persist edited CV {CvId}", id);
+                try
+                {
+                    if (oldPdf != null) await storage.SaveAsync(key, new MemoryStream(oldPdf));
+                    else await storage.DeleteAsync(key);
+                }
+                catch (Exception restoreError) { logger.LogError(restoreError, "Could not restore PDF after failed edit {CvId}", id); }
+                return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không lưu được thay đổi. CV cũ được giữ nguyên.");
+            }
+            return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đã lưu thay đổi CV. Hãy chấm điểm lại để cập nhật đánh giá.", await MapAsync(doc));
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task DeleteAfterFailedCreateAsync(string key)
+    {
+        try { await storage.DeleteAsync(key); }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to clean up uncommitted CV storage object {StorageKey}", key);
+        }
+    }
+
+    private async Task<bool> StoredFileExistsAsync(CvDocument doc)
+    {
+        var key = storage.ResolveExistingKey(doc.StoragePath, doc.UserId);
+        return key != null && await storage.ExistsAsync(key);
+    }
+
+    private async Task<byte[]?> ReadStoredFileAsync(CvDocument doc)
+    {
+        var key = storage.ResolveExistingKey(doc.StoragePath, doc.UserId);
+        if (key == null || !await storage.ExistsAsync(key)) return null;
+        try
+        {
+            await using var input = await storage.OpenReadAsync(key);
+            using var buffer = new MemoryStream();
+            await input.CopyToAsync(buffer);
+            return buffer.ToArray();
+        }
+        catch (FileNotFoundException) { return null; }
+        catch (DirectoryNotFoundException) { return null; }
     }
 
     public async Task<IServiceResult> GetDownloadAsync(Guid userId, Guid id)
@@ -752,14 +866,14 @@ public class CvService(
         if (doc == null)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy CV");
 
-        // Wizard: ưu tiên PDF trên disk; nếu thiếu thì regenerate từ WizardAnswersJson
+        // Wizard: prefer the stored PDF; regenerate from answers only when it is missing.
         if (doc.Source == "Wizard")
         {
-            if (!string.IsNullOrWhiteSpace(doc.StoragePath) && File.Exists(doc.StoragePath)
-                && doc.ContentType?.Contains("pdf", StringComparison.OrdinalIgnoreCase) == true)
+            if (doc.ContentType?.Contains("pdf", StringComparison.OrdinalIgnoreCase) == true)
             {
-                var bytes = await File.ReadAllBytesAsync(doc.StoragePath);
-                return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new FileDownloadDto
+                var bytes = await ReadStoredFileAsync(doc);
+                if (bytes != null)
+                    return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new FileDownloadDto
                 {
                     FileName = EnsurePdfName(doc.FileName),
                     ContentType = "application/pdf",
@@ -783,23 +897,18 @@ public class CvService(
                                 layout = CvLayoutDefinition.ParseOrDefault(t.LayoutDefinitionJson, t.LayoutKey);
                         }
                         var pdf = HireMateCvPdf.Generate(answers, layout);
-                        if (!string.IsNullOrWhiteSpace(doc.StoragePath))
+                        try
                         {
-                            try
-                            {
-                                var storageDirectory = Path.GetDirectoryName(doc.StoragePath);
-                                if (!string.IsNullOrWhiteSpace(storageDirectory)) Directory.CreateDirectory(storageDirectory);
-                                await File.WriteAllBytesAsync(doc.StoragePath, pdf);
-                                await File.WriteAllTextAsync(Path.ChangeExtension(doc.StoragePath, ".html"),
-                                    HireMateCvHtml.Render(answers, layout));
-                                doc.ContentType = "application/pdf";
-                                doc.FileSize = pdf.Length;
-                                await uow.SaveChangesAsync();
-                            }
-                            catch
-                            {
-                                // Cache write is best-effort. The regenerated PDF is still valid for this download.
-                            }
+                            var key = CvStorageKeys.Generated(userId, doc.Id);
+                            await storage.SaveAsync(key, new MemoryStream(pdf));
+                            doc.StoragePath = key;
+                            doc.ContentType = "application/pdf";
+                            doc.FileSize = pdf.Length;
+                            await uow.SaveChangesAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "CV {CvId} PDF regenerated but could not be cached", doc.Id);
                         }
                         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new FileDownloadDto
                         {
@@ -809,27 +918,28 @@ public class CvService(
                         });
                     }
                 }
-                catch { /* fallthrough */ }
+                catch (Exception ex) { logger.LogWarning(ex, "Could not regenerate PDF for CV {CvId}", doc.Id); }
             }
 
             // HTML cũ: vẫn cho tải
-            if (!string.IsNullOrWhiteSpace(doc.StoragePath) && File.Exists(doc.StoragePath))
+            var legacyBytes = await ReadStoredFileAsync(doc);
+            if (legacyBytes != null)
             {
-                var bytes = await File.ReadAllBytesAsync(doc.StoragePath);
                 return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new FileDownloadDto
                 {
                     FileName = string.IsNullOrWhiteSpace(doc.FileName) ? "HireMate-CV.html" : doc.FileName,
                     ContentType = doc.ContentType ?? "text/html",
-                    Bytes = bytes
+                    Bytes = legacyBytes
                 });
             }
         }
 
         // Upload: trả file gốc
-        if (!string.IsNullOrWhiteSpace(doc.StoragePath) && File.Exists(doc.StoragePath))
+        if (doc.Source != "Wizard")
         {
-            var bytes = await File.ReadAllBytesAsync(doc.StoragePath);
-            return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new FileDownloadDto
+            var bytes = await ReadStoredFileAsync(doc);
+            if (bytes != null)
+                return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new FileDownloadDto
             {
                 FileName = string.IsNullOrWhiteSpace(doc.FileName) ? "CV" : doc.FileName,
                 ContentType = string.IsNullOrWhiteSpace(doc.ContentType) ? "application/octet-stream" : doc.ContentType,
@@ -951,7 +1061,7 @@ public class CvService(
         // Keep CV content; only switch layout reference.
         doc.TemplateId = template.Id;
 
-        // If wizard CV exists on disk, optionally re-render PDF with new layout (content unchanged).
+        // Re-render through private storage; never write to a legacy/public physical path.
         if (doc.Source == "Wizard" && !string.IsNullOrWhiteSpace(doc.WizardAnswersJson)
             && !string.IsNullOrWhiteSpace(doc.StoragePath))
         {
@@ -962,16 +1072,15 @@ public class CvService(
                 {
                     var layout = CvLayoutDefinition.ParseOrDefault(template.LayoutDefinitionJson, template.LayoutKey);
                     var pdfBytes = HireMateCvPdf.Generate(answers, layout);
-                    var html = HireMateCvHtml.Render(answers, layout);
-                    await File.WriteAllBytesAsync(doc.StoragePath, pdfBytes);
-                    var htmlPath = Path.ChangeExtension(doc.StoragePath, ".html");
-                    await File.WriteAllTextAsync(htmlPath, html);
+                    var key = CvStorageKeys.Generated(userId, doc.Id);
+                    await storage.SaveAsync(key, new MemoryStream(pdfBytes));
+                    doc.StoragePath = key;
                     doc.FileSize = pdfBytes.Length;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // TemplateId still saved even if re-render fails.
+                logger.LogWarning(ex, "Could not re-render PDF for CV {CvId}; template reference is still saved", doc.Id);
             }
         }
 
@@ -1224,7 +1333,7 @@ public class CvService(
             templateLayoutKey = t?.LayoutKey;
         }
 
-        return MapCore(d, suggestions, activeCvDocumentId, templateName, templateLayoutKey);
+        return await MapCoreAsync(d, suggestions, activeCvDocumentId, templateName, templateLayoutKey);
     }
 
     private async Task<List<object>> MapManyAsync(IReadOnlyList<CvDocument> docs, Guid? activeId)
@@ -1236,7 +1345,8 @@ public class CvService(
                 .Where(t => templateIds.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => (t.Name, t.LayoutKey));
 
-        return docs.Select(d =>
+        var mapped = new List<object>(docs.Count);
+        foreach (var d in docs)
         {
             string? name = null;
             string? key = null;
@@ -1245,14 +1355,15 @@ public class CvService(
                 name = t.Name;
                 key = t.LayoutKey;
             }
-            return MapCore(d, null, activeId, name, key);
-        }).ToList();
+            mapped.Add(await MapCoreAsync(d, null, activeId, name, key));
+        }
+        return mapped;
     }
 
     private static string Truncate(string s, int max)
         => string.IsNullOrEmpty(s) ? s : (s.Length <= max ? s : s[..max]);
 
-    private static object MapCore(
+    private async Task<object> MapCoreAsync(
         CvDocument d,
         IReadOnlyList<string>? suggestions,
         Guid? activeCvDocumentId,
@@ -1298,6 +1409,8 @@ public class CvService(
         }
         catch (JsonException) { /* Keep the CV available even if old analysis JSON is malformed. */ }
 
+        var canDownload = !string.IsNullOrWhiteSpace(d.WizardAnswersJson) && d.Source == "Wizard"
+            || await StoredFileExistsAsync(d);
         return new
         {
             d.Id,
@@ -1324,14 +1437,8 @@ public class CvService(
             d.IsConfirmed,
             isActive,
             d.ConfirmedAt,
-            canDownload = d.Source == "Wizard"
-                ? !string.IsNullOrWhiteSpace(d.WizardAnswersJson) || (!string.IsNullOrWhiteSpace(d.StoragePath) && File.Exists(d.StoragePath))
-                : !string.IsNullOrWhiteSpace(d.StoragePath) && File.Exists(d.StoragePath),
-            downloadUrl = (d.Source == "Wizard"
-                ? !string.IsNullOrWhiteSpace(d.WizardAnswersJson) || (!string.IsNullOrWhiteSpace(d.StoragePath) && File.Exists(d.StoragePath))
-                : !string.IsNullOrWhiteSpace(d.StoragePath) && File.Exists(d.StoragePath))
-                    ? $"/api/Cv/{d.Id}/download"
-                    : null,
+            canDownload,
+            downloadUrl = canDownload ? $"/api/Cv/{d.Id}/download" : null,
             analysis = d.AnalysisJson,
             suggestions = tips,
             provider = d.AiProvider

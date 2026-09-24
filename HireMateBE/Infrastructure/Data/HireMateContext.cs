@@ -71,7 +71,12 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
             e.HasMany(s => s.Answers).WithOne(a => a.Session!).HasForeignKey(a => a.SessionId).OnDelete(DeleteBehavior.Cascade);
         });
         builder.Entity<InterviewAnswer>(e => e.HasIndex(a => new { a.SessionId, a.OrderIndex }).IsUnique());
-        builder.Entity<Question>(e => e.HasIndex(q => new { q.Category, q.IsActive }));
+        builder.Entity<Question>(e =>
+        {
+            e.HasIndex(q => new { q.Category, q.IsActive });
+            e.HasIndex(q => new { q.Language, q.IsActive, q.Industry, q.RoleHint });
+            e.Property(q => q.Language).HasDefaultValue("vi");
+        });
         builder.Entity<CareerMemoryEvent>(e =>
         {
             e.HasIndex(x => new { x.UserId, x.CreatedAt });

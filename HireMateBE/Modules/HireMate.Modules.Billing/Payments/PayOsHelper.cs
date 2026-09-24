@@ -31,6 +31,15 @@ public class PayOsCreateResult
 
 public static class PayOsHelper
 {
+    /// <summary>PayOS VND amounts are positive integer JSON numbers. Missing, strings and fractions are invalid.</summary>
+    public static int? ReadPaidAmount(JsonElement data)
+        => data.ValueKind == JsonValueKind.Object
+           && data.TryGetProperty("amount", out var amount)
+           && amount.ValueKind == JsonValueKind.Number
+           && amount.TryGetInt32(out var value)
+           && value > 0
+            ? value : null;
+
     /// <summary>
     /// A PayOS webhook can settle only when this success code is inside the signed data object.
     /// Root-level fields are not part of VerifyWebhookSignature's trust boundary.
@@ -50,7 +59,8 @@ public static class PayOsHelper
 
     public static bool VerifyWebhookSignature(JsonElement data, string signature, string checksumKey)
     {
-        if (string.IsNullOrWhiteSpace(signature) || data.ValueKind != JsonValueKind.Object)
+        if (string.IsNullOrWhiteSpace(signature) || string.IsNullOrWhiteSpace(checksumKey)
+            || data.ValueKind != JsonValueKind.Object)
             return false;
         var expected = SignDataObject(data, checksumKey);
         return string.Equals(expected, signature, StringComparison.OrdinalIgnoreCase);
@@ -151,6 +161,8 @@ public class PayOsClient(HttpClient http, Microsoft.Extensions.Options.IOptions<
     /// <summary>Merchant API lookup — status + amount for settlement verification.</summary>
     public async Task<PayOsLinkDetail?> GetPaymentLinkDetailAsync(long orderCode, CancellationToken ct = default)
     {
+        if (!_opts.Enabled || string.IsNullOrWhiteSpace(_opts.ClientId) || string.IsNullOrWhiteSpace(_opts.ApiKey))
+            return null;
         using var req = new HttpRequestMessage(HttpMethod.Get, $"v2/payment-requests/{orderCode}");
         req.Headers.TryAddWithoutValidation("x-client-id", _opts.ClientId);
         req.Headers.TryAddWithoutValidation("x-api-key", _opts.ApiKey);
@@ -158,19 +170,20 @@ public class PayOsClient(HttpClient http, Microsoft.Extensions.Options.IOptions<
         var raw = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
         var root = doc.RootElement;
-        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+        if (!res.IsSuccessStatusCode
+            || !root.TryGetProperty("code", out var code)
+            || code.ValueKind != JsonValueKind.String || code.GetString() != "00"
+            || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
             return null;
-        int? amount = null;
-        if (data.TryGetProperty("amount", out var a))
-        {
-            if (a.TryGetInt32(out var ai)) amount = ai;
-            else if (a.TryGetInt64(out var al)) amount = (int)al;
-        }
+        var providerOrderCode = data.TryGetProperty("orderCode", out var providerOrder)
+            && providerOrder.ValueKind == JsonValueKind.Number
+            && providerOrder.TryGetInt64(out var parsedOrder) ? parsedOrder : 0;
         return new PayOsLinkDetail
         {
-            Status = data.TryGetProperty("status", out var status) ? status.GetString() : null,
-            Amount = amount,
-            OrderCode = orderCode
+            Status = data.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.String
+                ? status.GetString() : null,
+            Amount = PayOsHelper.ReadPaidAmount(data),
+            OrderCode = providerOrderCode
         };
     }
 }

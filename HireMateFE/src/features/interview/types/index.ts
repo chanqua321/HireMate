@@ -9,6 +9,7 @@ export interface CreateSessionDto {
   jobDescriptionId?: string;
   cvDocumentId?: string;
   contextJson?: string;
+  language?: 'vi' | 'en';
 }
 
 export interface SubmitAnswerDto {
@@ -44,6 +45,14 @@ export type EvidenceStatusType =
 
 export interface AnswerAnalysis {
   analysisAvailable: boolean;
+  weightedScore?: number | null;
+  dimensions?: Record<string, {
+    score: number;
+    confidence: number;
+    status: EvidenceStatusType | string;
+    evidence: string[];
+    reason: string;
+  }>;
   feedbackStatus?: 'good' | 'needs_improvement' | 'invalid' | null;
   feedbackComment?: string | null;
   starTip?: string | null;
@@ -83,6 +92,7 @@ export interface SubmitAnswerResult {
 
 export interface InterviewSessionSummary {
   id: string;
+  questionCount: number;
   industry: string;
   position: string;
   difficulty: string;
@@ -197,18 +207,18 @@ export interface StructuredFeedback {
 }
 
 export interface CoachReport {
-  summary: { overallScore: number; headline: string; date: string };
-  scores: { situation: number; task: number; action: number; result: number; clarity: number };
+  summary: { overallScore: number | null; headline: string; date: string };
+  scores: { situation: number | null; task: number | null; action: number | null; result: number | null; clarity: number | null };
   starAnalysis: {
     situation: CoachStarItem;
     task: CoachStarItem;
     action: CoachStarItem;
     result: CoachStarItem;
-  };
+  } | null;
 }
 
 export interface CoachStarItem {
-  score: number;
+  score: number | null;
   issue: string;
   advice: string;
 }

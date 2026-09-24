@@ -13,5 +13,6 @@
     <ProjectReference Include="..\..\Common\Common.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\HireMate.Modules.Platform\HireMate.Modules.Platform.csproj" />
+    <ProjectReference Include="..\HireMate.Modules.Onboarding\HireMate.Modules.Onboarding.csproj" />
   </ItemGroup>
 </Project>

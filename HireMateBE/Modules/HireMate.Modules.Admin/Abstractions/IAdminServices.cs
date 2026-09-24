@@ -20,6 +20,12 @@ public interface IAdminService
     Task<IServiceResult> UpsertPageAsync(ContentPage page);
     Task<IServiceResult> UpsertPlanAsync(SubscriptionPlan plan);
     Task<IServiceResult> UpsertPromoAsync(PromoCode promo);
+    Task<IServiceResult> QuestionsAsync(string? search, string? language, string? industry,
+        string? position, string? category, string? difficulty, string? seniority, bool? isActive);
+    Task<IServiceResult> QuestionAsync(Guid id);
+    Task<IServiceResult> CreateQuestionAsync(Guid adminId, AdminQuestionWriteDto dto);
+    Task<IServiceResult> UpdateQuestionAsync(Guid id, AdminQuestionWriteDto dto);
+    Task<IServiceResult> SetQuestionActiveAsync(Guid id, bool isActive);
 }
 
 public interface IB2BService

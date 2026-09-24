@@ -14,10 +14,32 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
+using HireMate.Modules.Onboarding.Storage;
 
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Local is intentionally development-only. Production must not silently write user files
+// to an ephemeral container; register an object-storage provider before deployment.
+var fileStorageProvider = builder.Configuration["FileStorage:Provider"];
+if (builder.Environment.IsProduction())
+    throw new InvalidOperationException(
+        $"Production file storage provider is not configured (FileStorage:Provider={fileStorageProvider ?? "missing"}). " +
+        "An object-storage implementation is required before deployment.");
+if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Testing"))
+    throw new InvalidOperationException("File storage is only configured for Development/Testing.");
+if (!string.IsNullOrWhiteSpace(fileStorageProvider) && !fileStorageProvider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException($"Unsupported FileStorage:Provider '{fileStorageProvider}'.");
+var fileStorageRoot = builder.Configuration["FileStorage:RootPath"];
+if (string.IsNullOrWhiteSpace(fileStorageRoot))
+    fileStorageRoot = Path.Combine(builder.Environment.ContentRootPath, "private-files");
+if (!Path.IsPathFullyQualified(fileStorageRoot))
+    fileStorageRoot = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, fileStorageRoot));
+builder.Services.AddSingleton<IFileStorageService>(new LocalFileStorage(
+    fileStorageRoot,
+    Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads", "cv"),
+    Path.Combine(builder.Environment.ContentRootPath, "private-uploads", "cv")));
 
 // Cloud hosts (Render/Railway) inject PORT
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -206,7 +228,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "wwwroot", "uploads", "cv"));
 await DbSeeder.SeedAsync(app.Services, app.Environment.IsDevelopment());
 
 if (builder.Configuration.GetValue("Swagger:Enabled", app.Environment.IsDevelopment()))

@@ -78,5 +78,32 @@ public class AdminController(IAdminService svc, ISystemConfigService settings) :
     [HttpPut("settings")]
     public async Task<IActionResult> PutSettings([FromBody] List<SystemSetting> items)
         => this.FromService(await settings.UpsertAsync(items));
+
+    [HttpGet("questions")]
+    public async Task<IActionResult> Questions([FromQuery] string? search, [FromQuery] string? language,
+        [FromQuery] string? industry, [FromQuery] string? position, [FromQuery] string? category,
+        [FromQuery] string? difficulty, [FromQuery] string? seniority, [FromQuery] bool? isActive)
+        => this.FromService(await svc.QuestionsAsync(search, language, industry, position, category, difficulty, seniority, isActive));
+
+    [HttpGet("questions/{id:guid}")]
+    public async Task<IActionResult> Question(Guid id)
+        => this.FromService(await svc.QuestionAsync(id));
+
+    [HttpPost("questions")]
+    public async Task<IActionResult> CreateQuestion([FromBody] AdminQuestionWriteDto dto)
+        => this.FromService(await svc.CreateQuestionAsync(UserId, dto), 201);
+
+    [HttpPut("questions/{id:guid}")]
+    public async Task<IActionResult> UpdateQuestion(Guid id, [FromBody] AdminQuestionWriteDto dto)
+        => this.FromService(await svc.UpdateQuestionAsync(id, dto));
+
+    [HttpPatch("questions/{id:guid}/status")]
+    public async Task<IActionResult> SetQuestionStatus(Guid id, [FromBody] QuestionStatusDto dto)
+        => this.FromService(await svc.SetQuestionActiveAsync(id, dto.IsActive));
+}
+
+public sealed class QuestionStatusDto
+{
+    public bool IsActive { get; set; }
 }
 

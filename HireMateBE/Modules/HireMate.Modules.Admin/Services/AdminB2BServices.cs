@@ -1,4 +1,5 @@
 using HireMate.Modules.Admin.Abstractions;
+using HireMate.Modules.Onboarding.Cv;
 using HireMate.BuildingBlocks;
 
 using Common;
@@ -343,6 +344,120 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
         }
         await uow.SaveChangesAsync();
         return new ServiceResult(Const.SUCCESS_UPDATE_CODE, Const.SUCCESS_UPDATE_MSG);
+    }
+
+    public async Task<IServiceResult> QuestionsAsync(string? search, string? language, string? industry,
+        string? position, string? category, string? difficulty, string? seniority, bool? isActive)
+    {
+        var query = uow.QuestionRepository.GetQueryable().AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(q => q.Content.Contains(search.Trim()));
+        if (!string.IsNullOrWhiteSpace(language)) query = query.Where(q => q.Language == language.Trim());
+        if (!string.IsNullOrWhiteSpace(industry)) query = query.Where(q => q.Industry == industry.Trim());
+        if (!string.IsNullOrWhiteSpace(position)) query = query.Where(q => q.RoleHint == position.Trim());
+        if (!string.IsNullOrWhiteSpace(category)) query = query.Where(q => q.Category == category.Trim());
+        if (!string.IsNullOrWhiteSpace(difficulty)) query = query.Where(q => q.Difficulty == difficulty.Trim());
+        if (!string.IsNullOrWhiteSpace(seniority)) query = query.Where(q => q.Seniority == seniority.Trim());
+        if (isActive.HasValue) query = query.Where(q => q.IsActive == isActive.Value);
+        var list = await query.OrderByDescending(q => q.UpdatedAt).Take(200).ToListAsync();
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
+    }
+
+    public async Task<IServiceResult> QuestionAsync(Guid id)
+    {
+        var question = await uow.QuestionRepository.GetQueryable().AsNoTracking()
+            .FirstOrDefaultAsync(q => q.Id == id);
+        return question == null
+            ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy câu hỏi")
+            : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, question);
+    }
+
+    public async Task<IServiceResult> CreateQuestionAsync(Guid adminId, AdminQuestionWriteDto dto)
+    {
+        var error = ValidateQuestion(dto);
+        if (error != null) return error;
+        if (await QuestionExistsAsync(dto, null))
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Question already exists.");
+        var question = new Question { Id = Guid.NewGuid(), CreatedBy = adminId, CreatedAt = DateTime.UtcNow };
+        ApplyQuestion(question, dto);
+        await uow.QuestionRepository.CreateAsync(question);
+        await uow.SaveChangesAsync();
+        return new ServiceResult(Const.SUCCESS_CREATE_CODE, Const.SUCCESS_CREATE_MSG, question);
+    }
+
+    public async Task<IServiceResult> UpdateQuestionAsync(Guid id, AdminQuestionWriteDto dto)
+    {
+        var error = ValidateQuestion(dto);
+        if (error != null) return error;
+        var question = await uow.QuestionRepository.GetQueryable().FirstOrDefaultAsync(q => q.Id == id);
+        if (question == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy câu hỏi");
+        if (await QuestionExistsAsync(dto, id))
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Question already exists.");
+        ApplyQuestion(question, dto);
+        await uow.SaveChangesAsync();
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, Const.SUCCESS_UPDATE_MSG, question);
+    }
+
+    public async Task<IServiceResult> SetQuestionActiveAsync(Guid id, bool isActive)
+    {
+        var question = await uow.QuestionRepository.GetQueryable().FirstOrDefaultAsync(q => q.Id == id);
+        if (question == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy câu hỏi");
+        question.IsActive = isActive;
+        question.UpdatedAt = DateTime.UtcNow;
+        await uow.SaveChangesAsync();
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, Const.SUCCESS_UPDATE_MSG, question);
+    }
+
+    private async Task<bool> QuestionExistsAsync(AdminQuestionWriteDto dto, Guid? exceptId)
+    {
+        var content = dto.Content.Trim().ToLower();
+        var language = dto.Language.Trim();
+        var industry = dto.Industry?.Trim() ?? string.Empty;
+        var role = dto.RoleHint?.Trim() ?? string.Empty;
+        var category = dto.Category.Trim();
+        return await uow.QuestionRepository.GetQueryable().AsNoTracking().AnyAsync(q =>
+            q.Id != exceptId && q.Content.ToLower() == content && q.Language == language
+            && (q.Industry ?? "") == industry && (q.RoleHint ?? "") == role && q.Category == category);
+    }
+
+    private static IServiceResult? ValidateQuestion(AdminQuestionWriteDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Content) || dto.Content.Trim().Length > 1000)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Question Text là bắt buộc (tối đa 1000 ký tự)");
+        if (dto.Language is not ("vi" or "en"))
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Language phải là vi hoặc en");
+        if (string.IsNullOrWhiteSpace(dto.Category) || dto.Category.Length > 100)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Category không hợp lệ");
+        if (dto.Difficulty is not ("Easy" or "Medium" or "Hard"))
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Difficulty không hợp lệ");
+        if (dto.Seniority != null && dto.Seniority is not ("Student" or "Fresher" or "Junior" or "Mid" or "Senior"))
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Seniority không hợp lệ");
+        if (!string.IsNullOrWhiteSpace(dto.Industry)
+            && CareerFieldCatalog.GetRoles(dto.Industry).Count == 0)
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Career Field không hợp lệ");
+        if (!string.IsNullOrWhiteSpace(dto.RoleHint) && string.IsNullOrWhiteSpace(dto.Industry))
+            return new ServiceResult(Const.FAIL_CREATE_CODE, "Chọn Career Field trước khi chọn Position");
+        if (!string.IsNullOrWhiteSpace(dto.Industry) && !CareerFieldCatalog.IsSuggestedRole(dto.RoleHint, dto.Industry))
+        {
+            var knownElsewhere = CareerFieldCatalog.IndustryRoles
+                .Where(pair => !pair.Key.Equals(dto.Industry.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Any(pair => pair.Value.Any(role => role.Equals(dto.RoleHint!.Trim(), StringComparison.OrdinalIgnoreCase)));
+            if (knownElsewhere) return new ServiceResult(Const.FAIL_CREATE_CODE, "Position không thuộc Career Field");
+        }
+        return null;
+    }
+
+    private static void ApplyQuestion(Question question, AdminQuestionWriteDto dto)
+    {
+        question.Content = dto.Content.Trim();
+        question.Language = dto.Language.Trim();
+        question.Industry = string.IsNullOrWhiteSpace(dto.Industry) ? null : dto.Industry.Trim();
+        question.RoleHint = string.IsNullOrWhiteSpace(dto.RoleHint) ? null : dto.RoleHint.Trim();
+        question.Category = dto.Category.Trim();
+        question.Difficulty = dto.Difficulty.Trim();
+        question.Seniority = dto.Seniority;
+        question.Hint = string.IsNullOrWhiteSpace(dto.Hint) ? null : dto.Hint.Trim();
+        question.IsActive = dto.IsActive;
+        question.UpdatedAt = DateTime.UtcNow;
     }
 }
 

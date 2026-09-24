@@ -20,6 +20,7 @@ interface CvWizardModalProps {
   defaultRole?: string;
   templates?: CvTemplateDto[];
   initial?: Partial<CvWizardPayload>;
+  editingCvId?: string;
   onSwitchToUpload?: () => void;
   userCvCount?: number;
 }
@@ -371,6 +372,7 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
   defaultRole = '',
   templates = [],
   initial = {},
+  editingCvId,
   onSwitchToUpload,
   userCvCount,
 }) => {
@@ -385,6 +387,7 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
   const [aiMessage, setAiMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [saveNotice, setSaveNotice] = useState('');
   const [activeSection, setActiveSection] = useState(1);
   const [showOptional, setShowOptional] = useState(false);
   const roles = useMemo(() => getRolesForField(form.desiredIndustry), [form.desiredIndustry]);
@@ -471,7 +474,7 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
     setBirthDateText(displayBirthDate(initial.dateOfBirth));
     setPreviewHtml('');
     setPreviewPdfUrl(previous => { if (previous) URL.revokeObjectURL(previous); return ''; });
-    setAiPanelOpen(false); setAiProposal(null); setAiMessage(''); setAiBusy(false); setError(''); setBusy(false); setActiveSection(1); setShowOptional(false);
+    setAiPanelOpen(false); setAiProposal(null); setAiMessage(''); setAiBusy(false); setError(''); setSaveNotice(''); setBusy(false); setActiveSection(1); setShowOptional(false);
   }, [isOpen]);
 
   useEffect(() => {
@@ -523,9 +526,9 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`.cvb-section[data-section="${section}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
   const preview = async () => { const msg = validate(); if (msg) { showValidationError(msg); return; } await renderPreview(form); };
-  const backToEdit = () => { setAiPanelOpen(false); setPreviewHtml(''); setPreviewPdfUrl(previous => { if (previous) URL.revokeObjectURL(previous); return ''; }); };
+  const backToEdit = () => { setAiPanelOpen(false); setSaveNotice(''); setPreviewHtml(''); setPreviewPdfUrl(previous => { if (previous) URL.revokeObjectURL(previous); return ''; }); };
   const closeBuilder = () => { if (embedded) backToEdit(); onClose(); };
-  const confirm = async () => { if (busy) return; const validation = validate(); if (validation) { backToEdit(); showValidationError(validation); return; } setBusy(true); setError(''); try { const res = await cvService.createFromWizard(clean()); if (!res.ok || !res.data) throw new Error(res.message || 'Không tạo được CV.'); await onSuccess(res.data, res.message); setForm(previous => ({ ...previous, clientRequestId: requestId() })); backToEdit(); onClose(); } catch (e: any) { setError(e?.message || 'Không tạo được CV.'); } finally { setBusy(false); } };
+  const confirm = async () => { if (busy) return; const validation = validate(); if (validation) { backToEdit(); showValidationError(validation); return; } setBusy(true); setError(''); setSaveNotice(''); try { const res = editingCvId ? await cvService.updateCv(editingCvId, clean()) : await cvService.createFromWizard(clean()); if (!res.ok || !res.data) throw new Error(res.message || (editingCvId ? 'Không lưu được CV.' : 'Không tạo được CV.')); await onSuccess(res.data, res.message); if (editingCvId) setSaveNotice('Đã lưu thay đổi vào CV này. Bản xem trước đang hiển thị nội dung mới; hãy chấm điểm lại khi cần.'); else { setForm(previous => ({ ...previous, clientRequestId: requestId() })); backToEdit(); onClose(); } } catch (e: any) { setError(e?.message || 'Không lưu được CV.'); } finally { setBusy(false); } };
   const updateArray = <T,>(key: keyof CvWizardPayload, index: number, patch: Partial<T>) => setForm(prev => ({ ...prev, [key]: ((prev[key] as T[] | undefined) || []).map((x, i) => i === index ? { ...x, ...patch } : x) }));
   const remove = (key: keyof CvWizardPayload, index: number) => setForm(prev => ({ ...prev, [key]: ((prev[key] as any[] | undefined) || []).filter((_, i) => i !== index) }));
   const avatar = (file?: File) => { if (!file) return; if (file.size > 1_500_000) return setError('Ảnh đại diện tối đa 1,5 MB.'); const reader = new FileReader(); reader.onload = () => set('avatarUrl', String(reader.result)); reader.readAsDataURL(file); };
@@ -588,14 +591,15 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
           )}
           <div className="wizard-icon-box"><Sparkles size={20}/></div>
           <div>
-            <h3 className="wizard-title">{previewHtml ? 'Xem trước CV' : 'Tạo CV'}</h3>
-            <p className="wizard-subtitle">{previewHtml ? 'Kiểm tra toàn bộ định dạng và AI tối ưu trước khi tạo.' : 'Điền thông tin một lần, xem trước rồi xác nhận tạo CV.'}</p>
+            <h3 className="wizard-title">{previewHtml ? 'Xem trước CV' : editingCvId ? 'Chỉnh sửa CV' : 'Tạo CV'}</h3>
+            <p className="wizard-subtitle">{previewHtml ? 'Kiểm tra nội dung trước khi lưu.' : editingCvId ? 'Chỉnh sửa nội dung của CV hiện tại, rồi xem trước và lưu.' : 'Điền thông tin một lần, xem trước rồi xác nhận tạo CV.'}</p>
           </div>
         </div>
         <button type="button" className="wizard-close-btn" disabled={busy} onClick={closeBuilder}><X size={18}/></button>
       </div>
     )}
     {error && <div className="wizard-alert-error">{error}</div>}
+    {saveNotice && <div role="status" className="cvb-ai-message">{saveNotice}</div>}
     {previewHtml ? (
       <div className="cvb-preview-workspace">
         <div className="cvb-preview-document">
@@ -678,14 +682,15 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
           </button>
           <button type="button" className="wizard-submit-btn" disabled={busy || aiBusy} onClick={confirm}>
             {busy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-            Xác nhận tạo CV
+            {editingCvId ? 'Lưu thay đổi' : 'Xác nhận tạo CV'}
           </button>
         </div>
       </div>
     ) : (
       <div className="wizard-form-body cvb-body">
+        {editingCvId && <div role="status" className="cvb-ai-message">Đang chỉnh sửa: <strong>{initial.displayName || 'CV hiện tại'}</strong>. Lưu sẽ cập nhật bản CV này.</div>}
         {/* Notification bar tiến độ hoàn thiện — chỉ xuất hiện khi user mới tạo account hoặc chưa có CV */}
-        {!hasExistingCv ? (
+        {!editingCvId && (!hasExistingCv ? (
           <div className="cvb-stepper-bar">
             <div className="cvb-stepper-info">
               <div className="cvb-stepper-label-row">
@@ -721,7 +726,7 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
               <span>Điền mẫu nhanh</span>
             </button>
           </div>
-        )}
+        ))}
 
         <SectionNavigation.Provider value={{ active: activeSection, setActive: setActiveSection, hasExistingCv }}>
         <Section n={1} title="Thông tin CV & Vị trí mục tiêu" stageName="Đợt 1" filled={section1Filled}>
@@ -759,13 +764,15 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
             Tên hiển thị CV
             <input
               value={form.displayName || ''}
+              readOnly={!!editingCvId}
               onChange={(e) => set('displayName', e.target.value)}
               placeholder="VD: CV Frontend Developer — 2026"
             />
+            {editingCvId && <small>Đổi tên CV trong Kho CV.</small>}
           </label>
           <label>
             Mẫu giao diện CV (Template)
-            <CustomSelect
+            {editingCvId ? <><input readOnly value={templates.find(t => t.id === form.templateId)?.name || 'Mẫu hiện tại'} /><small>Đổi mẫu CV trong Kho CV.</small></> : <CustomSelect
               value={form.templateId || ''}
               onChange={(val) => set('templateId', val || undefined)}
               options={
@@ -778,7 +785,7 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
                     }))
               }
               placeholder="Chọn mẫu template"
-            />
+            />}
           </label>
         </div>
       </Section>
@@ -842,7 +849,7 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
         </button>
         <button type="button" className="wizard-submit-btn cvb-primary-action-btn" disabled={busy} onClick={preview}>
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
-          <span>Xem trước & Tối ưu bằng AI</span>
+          <span>{editingCvId ? 'Xem trước thay đổi' : 'Xem trước & Tối ưu bằng AI'}</span>
           <ArrowRight size={16} />
         </button>
       </div>

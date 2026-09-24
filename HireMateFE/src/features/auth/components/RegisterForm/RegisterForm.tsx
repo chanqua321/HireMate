@@ -116,7 +116,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
     setGoogleLoading(false);
     const origin = window.location.origin;
     setError(
-      `Google từ chối origin ${origin} (lỗi origin_mismatch). Thêm đúng origin này vào Authorized JavaScript origins của Client ID Google, rồi mở lại http://localhost:3000.`
+      `Google từ chối origin ${origin} (lỗi origin_mismatch). Thêm đúng origin này vào Authorized JavaScript origins của Client ID Google, rồi tải lại trang.`
     );
   };
 

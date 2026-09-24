@@ -193,6 +193,7 @@ export const InterviewSetup: React.FC = () => {
   const [role, setRole] = useState<string>(resolvedRole);
   const [jobDescription, setJobDescription] = useState('');
   const [jobDescriptionId, setJobDescriptionId] = useState('');
+  const [language, setLanguage] = useState<'' | 'vi' | 'en'>('');
   const [savedJds, setSavedJds] = useState<{ id: string; title: string; companyName?: string | null }[]>([]);
   const [contextPreview, setContextPreview] = useState<string | null>(null);
 
@@ -431,6 +432,7 @@ export const InterviewSetup: React.FC = () => {
         jobDescription: jobDescriptionId ? undefined : jobDescription.trim() || undefined,
         jobDescriptionId: jobDescriptionId || undefined,
         cvDocumentId,
+        language: language || undefined,
       });
       if (ctxRes.ok && ctxRes.data) {
         contextJson = JSON.stringify(ctxRes.data);
@@ -449,6 +451,7 @@ export const InterviewSetup: React.FC = () => {
         jobDescriptionId: jobDescriptionId || undefined,
         cvDocumentId,
         contextJson,
+        language: language || undefined,
       });
 
       const sessionId = res.data?.id || (res.data as any)?.Id;
@@ -478,7 +481,7 @@ export const InterviewSetup: React.FC = () => {
     {
       id: 'Text' as const,
       label: 'Văn bản (Text Mode)',
-      subtitle: 'Gõ câu trả lời, nhận gợi ý thời gian thực chuẩn cấu trúc STAR',
+      subtitle: 'Gõ câu trả lời, nhận gợi ý phù hợp với từng loại câu hỏi',
       icon: <MessageSquare size={22} />,
       locked: false,
       hint: '',
@@ -519,7 +522,7 @@ export const InterviewSetup: React.FC = () => {
             <h1 className="setup-header-title">Thiết lập phòng phỏng vấn AI</h1>
             <p className="setup-header-desc">
               Tùy chỉnh ngành, vị trí mục tiêu, JD (tuỳ chọn) và hình thức Text / Voice — câu hỏi cá nhân hóa theo CV
-              trước khi bắt đầu buổi tập luyện mô phỏng chuẩn STAR quốc tế.
+              trước khi bắt đầu buổi tập luyện mô phỏng theo vị trí ứng tuyển.
             </p>
           </div>
 
@@ -704,6 +707,16 @@ export const InterviewSetup: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: 24 }}>
+                <label htmlFor="interview-language" className="setup-label-text">Ngôn ngữ phỏng vấn</label>
+                <select id="interview-language" value={language}
+                  onChange={(event) => setLanguage(event.target.value as '' | 'vi' | 'en')}
+                  style={{ display: 'block', width: '100%', padding: '12px', marginTop: 8, border: '1px solid #CBD5E1', borderRadius: 10 }}>
+                  <option value="">Tự động theo ngôn ngữ CV</option>
+                  <option value="vi">Tiếng Việt</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
               {/* 1. Industry / Field Select */}
               <div style={{ marginBottom: '24px' }}>
                 <div className="setup-section-label">

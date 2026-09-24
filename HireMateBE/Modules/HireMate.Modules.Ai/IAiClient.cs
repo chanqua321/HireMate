@@ -32,7 +32,9 @@ public class AiCompletionResult
 
 public interface IAiClient
 {
-    Task<AiCompletionResult> CompleteAsync(string systemPrompt, string userPrompt, CancellationToken ct = default, int? maxOutputChars = null);
+    Task<AiCompletionResult> CompleteAsync(string systemPrompt, string userPrompt,
+        CancellationToken ct = default, int? maxOutputChars = null,
+        System.Text.Json.JsonElement? responseSchema = null);
 }
 
 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
-import { QUESTION_BANK } from '../../../../shared/data/questionBank';
 import { Question, InterviewResult } from '../../../../shared/types';
 import {
   Mic,
@@ -17,11 +16,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { interviewService } from '../../api/interview.service';
 import type { AnswerAnalysis, SubmitAnswerResult } from '../../types';
-import {
-  playVietnameseSpeech,
-  stopVietnameseSpeech,
-  getAvailableVietnameseVoice,
-} from '../../../../shared/utils/vietnameseSpeech';
+import { playInterviewSpeech, stopInterviewSpeech, resolveInterviewVoice,
+  InterviewLanguage } from '../../../../shared/utils/interviewSpeech';
 import { InterviewStepper } from '../InterviewStepper/InterviewStepper';
 import { RoomEntranceOverlay, RoomHeader, RoomSidebar } from './components';
 import './css/InterviewRoom.css';
@@ -31,6 +27,12 @@ interface ChatMessage {
   text: string;
   timestamp?: string;
   analysis?: AnswerAnalysis | null;
+  speechText?: string;
+}
+
+// Match the backend's STAR-applicable categories; unknown and technical questions stay neutral.
+function usesStarHelper(category: string | undefined): boolean {
+  return /Behavioral|Hành vi|Experience|Project|STAR/i.test(category ?? '');
 }
 
 function formatEvidenceLabel(status?: string | null): string {
@@ -123,12 +125,16 @@ export const InterviewRoom: React.FC = () => {
   const isVoiceSession = activeMode === 'Voice';
   const VOICE_MAX_SEC = 15 * 60;
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
+  const [speakingText, setSpeakingText] = useState<string | null>(null);
+  const [speechError, setSpeechError] = useState<string | null>(null);
   const [activeVoiceName, setActiveVoiceName] = useState<string>('Tiếng Việt (AI)');
+  const [interviewLanguage, setInterviewLanguage] = useState<InterviewLanguage | null>(null);
   const [timeLeft, setTimeLeft] = useState(isVoiceSession ? VOICE_MAX_SEC : 120);
   const [sessionSecondsLeft, setSessionSecondsLeft] = useState(VOICE_MAX_SEC);
   const [voiceExpiresAt, setVoiceExpiresAt] = useState<Date | null>(null);
   const [voiceStarted, setVoiceStarted] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceAnswerReceived, setVoiceAnswerReceived] = useState(false);
   const [voiceWarning, setVoiceWarning] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -139,6 +145,9 @@ export const InterviewRoom: React.FC = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordStartedAtRef = useRef<number>(0);
+  const currentQuestion = questions[currentIndex];
+  const showStarHelper = usesStarHelper(currentQuestion?.cat);
+  const isEnglish = interviewLanguage === 'en';
 
   // Play auditory feedback chime when AI begins speaking
   const playChimeTone = () => {
@@ -165,14 +174,14 @@ export const InterviewRoom: React.FC = () => {
   // Pre-load voices & detect installed Vietnamese voice
   useEffect(() => {
     const detectVoice = () => {
-      const viVoice = getAvailableVietnameseVoice();
-      if (viVoice) {
-        const cleanName = viVoice.name
+      const voice = interviewLanguage ? resolveInterviewVoice(interviewLanguage) : null;
+      if (voice) {
+        const cleanName = voice.name
           .replace(/Microsoft |Online \(Natural\) - |Google /gi, '')
           .trim();
-        setActiveVoiceName(cleanName || 'Tiếng Việt');
+        setActiveVoiceName(cleanName || (interviewLanguage === 'en' ? 'English' : 'Tiếng Việt'));
       } else {
-        setActiveVoiceName('Tiếng Việt Neural');
+        setActiveVoiceName(interviewLanguage === 'en' ? 'English voice unavailable' : 'Tiếng Việt Neural');
       }
     };
 
@@ -182,33 +191,41 @@ export const InterviewRoom: React.FC = () => {
     }
 
     return () => {
-      stopVietnameseSpeech();
+      stopInterviewSpeech();
     };
-  }, []);
+  }, [interviewLanguage]);
 
   // 100% Guaranteed Robust Vietnamese Speech Engine
   const speakVietnamese = useCallback((text: string, onEnd?: () => void) => {
+    setSpeechError(null);
     try {
       playChimeTone();
     } catch (e) {}
 
-    playVietnameseSpeech(text, {
-      onStart: () => setIsAiSpeaking(true),
+    if (!interviewLanguage) { setSpeechError('Chưa xác định ngôn ngữ phiên phỏng vấn.'); if (onEnd) onEnd(); return; }
+    playInterviewSpeech(text, interviewLanguage, {
+      onStart: () => { setIsAiSpeaking(true); setSpeakingText(text); },
       onEnd: () => {
         setIsAiSpeaking(false);
+        setSpeakingText(null);
         if (onEnd) onEnd();
       },
       onError: () => {
         setIsAiSpeaking(false);
+        setSpeakingText(null);
+        setSpeechError(interviewLanguage === 'en'
+          ? 'Voice playback is unavailable. You can still read the question.'
+          : 'Không phát được giọng đọc. Bạn vẫn có thể đọc câu hỏi.');
         if (onEnd) onEnd();
       },
     });
-  }, []);
+  }, [interviewLanguage]);
 
   // Stop speech
   const stopSpeech = useCallback(() => {
-    stopVietnameseSpeech();
+    stopInterviewSpeech();
     setIsAiSpeaking(false);
+    setSpeakingText(null);
   }, []);
 
   // Entrance checklist animation sequence
@@ -226,6 +243,10 @@ export const InterviewRoom: React.FC = () => {
 
   // User clicks "Sẵn sàng & Bắt đầu phỏng vấn"
   const handleStartInterview = async () => {
+    if (questions.length === 0) {
+      setInputError('Chưa tải được câu hỏi cho phiên này. Vui lòng quay lại thiết lập và thử lại.');
+      return;
+    }
     if ('speechSynthesis' in window) {
       window.speechSynthesis.resume();
     }
@@ -266,65 +287,51 @@ export const InterviewRoom: React.FC = () => {
     }
   };
 
-  // Initialize questions from backend or fallback to local question bank
+  // Only server-selected questions belong to this owned interview session.
   useEffect(() => {
     const initQuestions = async () => {
       let loadedQuestions: Question[] = [];
       let loadedIds: string[] = [];
+      let loadedLanguage: InterviewLanguage | null = null;
 
       if (sessionId && localStorage.getItem('hm_access_token')) {
         try {
-          const res = await interviewService.getQuestions(sessionId);
+          const languageResult = await interviewService.getLanguage(sessionId);
+          if (!languageResult.ok || !languageResult.data?.language) {
+            setInputError(languageResult.message || 'Không tải được ngôn ngữ phiên phỏng vấn.');
+            return;
+          }
+          loadedLanguage = languageResult.data.language;
+          setInterviewLanguage(languageResult.data.language);
+          const [res, detailResult] = await Promise.all([
+            interviewService.getQuestions(sessionId), interviewService.getDetail(sessionId),
+          ]);
           if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
-            loadedQuestions = res.data.map((item) => ({
-              q: item.content,
-              cat: item.category || 'Chuyên môn',
-              hint: item.hint || 'Hãy trả lời theo cấu trúc STAR: Bối cảnh -> Nhiệm vụ -> Hành động -> Kết quả',
-            }));
-            loadedIds = res.data.map((item) => item.questionId);
+            const item = res.data[0];
+            const count = Math.max(detailResult.data?.questionCount || 0, item.orderIndex + 1);
+            loadedQuestions = Array.from({ length: count }, () => ({ q: '', cat: '', hint: '' }));
+            loadedIds = Array.from({ length: count }, () => '');
+            loadedQuestions[item.orderIndex] = { q: item.content, cat: item.category || 'Chuyên môn', hint: item.hint || '' };
+            loadedIds[item.orderIndex] = item.questionId;
+            setCurrentIndex(item.orderIndex);
           }
         } catch (e) {
-          // Fallback to local question bank
+          setInputError('Không tải được câu hỏi phỏng vấn. Vui lòng thử lại.');
         }
       }
 
       if (loadedQuestions.length === 0) {
-        const roleLower = currentRole.toLowerCase();
-        let targetCat = 'Backend';
-        if (roleLower.includes('frontend') || roleLower.includes('front-end')) targetCat = 'Frontend';
-        else if (roleLower.includes('backend') || roleLower.includes('back-end')) targetCat = 'Backend';
-        else if (roleLower.includes('data') || roleLower.includes('dữ liệu')) targetCat = 'Data';
-        else if (roleLower.includes('sản phẩm') || roleLower.includes('product') || roleLower.includes('pm')) targetCat = 'Quản lý sản phẩm';
-        else if (roleLower.includes('thiết kế') || roleLower.includes('ui/ux') || roleLower.includes('design')) targetCat = 'Thiết kế (UI/UX)';
-        else if (roleLower.includes('marketing') || roleLower.includes('kinh doanh') || roleLower.includes('sale')) targetCat = 'Marketing';
-
-        const hrQuestions = QUESTION_BANK.filter((q) => q.cat === 'Hành vi (HR)');
-        const catQuestions = QUESTION_BANK.filter((q) => q.cat === targetCat);
-        const otherQuestions = catQuestions.length > 0 ? catQuestions : QUESTION_BANK.filter((q) => q.cat !== 'Hành vi (HR)');
-
-        const pickRandom = (arr: Question[], count: number) => {
-          const shuffled = [...arr].sort(() => 0.5 - Math.random());
-          return shuffled.slice(0, count);
-        };
-
-        const hrPicked = pickRandom(hrQuestions, 2);
-        const techPicked = pickRandom(otherQuestions, 3);
-        loadedQuestions = [...hrPicked, ...techPicked];
-
-        if (loadedQuestions.length === 0) {
-          loadedQuestions.push(QUESTION_BANK[0]);
-        }
+        setInputError('Phiên này chưa có câu hỏi hợp lệ. Vui lòng quay lại thiết lập và thử lại.');
+        return;
       }
 
       setQuestions(loadedQuestions);
       setQuestionIds(loadedIds);
-      setCurrentIndex(0);
+      const firstQ = loadedQuestions.find(question => question.q)?.q || '';
 
-      const firstQ =
-        loadedQuestions[0]?.q ||
-        'Bạn hãy giới thiệu về bản thân và một dự án nổi bật nhất mà bạn từng tham gia?';
-
-      const greetingText = `Chào bạn! Tôi là Cố vấn AI HireMate. Hôm nay chúng ta sẽ bắt đầu buổi phỏng vấn vị trí "${currentRole}".\n\n📌 Hãy trả lời câu hỏi đầu tiên theo cấu trúc STAR:\n${firstQ}`;
+      const greetingText = loadedLanguage === 'en'
+        ? `Hello! I'm your HireMate AI Coach. Let's begin the interview for "${currentRole}".\n\nFirst question:\n${firstQ}`
+        : `Chào bạn! Tôi là Cố vấn AI HireMate. Hôm nay chúng ta sẽ bắt đầu buổi phỏng vấn vị trí "${currentRole}".\n\n📌 Câu hỏi đầu tiên:\n${firstQ}`;
 
       setMessages([
         {
@@ -343,6 +350,27 @@ export const InterviewRoom: React.FC = () => {
 
   // Personalized interview — Text: 120s/question; Voice: 15-minute session (UX; BE enforces)
   const perQuestionDuration = 120;
+
+  const fetchPendingQuestion = async (): Promise<Question | null> => {
+    if (!sessionId) return null;
+    let response;
+    try {
+      response = await interviewService.getQuestions(sessionId);
+    } catch {
+      setInputError('Không tải được câu hỏi tiếp theo. Vui lòng thử lại.');
+      return null;
+    }
+    const item = response.ok && Array.isArray(response.data) ? response.data[0] : undefined;
+    if (!item) return null;
+    const question: Question = { q: item.content, cat: item.category || 'Chuyên môn', hint: item.hint || '' };
+    setQuestions(previous => {
+      const next = [...previous]; next[item.orderIndex] = question; return next;
+    });
+    setQuestionIds(previous => {
+      const next = [...previous]; next[item.orderIndex] = item.questionId; return next;
+    });
+    return question;
+  };
 
   useEffect(() => {
     if (isVoiceSession) return;
@@ -397,57 +425,6 @@ export const InterviewRoom: React.FC = () => {
     scrollToBottom();
   }, [messages, isSubmitting, scrollToBottom]);
 
-  const calculateRealisticScore = (answersList: string[]): InterviewResult => {
-    const validAnswers = answersList.filter(
-      (a) => a && !a.includes('(Ứng viên đã bỏ qua') && a.trim().length > 5
-    );
-    const today = new Date().toISOString().split('T')[0];
-
-    if (validAnswers.length === 0) {
-      return {
-        overall: 20,
-        role: currentRole,
-        clarity: 25,
-        subs: { S: 20, T: 20, A: 20, R: 20 },
-        date: today,
-      };
-    }
-
-    const joined = validAnswers.join(' ').toLowerCase();
-    const hasS = ['bối cảnh', 'tình huống', 'dự án', 'khi đó', 'thời điểm'].some((k) =>
-      joined.includes(k)
-    );
-    const hasT = ['nhiệm vụ', 'mục tiêu', 'trách nhiệm', 'yêu cầu', 'kpi'].some((k) =>
-      joined.includes(k)
-    );
-    const hasA = ['hành động', 'triển khai', 'tôi đã', 'xử lý', 'thực hiện', 'phối hợp'].some((k) =>
-      joined.includes(k)
-    );
-    const hasR = ['kết quả', 'đạt được', '%', 'hoàn thành', 'tăng', 'giảm'].some((k) =>
-      joined.includes(k)
-    );
-
-    const lengthBonus = Math.min(30, joined.length / 20);
-    const s = Math.min(96, Math.max(25, 35 + (hasS ? 30 : 0) + lengthBonus));
-    const t = Math.min(96, Math.max(25, 35 + (hasT ? 30 : 0) + lengthBonus));
-    const a = Math.min(96, Math.max(25, 30 + (hasA ? 35 : 0) + lengthBonus));
-    const r = Math.min(96, Math.max(25, 25 + (hasR ? 40 : 0) + lengthBonus));
-    const overall = Math.round((s + t + a + r) / 4);
-
-    return {
-      overall,
-      role: currentRole,
-      clarity: Math.round(overall * 0.95),
-      subs: {
-        S: Math.round(s),
-        T: Math.round(t),
-        A: Math.round(a),
-        R: Math.round(r),
-      },
-      date: today,
-    };
-  };
-
   const proceedWithAnswer = async (userAnswer: string, isSkipped = false) => {
     if (isCompleted || isSubmitting) return;
 
@@ -478,6 +455,11 @@ export const InterviewRoom: React.FC = () => {
           skipped: isSkipped,
           durationSec: Math.max(1, perQuestionDuration - timeLeft),
         });
+        if (!res.ok || !res.data) {
+          setInputError(res.message || 'Không lưu được câu trả lời. Vui lòng thử lại.');
+          setIsSubmitting(false);
+          return;
+        }
         if (res.ok && res.data) {
           submitResult = res.data;
           const suggestedNext = submitResult.nextQuestion;
@@ -525,7 +507,9 @@ export const InterviewRoom: React.FC = () => {
           }
         }
       } catch {
-        // Answer may still be saved server-side; continue UX
+        setInputError('Chưa xác nhận được câu trả lời đã lưu. Vui lòng thử lại.');
+        setIsSubmitting(false);
+        return;
       }
     }
 
@@ -536,14 +520,16 @@ export const InterviewRoom: React.FC = () => {
       setIsCompleted(true);
       setInputVal('');
 
-      const farewellText =
-        'Cảm ơn bạn đã hoàn thành buổi phỏng vấn hôm nay cùng HireMate AI! Tôi đã ghi nhận toàn bộ câu trả lời của bạn và đang hoàn tất báo cáo phân tích chi tiết 4 yếu tố STAR cùng danh sách lỗi cần cải thiện. Chúng ta cùng xem kết quả nhé!';
+      const farewellText = interviewLanguage === 'en'
+        ? 'Thank you for completing your HireMate interview. Your feedback report is being prepared.'
+        : 'Cảm ơn bạn đã hoàn thành buổi phỏng vấn hôm nay cùng HireMate AI! Tôi đã ghi nhận toàn bộ câu trả lời của bạn và đang hoàn tất báo cáo phân tích chi tiết 4 yếu tố STAR cùng danh sách lỗi cần cải thiện. Chúng ta cùng xem kết quả nhé!';
 
       const endMsgs: ChatMessage[] = [...updatedMessages];
       if (analysisNote) {
         endMsgs.push({
           sender: 'ai',
           text: analysisNote,
+          speechText: interviewLanguage === 'en' ? '' : undefined,
           analysis: submitResult?.analysis,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
@@ -558,36 +544,26 @@ export const InterviewRoom: React.FC = () => {
       });
       setMessages(endMsgs);
 
-      const allAnswers = [
-        ...messages.filter((m) => m.sender === 'user').map((m) => m.text),
-        userAnswer,
-      ];
-      let finalResult = calculateRealisticScore(allAnswers);
+      let finalResult: InterviewResult | null = null;
 
       if (sessionId && localStorage.getItem('hm_access_token')) {
         try {
           const compRes = await interviewService.completeSession(sessionId);
           if (compRes.ok && compRes.data) {
             const be = compRes.data;
-            finalResult = {
-              overall: be.overallScore ?? finalResult.overall,
-              role: be.position || finalResult.role,
-              clarity: be.clarityScore ?? finalResult.clarity,
-              subs: {
-                S: be.scoreS ?? finalResult.subs.S,
-                T: be.scoreT ?? finalResult.subs.T,
-                A: be.scoreA ?? finalResult.subs.A,
-                R: be.scoreR ?? finalResult.subs.R,
-              },
-              date: new Date().toISOString().split('T')[0],
-            };
+            if ([be.overallScore, be.clarityScore, be.scoreS, be.scoreT, be.scoreA, be.scoreR]
+              .every(score => typeof score === 'number')) {
+              finalResult = { overall: be.overallScore!, role: be.position, clarity: be.clarityScore!,
+                subs: { S: be.scoreS!, T: be.scoreT!, A: be.scoreA!, R: be.scoreR! },
+                date: new Date().toISOString().split('T')[0] };
+            }
           }
         } catch (e) {
-          // Fallback to heuristic score
+          setInputError('Chưa nhận được báo cáo từ máy chủ. Bạn có thể mở lại trang Feedback để thử xem kết quả.');
         }
       }
 
-      saveLastResult(finalResult);
+      if (finalResult) saveLastResult(finalResult);
 
       // Speak farewell then transition to Feedback report
       let hasNavigated = false;
@@ -612,17 +588,26 @@ export const InterviewRoom: React.FC = () => {
     }
 
     const nextIdx = currentIndex + 1;
-    const nextQ =
+    const pending = await fetchPendingQuestion();
+    const nextQ = pending || (
       submitResult?.followUp?.content
         ? { q: submitResult.followUp.content, cat: 'Follow-up', hint: submitResult.followUp.hint || '' }
         : submitResult?.nextQuestion?.content
         ? { q: submitResult.nextQuestion.content, cat: submitResult.nextQuestion.category || 'CV-based', hint: submitResult.nextQuestion.hint || '' }
-        : questions[nextIdx];
+        : questions[nextIdx]);
+
+    if (!nextQ?.q) {
+      setInputError('Không tải được câu hỏi tiếp theo. Vui lòng thử lại.');
+      setIsSubmitting(false);
+      return;
+    }
 
     const analysisBlock = analysisNote ? `${analysisNote}\n\n` : '';
-    const aiFeedback = `${analysisBlock}Cảm ơn câu trả lời của bạn.\n\n👉 Câu hỏi ${
+    const aiFeedback = interviewLanguage === 'en'
+      ? `Thank you. Next question:\n${nextQ?.q || ''}`
+      : `${analysisBlock}Cảm ơn câu trả lời của bạn.\n\n👉 Câu hỏi ${
       nextIdx + 1
-    }:\n${nextQ?.q || 'Bạn giải quyết xung đột ý kiến trong nhóm như thế nào?'}`;
+    }:\n${nextQ?.q || ''}`;
 
     setMessages([
       ...updatedMessages,
@@ -646,7 +631,7 @@ export const InterviewRoom: React.FC = () => {
   };
 
   const handleNextQuestion = async () => {
-    if (isCompleted || isSubmitting) return;
+    if (isCompleted || isSubmitting || activeMode === 'Voice') return;
 
     if (!inputVal.trim() && !recording) {
       setInputError('Vui lòng nhập câu trả lời của bạn trước khi gửi, hoặc bấm nút "Bỏ qua câu này" nếu muốn chuyển tiếp.');
@@ -656,7 +641,7 @@ export const InterviewRoom: React.FC = () => {
   };
 
   const handleSkipQuestion = async () => {
-    if (isCompleted || isSubmitting) return;
+    if (isCompleted || isSubmitting || isTranscribing || recording) return;
     setInputError(null);
     await proceedWithAnswer('(Ứng viên đã bỏ qua câu hỏi này)', true);
   };
@@ -670,6 +655,8 @@ export const InterviewRoom: React.FC = () => {
 
     if (!recording) {
       try {
+        setVoiceAnswerReceived(false);
+        setInputError(null);
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
         const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -723,11 +710,13 @@ export const InterviewRoom: React.FC = () => {
               typeof (res.data as any)?.answerText === 'string'
                 ? String((res.data as any).answerText).trim()
                 : '';
-            if (!transcript) {
-              setInputError('VOICE_EMPTY_TRANSCRIPT: Không nhận được nội dung. Thử ghi lại.');
-              return;
-            }
-            await proceedWithAnswerFromVoice(transcript, res.data as SubmitAnswerResult);
+          if (!transcript) {
+            setInputError('VOICE_EMPTY_TRANSCRIPT: Không nhận được nội dung. Thử ghi lại.');
+            return;
+          }
+          setVoiceAnswerReceived(true);
+          setIsTranscribing(false);
+          await proceedWithAnswerFromVoice(transcript, res.data as SubmitAnswerResult);
           } catch {
             setInputError('Không thể gửi câu trả lời. Vui lòng thử lại.');
           } finally {
@@ -817,10 +806,18 @@ export const InterviewRoom: React.FC = () => {
     }
 
     const nextIdx = currentIndex + 1;
-    const nextQ = submitResult?.followUp?.content || submitResult?.nextQuestion?.content || questions[nextIdx]?.q || 'Câu hỏi tiếp theo';
-    const aiFeedback = analysisNote
-      ? `${analysisNote}\n\n📌 Câu hỏi tiếp theo:\n${nextQ}`
-      : `Cảm ơn bạn. 📌 Câu hỏi tiếp theo:\n${nextQ}`;
+    const pending = await fetchPendingQuestion();
+    const nextQ = pending?.q || submitResult?.followUp?.content || submitResult?.nextQuestion?.content || questions[nextIdx]?.q;
+    if (!nextQ) {
+      setInputError('Không tải được câu hỏi tiếp theo. Vui lòng thử lại.');
+      setIsSubmitting(false);
+      return;
+    }
+    const aiFeedback = interviewLanguage === 'en'
+      ? `Thank you. Next question:\n${nextQ}`
+      : analysisNote
+        ? `${analysisNote}\n\n📌 Câu hỏi tiếp theo:\n${nextQ}`
+        : `Cảm ơn bạn. 📌 Câu hỏi tiếp theo:\n${nextQ}`;
 
     setMessages([
       ...updatedMessages,
@@ -846,14 +843,16 @@ export const InterviewRoom: React.FC = () => {
   ) => {
     setIsCompleted(true);
     setInputVal('');
-    const farewellText =
-      'Cảm ơn bạn đã hoàn thành buổi phỏng vấn hôm nay cùng HireMate AI! Tôi đã ghi nhận toàn bộ câu trả lời của bạn và đang hoàn tất báo cáo phân tích chi tiết.';
+    const farewellText = interviewLanguage === 'en'
+      ? 'Thank you for completing your HireMate interview. Your feedback report is being prepared.'
+      : 'Cảm ơn bạn đã hoàn thành buổi phỏng vấn hôm nay cùng HireMate AI! Tôi đã ghi nhận toàn bộ câu trả lời của bạn và đang hoàn tất báo cáo phân tích chi tiết.';
 
     const endMsgs: ChatMessage[] = [...updatedMessages];
     if (analysisNote) {
       endMsgs.push({
         sender: 'ai',
         text: analysisNote,
+        speechText: interviewLanguage === 'en' ? '' : undefined,
         analysis: submitResult?.analysis,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
@@ -865,36 +864,26 @@ export const InterviewRoom: React.FC = () => {
     });
     setMessages(endMsgs);
 
-    const allAnswers = [
-      ...messages.filter((m) => m.sender === 'user').map((m) => m.text),
-      userAnswer,
-    ];
-    let finalResult = calculateRealisticScore(allAnswers);
+    let finalResult: InterviewResult | null = null;
 
     if (sessionId && localStorage.getItem('hm_access_token')) {
       try {
         const compRes = await interviewService.completeSession(sessionId);
         if (compRes.ok && compRes.data) {
           const be = compRes.data;
-          finalResult = {
-            overall: be.overallScore ?? finalResult.overall,
-            role: be.position || finalResult.role,
-            clarity: be.clarityScore ?? finalResult.clarity,
-            subs: {
-              S: be.scoreS ?? finalResult.subs.S,
-              T: be.scoreT ?? finalResult.subs.T,
-              A: be.scoreA ?? finalResult.subs.A,
-              R: be.scoreR ?? finalResult.subs.R,
-            },
-            date: new Date().toISOString().split('T')[0],
-          };
+          if ([be.overallScore, be.clarityScore, be.scoreS, be.scoreT, be.scoreA, be.scoreR]
+            .every(score => typeof score === 'number')) {
+            finalResult = { overall: be.overallScore!, role: be.position, clarity: be.clarityScore!,
+              subs: { S: be.scoreS!, T: be.scoreT!, A: be.scoreA!, R: be.scoreR! },
+              date: new Date().toISOString().split('T')[0] };
+          }
         }
       } catch {
-        // heuristic fallback
+        setInputError('Chưa nhận được báo cáo từ máy chủ. Bạn có thể mở lại trang Feedback để thử xem kết quả.');
       }
     }
 
-    saveLastResult(finalResult);
+    if (finalResult) saveLastResult(finalResult);
     let hasNavigated = false;
     const navigateToReport = () => {
       if (hasNavigated) return;
@@ -922,6 +911,8 @@ export const InterviewRoom: React.FC = () => {
         isEntering={isEntering}
         entranceStep={entranceStep}
         currentRole={currentRole}
+        canStart={questions.length > 0}
+        errorMessage={inputError}
         onStartInterview={handleStartInterview}
       />
 
@@ -939,11 +930,13 @@ export const InterviewRoom: React.FC = () => {
         lockMode={isVoiceSession}
         sessionLabel={isVoiceSession ? 'Voice · tối đa 15 phút' : undefined}
         warningText={voiceWarning}
+        language={interviewLanguage ?? 'vi'}
         onToggleSpeech={() => {
           if (isAiSpeaking) {
             stopSpeech();
-          } else if (messages.length > 0) {
-            speakVietnamese(messages[messages.length - 1].text);
+          } else {
+            const latestAi = [...messages].reverse().find(message => message.sender === 'ai' && message.speechText !== '');
+            if (latestAi) speakVietnamese(latestAi.speechText ?? latestAi.text);
           }
         }}
         onModeChange={(m) => {
@@ -952,9 +945,10 @@ export const InterviewRoom: React.FC = () => {
         }}
         formatTime={formatTime}
       />
+      {speechError && <div className="room-speech-error" role="status">{speechError}</div>}
 
       {/* Main 2-Column Layout */}
-      <div className="room-main-layout">
+      <div className={`room-main-layout ${!showStarHelper && !currentQuestion?.hint ? 'single' : ''}`}>
         {/* Left Column: Chat History & Voice/Text Input */}
         <motion.div
           className="room-chat-panel"
@@ -982,24 +976,28 @@ export const InterviewRoom: React.FC = () => {
                         </div>
                         <button
                           type="button"
-                          className={`tts-speaker-btn ${isAiSpeaking ? 'active' : ''}`}
-                          onClick={() => speakVietnamese(msg.text)}
-                          title="Đọc câu hỏi bằng giọng AI"
+                          className={`tts-speaker-btn ${isAiSpeaking && speakingText === (msg.speechText ?? msg.text) ? 'active' : ''}`}
+                          onClick={() => speakVietnamese(msg.speechText ?? msg.text)}
+                          disabled={msg.speechText === ''}
+                          title={isEnglish ? 'Listen to this message again' : 'Nghe lại nội dung này'}
+                          aria-label={isEnglish ? 'Listen to this message again' : 'Nghe lại nội dung này'}
                         >
                           <Volume2 size={15} />
-                          <span>{isAiSpeaking ? 'Đang đọc...' : 'Nghe giọng AI'}</span>
+                          <span>{isAiSpeaking && speakingText === (msg.speechText ?? msg.text)
+                            ? (isEnglish ? 'AI is speaking...' : 'AI đang nói...')
+                            : (isEnglish ? 'Listen again' : 'Nghe lại')}</span>
                         </button>
                       </div>
 
                       {/* Live Waveform Indicator while AI is speaking */}
-                      {isAiSpeaking && idx === messages.length - 1 && (
+                      {isAiSpeaking && speakingText === (msg.speechText ?? msg.text) && (
                         <div className="ai-speaking-live-badge">
                           <div className="live-mini-wave">
                             <span className="live-wave-bar" />
                             <span className="live-wave-bar" />
                             <span className="live-wave-bar" />
                           </div>
-                          <span>AI đang đọc câu hỏi...</span>
+                          <span>{isEnglish ? 'AI is speaking...' : 'AI đang nói...'}</span>
                         </div>
                       )}
 
@@ -1083,32 +1081,41 @@ export const InterviewRoom: React.FC = () => {
                   }}
                   title={
                     isCompleted
-                      ? 'Buổi phỏng vấn đã hoàn tất'
+                      ? (isEnglish ? 'Interview completed' : 'Buổi phỏng vấn đã hoàn tất')
                       : sessionSecondsLeft <= 0
-                      ? 'Hết 15 phút'
+                      ? (isEnglish ? 'Voice time is over' : 'Hết 15 phút')
                       : recording
-                      ? 'Dừng ghi âm'
-                      : 'Nhấn để bắt đầu nói'
+                      ? (isEnglish ? 'Stop recording' : 'Dừng ghi âm')
+                      : (isEnglish ? 'Press to answer' : 'Nhấn để trả lời')
                   }
+                  aria-label={recording
+                    ? (isEnglish ? 'Stop recording' : 'Dừng ghi âm')
+                    : (isEnglish ? 'Press to answer' : 'Nhấn để trả lời')}
                 >
                   {isTranscribing ? <Loader2 size={28} className="spin" /> : <Mic size={28} />}
                 </button>
-                <span className="voice-status-text">
+                <span className="voice-status-text" role="status" aria-live="polite">
                   {isCompleted
-                    ? 'Buổi phỏng vấn đã kết thúc thành công.'
+                    ? (isEnglish ? 'Interview completed.' : 'Buổi phỏng vấn đã kết thúc thành công.')
                     : isTranscribing
-                    ? 'Đang chuyển giọng nói thành văn bản...'
+                    ? (isEnglish ? 'Transcribing speech...' : 'Đang chuyển giọng nói thành văn bản...')
                     : recording
-                    ? 'Recording... (Nhấn Stop để gửi)'
+                    ? (isEnglish ? 'Recording... Press again to stop.' : 'Đang ghi âm... Nhấn lần nữa để dừng.')
+                    : isSubmitting
+                    ? (isEnglish ? 'Processing...' : 'Đang xử lý...')
+                    : inputError
+                    ? (isEnglish ? 'Could not process the answer. Please try again.' : 'Không thể xử lý câu trả lời. Vui lòng thử lại.')
                     : sessionSecondsLeft <= 0
-                    ? 'Hết thời gian Voice — hãy hoàn tất phiên'
-                    : 'Nhấn Micro để trả lời · 1 phiên = 1 lượt Interview'}
+                    ? (isEnglish ? 'Voice time is over.' : 'Hết thời gian Voice — hãy hoàn tất phiên')
+                    : voiceAnswerReceived
+                    ? (isEnglish ? 'Answer received.' : 'Đã nhận câu trả lời')
+                    : (isEnglish ? 'Press to answer' : 'Nhấn để trả lời')}
                 </span>
               </div>
             ) : (
               <div className="text-mode-box">
                 {/* Fast STAR helper tags */}
-                <div className="star-helper-chips">
+                {showStarHelper && <div className="star-helper-chips">
                   <span
                     style={{
                       fontSize: '0.78rem',
@@ -1117,44 +1124,45 @@ export const InterviewRoom: React.FC = () => {
                       alignSelf: 'center',
                     }}
                   >
-                    Chèn nhanh STAR:
+                    {isEnglish ? 'Optional STAR prompts:' : 'Gợi ý STAR (không bắt buộc):'}
                   </span>
                   <button
                     type="button"
                     className="star-chip-btn"
-                    onClick={() => insertStarPrompt('[Bối cảnh (S)]')}
+                    onClick={() => insertStarPrompt(isEnglish ? '[Situation (S)]' : '[Bối cảnh (S)]')}
                     disabled={isCompleted || isSubmitting}
                   >
-                    + Bối cảnh (S)
+                    {isEnglish ? '+ Situation (S)' : '+ Bối cảnh (S)'}
                   </button>
                   <button
                     type="button"
                     className="star-chip-btn"
-                    onClick={() => insertStarPrompt('[Nhiệm vụ (T)]')}
+                    onClick={() => insertStarPrompt(isEnglish ? '[Task (T)]' : '[Nhiệm vụ (T)]')}
                     disabled={isCompleted || isSubmitting}
                   >
-                    + Nhiệm vụ (T)
+                    {isEnglish ? '+ Task (T)' : '+ Nhiệm vụ (T)'}
                   </button>
                   <button
                     type="button"
                     className="star-chip-btn"
-                    onClick={() => insertStarPrompt('[Hành động (A)]')}
+                    onClick={() => insertStarPrompt(isEnglish ? '[Action (A)]' : '[Hành động (A)]')}
                     disabled={isCompleted || isSubmitting}
                   >
-                    + Hành động (A)
+                    {isEnglish ? '+ Action (A)' : '+ Hành động (A)'}
                   </button>
                   <button
                     type="button"
                     className="star-chip-btn"
-                    onClick={() => insertStarPrompt('[Kết quả (R)]')}
+                    onClick={() => insertStarPrompt(isEnglish ? '[Result (R)]' : '[Kết quả (R)]')}
                     disabled={isCompleted || isSubmitting}
                   >
-                    + Kết quả (R)
+                    {isEnglish ? '+ Result (R)' : '+ Kết quả (R)'}
                   </button>
-                </div>
+                </div>}
 
                 <textarea
                   className={`room-textarea ${inputError ? 'error' : ''}`}
+                  aria-label={isEnglish ? 'Your answer' : 'Câu trả lời của bạn'}
                   rows={3}
                   value={inputVal}
                   onChange={(e) => {
@@ -1167,11 +1175,13 @@ export const InterviewRoom: React.FC = () => {
                       handleNextQuestion();
                     }
                   }}
-                  disabled={isCompleted || isSubmitting}
+                  disabled={isCompleted || isSubmitting || isTranscribing || recording}
                   placeholder={
                     isCompleted
                       ? 'Buổi phỏng vấn đã hoàn tất. Đang chuyển sang trang báo cáo kết quả...'
-                      : 'Nhập câu trả lời theo chuẩn STAR (Bối cảnh -> Nhiệm vụ -> Hành động -> Kết quả)...'
+                      : showStarHelper
+                      ? (isEnglish ? 'Write your answer. Use STAR if it helps...' : 'Nhập câu trả lời của bạn. Có thể dùng STAR nếu phù hợp...')
+                      : (isEnglish ? 'Enter your answer...' : 'Nhập câu trả lời của bạn...')
                   }
                 />
                 {inputError && (
@@ -1189,7 +1199,7 @@ export const InterviewRoom: React.FC = () => {
                   type="button"
                   className="btn-skip-question"
                   onClick={handleSkipQuestion}
-                  disabled={isCompleted || isSubmitting}
+                  disabled={isCompleted || isSubmitting || isTranscribing || recording}
                   style={{
                     background: '#F1F5F9',
                     color: '#64748B',
@@ -1198,8 +1208,8 @@ export const InterviewRoom: React.FC = () => {
                     padding: '10px 16px',
                     fontSize: '0.875rem',
                     fontWeight: 600,
-                    cursor: (isCompleted || isSubmitting) ? 'not-allowed' : 'pointer',
-                    opacity: (isCompleted || isSubmitting) ? 0.5 : 1,
+                    cursor: (isCompleted || isSubmitting || isTranscribing || recording) ? 'not-allowed' : 'pointer',
+                    opacity: (isCompleted || isSubmitting || isTranscribing || recording) ? 0.5 : 1,
                     transition: 'all 0.2s',
                   }}
                   title="Bỏ qua câu hỏi này và không chấm điểm"
@@ -1207,7 +1217,7 @@ export const InterviewRoom: React.FC = () => {
                   Bỏ qua câu này
                 </button>
 
-                <button
+                {activeMode === 'Text' && <button
                   type="button"
                   className="btn-send-answer"
                   onClick={handleNextQuestion}
@@ -1244,14 +1254,14 @@ export const InterviewRoom: React.FC = () => {
                       <Send size={16} />
                     </>
                   )}
-                </button>
+                </button>}
               </div>
             </div>
           </div>
         </motion.div>
 
         {/* Right Column: STAR Coaching Assistant */}
-        <RoomSidebar hint={questions[currentIndex]?.hint} />
+        <RoomSidebar hint={currentQuestion?.hint} showStar={showStarHelper} language={interviewLanguage ?? 'vi'} />
       </div>
     </div>
   );

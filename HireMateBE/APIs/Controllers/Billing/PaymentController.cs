@@ -1,4 +1,5 @@
 using HireMate.Modules.Billing.Abstractions;
+using Common;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -42,7 +43,7 @@ public class PaymentController(IBillingService billing, IConfiguration config) :
         using var reader = new StreamReader(Request.Body);
         var body = await reader.ReadToEndAsync();
         var result = await billing.HandlePayOsWebhookAsync(body);
-        return Ok(new { error = result.Status > 0 ? (int?)null : 1, message = result.Message });
+        return Ok(new { error = result.Status == Const.SUCCESS_UPDATE_CODE ? (int?)null : 1, message = result.Message });
     }
 }
 

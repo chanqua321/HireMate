@@ -13,8 +13,22 @@ export interface RequestOptions extends RequestInit {
 }
 
 export const getBaseUrl = (): string => {
-  const envUrl = (import.meta as any).env?.VITE_API_BASE_URL;
-  return envUrl ? envUrl.replace(/\/$/, '') : 'https://localhost:7080/api';
+  const envUrl = String((import.meta as any).env?.VITE_API_BASE_URL || '').trim();
+  if (envUrl) {
+    let parsed: URL;
+    try {
+      parsed = new URL(envUrl);
+    } catch {
+      throw new Error('VITE_API_BASE_URL phải là URL tuyệt đối hợp lệ.');
+    }
+    if ((import.meta as any).env?.PROD &&
+        (parsed.protocol !== 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname))) {
+      throw new Error('VITE_API_BASE_URL production phải dùng HTTPS và không trỏ về localhost.');
+    }
+    return envUrl.replace(/\/+$/, '');
+  }
+  if ((import.meta as any).env?.DEV) return 'https://localhost:7080/api';
+  throw new Error('Thiếu VITE_API_BASE_URL cho frontend production.');
 };
 
 export const getFileUrl = (relativePath: string): string => {

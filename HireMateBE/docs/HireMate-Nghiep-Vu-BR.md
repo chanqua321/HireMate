@@ -410,7 +410,7 @@ Admin CMS, user, revenue, ticket **không** bắt `OnboardingCompleted` theo lu�
 
 ## BR26. Nội dung công khai
 
-Waitlist, contact, ticket, blog, FAQ, pages, resources, bảng giá, question-bank (xem) không login.
+Waitlist, contact, ticket, blog, FAQ, pages, resources và bảng giá không yêu cầu đăng nhập. Question Bank là dữ liệu quản trị, chỉ Admin được xem và chỉnh sửa; người dùng chỉ nhận câu hỏi hiện tại trong phiên phỏng vấn.
 
 - Mức: Không bắt buộc T1
 

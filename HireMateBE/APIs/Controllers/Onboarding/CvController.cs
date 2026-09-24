@@ -9,7 +9,7 @@ namespace APIs.Controllers.Onboarding;
 
 [Authorize(Roles = AppRoles.Authenticated)]
 [Route("api/[controller]")]
-public class CvController(ICvService svc, IWebHostEnvironment env) : HireMateControllerBase
+public class CvController(ICvService svc) : HireMateControllerBase
 {
     [HttpPost("upload")]
     [RequestSizeLimit(10_000_000)]
@@ -18,15 +18,13 @@ public class CvController(ICvService svc, IWebHostEnvironment env) : HireMateCon
         [FromForm] string? displayName = null,
         [FromForm] Guid? templateId = null)
     {
-        var root = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
-        return this.FromService(await svc.UploadAsync(UserId, file, root, displayName, templateId), 201);
+        return this.FromService(await svc.UploadAsync(UserId, file, displayName, templateId), 201);
     }
 
     [HttpPost("wizard")]
     public async Task<IActionResult> Wizard([FromBody] CvWizardDto dto)
     {
-        var root = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
-        return this.FromService(await svc.CreateFromWizardAsync(UserId, dto, root), 201);
+        return this.FromService(await svc.CreateFromWizardAsync(UserId, dto), 201);
     }
 
     [HttpGet]
@@ -36,6 +34,14 @@ public class CvController(ICvService svc, IWebHostEnvironment env) : HireMateCon
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id)
         => this.FromService(await svc.GetAsync(UserId, id));
+
+    [HttpGet("{id:guid}/edit")]
+    public async Task<IActionResult> GetEdit(Guid id)
+        => this.FromService(await svc.GetEditAsync(UserId, id));
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] CvWizardDto dto)
+        => this.FromService(await svc.UpdateAsync(UserId, id, dto));
 
     [HttpPut("{id:guid}/name")]
     public async Task<IActionResult> Rename(Guid id, [FromBody] RenameCvDto dto)

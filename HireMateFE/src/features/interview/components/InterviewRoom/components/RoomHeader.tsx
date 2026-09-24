@@ -16,6 +16,7 @@ interface RoomHeaderProps {
   lockMode?: boolean;
   sessionLabel?: string;
   warningText?: string | null;
+  language: 'vi' | 'en';
 }
 
 export const RoomHeader: React.FC<RoomHeaderProps> = ({
@@ -31,7 +32,9 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
   lockMode = false,
   sessionLabel,
   warningText,
+  language,
 }) => {
+  const en = language === 'en';
   return (
     <motion.div
       className="room-header-card"
@@ -44,8 +47,8 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
           className={`room-interviewer-avatar ${isAiSpeaking ? 'speaking' : ''}`}
           title={
             isAiSpeaking
-              ? 'Cố vấn AI đang nói...'
-              : 'Cố vấn AI HireMate đang lắng nghe'
+              ? (en ? 'AI Coach is speaking...' : 'Cố vấn AI đang nói...')
+              : (en ? 'HireMate AI Coach is listening' : 'Cố vấn AI HireMate đang lắng nghe')
           }
         >
           <Bot size={26} />
@@ -54,7 +57,7 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
 
         <div className="room-role-tag">
           <span className="room-eyebrow">
-            <Sparkles size={13} /> {sessionLabel || 'Phỏng vấn AI thực chiến'}
+            <Sparkles size={13} /> {sessionLabel || (en ? 'AI mock interview' : 'Phỏng vấn AI thực chiến')}
           </span>
           <h2 className="room-role-title">{currentRole}</h2>
         </div>
@@ -65,10 +68,10 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
           type="button"
           className={`room-audio-toggle ${isAiSpeaking ? 'speaking' : ''}`}
           onClick={onToggleSpeech}
-          title="Nghe lại câu hỏi bằng giọng AI"
+          title={en ? 'Listen to the latest AI message' : 'Nghe lại nội dung AI gần nhất'}
         >
           {isAiSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
-          <span>{isAiSpeaking ? 'AI đang nói...' : 'Phát lại giọng AI'}</span>
+          <span>{isAiSpeaking ? (en ? 'AI is speaking...' : 'AI đang nói...') : (en ? 'Listen again' : 'Nghe lại câu hỏi')}</span>
         </button>
 
         {!lockMode && (
@@ -108,7 +111,7 @@ export const RoomHeader: React.FC<RoomHeaderProps> = ({
         )}
 
         <div className="room-question-badge">
-          Câu {currentIndex + 1} / {totalQuestions || 5}
+          {en ? 'Question' : 'Câu'} {currentIndex + 1} / {totalQuestions || 5}
         </div>
       </div>
     </motion.div>

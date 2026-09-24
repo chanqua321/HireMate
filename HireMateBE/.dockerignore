@@ -5,6 +5,8 @@
 **/docs
 **/*.user
 **/wwwroot/uploads
+**/private-uploads
+**/private-files
 **/.env
 **/.env.*
 !**/.env.example

@@ -16,6 +16,9 @@ public sealed class CvExtractDraft
     public List<string> Skills { get; set; } = [];
     public List<string> Hobbies { get; set; } = [];
     public List<CvExperienceItem> Experiences { get; set; } = [];
+    public List<string> Education { get; set; } = [];
+    public List<string> Projects { get; set; } = [];
+    public List<string> Certifications { get; set; } = [];
 }
 
 public sealed class CvExperienceItem
@@ -74,10 +77,6 @@ public static class CvAnalysisParser
         return false;
     }
 
-    /// <summary>Đọc điểm; thiếu key → dùng default (không fail cả analyze).</summary>
-    public static int ReadScoreOr(JsonElement root, string key, int fallback)
-        => TryReadScore(root, key, out var s) ? s : fallback;
-
     public static List<string> ReadSuggestions(JsonElement root)
     {
         if (!root.TryGetProperty("suggestions", out var arr) || arr.ValueKind != JsonValueKind.Array)
@@ -125,19 +124,21 @@ public static class CvAnalysisParser
         draft.DesiredPosition = Str(ex, "desiredPosition");
         draft.ExperienceLevel = Str(ex, "experienceLevel");
         draft.Bio = Str(ex, "bio");
-        if (ex.TryGetProperty("graduationYear", out var y) && y.TryGetInt32(out var year))
+        if (ex.TryGetProperty("graduationYear", out var y) && y.ValueKind == JsonValueKind.Number && y.TryGetInt32(out var year))
             draft.GraduationYear = year;
         draft.Skills = StrList(ex, "skills");
         draft.Hobbies = StrList(ex, "hobbies");
         draft.Experiences = ReadExperiences(ex);
+        draft.Education = StrList(ex, "education");
+        draft.Projects = StrList(ex, "projects");
+        draft.Certifications = StrList(ex, "certifications");
         return draft;
     }
 
     public static bool ParseLooksComplete(CvExtractDraft d)
         => !string.IsNullOrWhiteSpace(d.FullName)
-           && !string.IsNullOrWhiteSpace(d.University)
-           && !string.IsNullOrWhiteSpace(d.DesiredIndustry)
-           && !string.IsNullOrWhiteSpace(d.DesiredPosition);
+           && (!string.IsNullOrWhiteSpace(d.University) || d.Education.Count > 0
+               || d.Experiences.Count > 0 || d.Projects.Count > 0 || d.Skills.Count > 0);
 
     private static string? Str(JsonElement el, string key)
         => el.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String
@@ -149,7 +150,7 @@ public static class CvAnalysisParser
         if (!el.TryGetProperty(key, out var arr) || arr.ValueKind != JsonValueKind.Array)
             return [];
         return arr.EnumerateArray()
-            .Select(x => x.GetString()?.Trim())
+            .Select(x => x.ValueKind == JsonValueKind.String ? x.GetString()?.Trim() : null)
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .Cast<string>()
             .Take(30)
@@ -176,7 +177,7 @@ public static class CvAnalysisParser
     }
 
     public static string CompactPromptSuffix(int maxChars) =>
-        $" Trả JSON thu gọn, không markdown, tối đa {maxChars} ký tự. Chỉ các key: parseSucceeded, format, keywords, readability, professionalism, readinessScore, fitT1, extract, suggestions.";
+        $" Return compact JSON without markdown, at most {maxChars} characters. Keys: parseSucceeded, format, keywords, readability, professionalism, readinessScore, fitT1, extract, suggestions.";
 }
 
 

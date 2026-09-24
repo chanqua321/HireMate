@@ -7,6 +7,8 @@ interface RoomEntranceOverlayProps {
   isEntering: boolean;
   entranceStep: number;
   currentRole: string;
+  canStart: boolean;
+  errorMessage?: string | null;
   onStartInterview: () => void;
 }
 
@@ -14,6 +16,8 @@ export const RoomEntranceOverlay: React.FC<RoomEntranceOverlayProps> = ({
   isEntering,
   entranceStep,
   currentRole,
+  canStart,
+  errorMessage,
   onStartInterview,
 }) => {
   return (
@@ -58,13 +62,15 @@ export const RoomEntranceOverlay: React.FC<RoomEntranceOverlayProps> = ({
                   size={16}
                   color={entranceStep >= 3 ? '#22c55e' : '#64748b'}
                 />
-                <span>Kích hoạt khung tiêu chuẩn đánh giá STAR</span>
+                <span>Chuẩn bị gợi ý trả lời phù hợp từng câu hỏi</span>
               </div>
             </div>
 
+            {errorMessage && <p role="alert" style={{ color: '#FCA5A5', marginBottom: 12 }}>{errorMessage}</p>}
             <button
               type="button"
               className="entrance-start-btn"
+              disabled={!canStart}
               onClick={onStartInterview}
             >
               <span>Sẵn sàng & Bắt đầu phỏng vấn</span>

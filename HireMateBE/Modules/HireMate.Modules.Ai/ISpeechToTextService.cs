@@ -29,5 +29,6 @@ public interface ISpeechToTextService
         Stream audio,
         string fileName,
         string contentType,
+        string language,
         CancellationToken ct = default);
 }

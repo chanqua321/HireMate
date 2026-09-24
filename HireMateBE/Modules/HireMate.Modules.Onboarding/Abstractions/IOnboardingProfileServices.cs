@@ -7,11 +7,13 @@ namespace HireMate.Modules.Onboarding.Abstractions;
 
 public interface ICvService
 {
-    Task<IServiceResult> UploadAsync(Guid userId, IFormFile file, string webRoot, string? displayName = null, Guid? templateId = null);
-    Task<IServiceResult> CreateFromWizardAsync(Guid userId, CvWizardDto dto, string webRoot);
+    Task<IServiceResult> UploadAsync(Guid userId, IFormFile file, string? displayName = null, Guid? templateId = null);
+    Task<IServiceResult> CreateFromWizardAsync(Guid userId, CvWizardDto dto);
     Task<IServiceResult> PreviewDraftAsync(Guid userId, CvWizardDto dto);
     Task<IServiceResult> ListAsync(Guid userId);
     Task<IServiceResult> GetAsync(Guid userId, Guid id);
+    Task<IServiceResult> GetEditAsync(Guid userId, Guid id);
+    Task<IServiceResult> UpdateAsync(Guid userId, Guid id, CvWizardDto dto);
     Task<IServiceResult> AnalyzeAsync(Guid userId, Guid id);
     /// <summary>Trả FileDownloadDto trong Data khi thành công.</summary>
     Task<IServiceResult> GetDownloadAsync(Guid userId, Guid id);

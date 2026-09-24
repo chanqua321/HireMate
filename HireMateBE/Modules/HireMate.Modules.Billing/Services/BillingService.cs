@@ -338,24 +338,27 @@ public class BillingService(
         if (!_payOs.Enabled)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "PayOS đang tắt");
 
-        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(jsonBody) ? "{}" : jsonBody);
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(jsonBody) ? "{}" : jsonBody); }
+        catch (JsonException) { return new ServiceResult(Const.FAIL_UPDATE_CODE, "Webhook PayOS không hợp lệ"); }
+        using var parsedWebhook = doc;
         var root = doc.RootElement;
-        var signature = root.TryGetProperty("signature", out var sig) ? sig.GetString() ?? "" : "";
-        if (!root.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
+        if (root.ValueKind != JsonValueKind.Object)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Webhook PayOS không hợp lệ");
+        var signature = root.TryGetProperty("signature", out var sig) && sig.ValueKind == JsonValueKind.String
+            ? sig.GetString() ?? "" : "";
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Webhook PayOS không hợp lệ");
 
         if (!PayOsHelper.VerifyWebhookSignature(data, signature, _payOs.ChecksumKey))
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Chữ ký PayOS không hợp lệ");
 
         var orderCode = data.TryGetProperty("orderCode", out var oc)
-            ? (oc.ValueKind == JsonValueKind.Number ? oc.GetInt64().ToString() : oc.GetString())
-            : null;
-        decimal? webhookAmount = null;
-        if (data.TryGetProperty("amount", out var amtEl))
-        {
-            if (amtEl.TryGetDecimal(out var ad)) webhookAmount = ad;
-            else if (amtEl.TryGetInt64(out var al)) webhookAmount = al;
-        }
+            && oc.ValueKind == JsonValueKind.Number && oc.TryGetInt64(out var code) && code > 0
+                ? code.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+        if (orderCode == null)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mã đơn PayOS không hợp lệ");
+        var webhookAmount = PayOsHelper.ReadPaidAmount(data);
 
         var payment = await uow.PaymentRepository.GetQueryable()
             .Include(p => p.Invoice)!.ThenInclude(i => i!.Plan)
@@ -363,6 +366,11 @@ public class BillingService(
 
         if (payment?.Invoice == null)
             return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy đơn hàng");
+
+        if (PayOsHelper.IsSuccessfulWebhookData(data)
+            && (!webhookAmount.HasValue || webhookAmount.Value != payment.Invoice.AmountVnd
+                || webhookAmount.Value != payment.AmountVnd))
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Số tiền PayOS không hợp lệ hoặc không khớp hóa đơn.");
 
         if (IsAlreadySettled(payment))
             return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đơn hàng đã được thanh toán", new { success = true, idempotent = true });
@@ -437,6 +445,8 @@ public class BillingService(
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Không xác minh được trạng thái PayOS (timeout/lỗi mạng). Thử lại sau.");
         }
 
+        if (detail != null && detail.OrderCode != orderCode)
+            return new ServiceResult(Const.FAIL_UPDATE_CODE, "Mã đơn PayOS không khớp");
         var paidByApi = string.Equals(detail?.Status, "PAID", StringComparison.OrdinalIgnoreCase);
         if (!paidByApi)
         {
@@ -575,7 +585,7 @@ public class BillingService(
 
     /// <summary>
     /// Atomic settle: only Pending → Success. Duplicate calls are idempotent.
-    /// Verifies amount when provided. Applies plan once inside the same transaction.
+    /// Requires an exact provider amount matching the server-side invoice before any paid transition.
     /// </summary>
     private async Task<SettleResult> TrySettlePaymentAsync(Guid paymentId, decimal? verifiedAmountVnd, string source)
     {
@@ -592,6 +602,18 @@ public class BillingService(
                 return SettleResult.Fail("Không tìm thấy đơn thanh toán");
             }
 
+            if (!verifiedAmountVnd.HasValue || verifiedAmountVnd.Value <= 0 || payment.Invoice.AmountVnd <= 0)
+            {
+                await tx.RollbackAsync();
+                return SettleResult.Fail("Không xác minh được số tiền thanh toán hợp lệ.");
+            }
+            if (payment.Invoice.Id != payment.InvoiceId || payment.AmountVnd != payment.Invoice.AmountVnd
+                || verifiedAmountVnd.Value != payment.Invoice.AmountVnd)
+            {
+                await tx.RollbackAsync();
+                return SettleResult.Fail("Số tiền thanh toán không khớp hóa đơn (từ chối cấp gói).");
+            }
+
             if (payment.Status == PaymentStatuses.Success && payment.Invoice.Status == InvoiceStatuses.Paid)
             {
                 await tx.CommitAsync();
@@ -602,16 +624,6 @@ public class BillingService(
             {
                 await tx.RollbackAsync();
                 return SettleResult.Fail($"Đơn hàng ở trạng thái {payment.Status}, không thể thanh toán.");
-            }
-
-            if (verifiedAmountVnd.HasValue)
-            {
-                var expected = payment.AmountVnd;
-                if (Math.Abs(verifiedAmountVnd.Value - expected) > 0.01m)
-                {
-                    await tx.RollbackAsync();
-                    return SettleResult.Fail("Số tiền thanh toán không khớp hóa đơn (từ chối cấp gói).");
-                }
             }
 
             // Conditional update — race-safe if two handlers run together.
@@ -636,12 +648,13 @@ public class BillingService(
             await db.SaveChangesAsync();
 
             var user = await users.FindByIdAsync(payment.Invoice.UserId.ToString());
-            if (user != null)
-            {
-                ApplyPlanFlags(user, payment.Invoice.Plan, renew: true);
-                user.UpdatedAt = DateTime.UtcNow;
-                await users.UpdateAsync(user);
-            }
+            if (user == null || payment.Invoice.Plan == null)
+                throw new InvalidOperationException("Payment invoice has no valid user or plan.");
+            ApplyPlanFlags(user, payment.Invoice.Plan, renew: true);
+            user.UpdatedAt = DateTime.UtcNow;
+            var updateUser = await users.UpdateAsync(user);
+            if (!updateUser.Succeeded)
+                throw new InvalidOperationException("Unable to apply paid plan entitlement.");
 
             await tx.CommitAsync();
             return SettleResult.Success($"Thanh toán thành công ({source})");

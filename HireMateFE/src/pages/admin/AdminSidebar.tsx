@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, TrendingUp, MessageSquare,
   FileText, HelpCircle, BookOpen, CreditCard, Tag,
@@ -46,6 +46,7 @@ const menuStructure: MenuEntry[] = [
     icon: <Briefcase size={18} />,
     items: [
       { type: 'item', name: 'Thống kê phỏng vấn', path: '/admin/interviews', icon: <Briefcase size={16} /> },
+      { type: 'item', name: 'Ngân hàng câu hỏi', path: '/admin/questions', icon: <ListOrdered size={16} /> },
     ],
   },
   {
@@ -92,11 +93,24 @@ interface AdminSidebarProps {
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { logout } = useApp();
-  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => ({
     'Người dùng': true,
     'Tài chính': true,
-  });
+    ...Object.fromEntries(menuStructure
+      .filter((entry): entry is FolderDef => entry.type === 'folder')
+      .filter(entry => entry.items.some(item => pathname === item.path || pathname.startsWith(`${item.path}/`)))
+      .map(entry => [entry.name, true])),
+  }));
+
+  useEffect(() => {
+    const activeFolder = menuStructure.find((entry): entry is FolderDef =>
+      entry.type === 'folder' && entry.items.some(item => pathname === item.path || pathname.startsWith(`${item.path}/`)));
+    if (activeFolder) {
+      setOpenFolders(prev => prev[activeFolder.name] ? prev : { ...prev, [activeFolder.name]: true });
+    }
+  }, [pathname]);
 
   const toggleFolder = (name: string) => {
     setOpenFolders(prev => ({ ...prev, [name]: !prev[name] }));

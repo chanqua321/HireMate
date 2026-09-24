@@ -25,6 +25,16 @@ public class Question
     [MaxLength(50)]
     public string Difficulty { get; set; } = "Medium";
 
+    [MaxLength(2)]
+    public string Language { get; set; } = "vi";
+
+    [MaxLength(30)]
+    public string? Seniority { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public Guid? CreatedBy { get; set; }
+
     public bool IsActive { get; set; } = true;
 }
 

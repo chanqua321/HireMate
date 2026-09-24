@@ -8,7 +8,8 @@ import { OnboardingSummary } from '../../features/onboarding';
 import { Pricing, Checkout, FreePlanActivation, PaymentSuccess, Invoice } from '../../features/billing';
 import { BillingResult } from '../../pages/billing/BillingResult';
 import { Dashboard } from '../../features/dashboard';
-import { InterviewSetup, InterviewRoom, Feedback, Questions } from '../../features/interview';
+import { InterviewSetup, InterviewRoom, Feedback } from '../../features/interview';
+import AdminQuestions from '../../pages/admin/AdminQuestions';
 import { RequirePremium } from '../../components/common/RequirePremium';
 
 // Candidate Systems
@@ -83,8 +84,8 @@ export const AppRouter: React.FC = () => {
         <Route path="feedback" element={<Feedback />} />
         <Route path="feedback.html" element={<Feedback />} />
         {/* Questions (Chỉ Admin mới có quyền truy cập) */}
-        <Route path="questions" element={<AdminRouteGuard><Questions /></AdminRouteGuard>} />
-        <Route path="questions.html" element={<AdminRouteGuard><Questions /></AdminRouteGuard>} />
+        <Route path="questions" element={<AdminRouteGuard><Navigate to="/admin/questions" replace /></AdminRouteGuard>} />
+        <Route path="questions.html" element={<AdminRouteGuard><Navigate to="/admin/questions" replace /></AdminRouteGuard>} />
 
         {/* Dashboard */}
         <Route path="dashboard" element={<Dashboard />} />
@@ -114,6 +115,7 @@ export const AppRouter: React.FC = () => {
         <Route index element={<AdminDashboard />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="interviews" element={<AdminInterviews />} />
+        <Route path="questions" element={<AdminQuestions />} />
         <Route path="revenue" element={<AdminRevenue />} />
         <Route path="plans" element={<AdminPlans />} />
         <Route path="promos" element={<AdminPromos />} />
