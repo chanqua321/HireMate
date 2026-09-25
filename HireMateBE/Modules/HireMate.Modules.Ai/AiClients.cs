@@ -307,7 +307,7 @@ internal static class AiLength
 {
     public static int ToMaxTokens(int? maxOutputChars)
     {
-        var chars = Math.Clamp(maxOutputChars ?? 1400, 200, 4000);
+        var chars = Math.Clamp(maxOutputChars ?? 1400, 200, 8000);
         return Math.Max(64, chars * 2 / 3);
     }
 }

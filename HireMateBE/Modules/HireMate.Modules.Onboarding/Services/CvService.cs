@@ -287,13 +287,12 @@ public class CvService(
 
         var alreadyOk = doc.ParseSucceeded && doc.AnalyzedAt != null;
 
-        var snap = await aiQuota.GetSnapshotAsync(user);
-        var maxOut = snap.MaxOutputChars;
+        var maxOut = AiQuotaService.CvAnalysisMaxOutputChars;
         var detectedLanguage = CvLanguage.Detect(doc.ExtractedText);
         var promptUser = $"Detected CV language: {detectedLanguage.Language}; dominant: {detectedLanguage.Dominant ?? "unknown"}. This is a signal, not a fact. Raw CV text follows unchanged:\n{doc.ExtractedText}{CvAnalysisParser.CompactPromptSuffix(maxOut)}";
         var system = "Analyze text-based Vietnamese, English, or mixed CVs with the same scoring criteria. Return JSON only, with fixed English keys: parseSucceeded, format, keywords, readability, professionalism, readinessScore, fitT1 (integer 0-100), extract{fullName,university,major,graduationYear,desiredIndustry,desiredPosition,experienceLevel,bio,skills[],hobbies[],experiences[{title,org,period,description}],education[],projects[],certifications[]}, suggestions[]. Recognize equivalent VI/EN section headings including Education/Học vấn, Work Experience/Kinh nghiệm làm việc, Skills/Kỹ năng, Projects/Dự án, Certifications/Chứng chỉ. Preserve all facts, dates, company/project/technology names and original data language. Do not translate or invent skills, experience, education, projects, certificates or a target role. Missing fields must be null or empty arrays. Suggestions may use the CV's dominant language. If evidence is insufficient, set parseSucceeded false; do not fabricate scores.";
 
-        var quotaBlock = await aiQuota.EnsureCanCallAsync(user, system.Length + promptUser.Length);
+        var quotaBlock = await aiQuota.EnsureCanCallAsync(user, system.Length + promptUser.Length, maxOut);
         if (quotaBlock != null)
             return quotaBlock;
 
@@ -306,7 +305,8 @@ public class CvService(
         try
         {
             aiResult = await aiQuota.CompleteAndLogAsync(
-                user, system, promptUser, "cv", doc.Id, SettingKeys.AiCvAnalyzeMaxOutputChars);
+                user, system, promptUser, "cv", doc.Id, SettingKeys.AiCvAnalyzeMaxOutputChars,
+                responseSchema: CvAnalysisSchema.ResponseSchema);
         }
         catch
         {

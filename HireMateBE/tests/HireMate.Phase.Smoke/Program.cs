@@ -11,6 +11,25 @@ using Common.DTOs.PublicDto;
 using HireMate.Modules.Interview.Services;
 using Infrastructure.Models;
 
+if (args.Length == 2 && args[0] == "--live-cv")
+{
+    using var settings = JsonDocument.Parse(File.ReadAllText(args[1]),
+        new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+    var opts = settings.RootElement.GetProperty("Ai").Deserialize<AiOptions>(
+        new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+    using var http = new HttpClient { BaseAddress = new Uri(opts.BaseUrl.TrimEnd('/') + "/") };
+    IAiClient client = opts.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase)
+        ? new GeminiAiClient(http, Options.Create(opts), NullLogger<GeminiAiClient>.Instance)
+        : new OpenAiCompatibleAiClient(http, Options.Create(opts), NullLogger<OpenAiCompatibleAiClient>.Instance);
+    await CvAnalysisSmoke.RunAsync(Check, client);
+    await CvAnalysisSmoke.RunAsync(Check, client, vietnamese: true);
+    return;
+}
+if (args.Length > 0 && args[0] == "--cv-schema")
+{
+    Console.WriteLine(CvAnalysisSchema.ResponseSchema.GetRawText());
+    return;
+}
 if (args.Length >= 2 && args[0] == "--evaluation-schema")
 {
     Console.WriteLine(InterviewEvaluationPolicy.ResponseSchema(args[1],
@@ -47,6 +66,7 @@ await AdminSeedSmoke.RunAsync(Check);
 await FileStorageSmoke.RunAsync(Check);
 await CvUploadSmoke.RunAsync(Check);
 await CvEditSmoke.RunAsync(Check);
+await CvAnalysisSmoke.RunAsync(Check);
 await PayOsSettlementSmoke.RunAsync(Check);
 
 var en = """
@@ -308,6 +328,22 @@ var smallResponse = await outputClient.CompleteAsync("system", "user", maxOutput
     responseSchema: InterviewEvaluationPolicy.ResponseSchema("Technical"));
 Check(smallResponse.Content == "{\"ok\":true}" && outputHandler.RequestBody.Contains("json_schema"),
     "OpenAI client sends strict schema and retains complete JSON");
+var longCvJson = JsonSerializer.Serialize(new { extract = new { bio = new string('x', 2200) } });
+outputHandler.Json = JsonSerializer.Serialize(new { choices = new[] { new
+    { finish_reason = "stop", message = new { content = longCvJson } } } });
+var cvResponse = await outputClient.CompleteAsync("Analyze CV", "Synthetic CV",
+    maxOutputChars: AiQuotaService.CvAnalysisMaxOutputChars, responseSchema: CvAnalysisSchema.ResponseSchema);
+Check(cvResponse.Content == longCvJson, "CV JSON exceeding short-reply limit remains intact");
+using (var cvRequest = JsonDocument.Parse(outputHandler.RequestBody))
+{
+    Check(cvRequest.RootElement.GetProperty("max_completion_tokens").GetInt32() > 2666,
+        "CV token budget accommodates structured extraction beyond 4000 chars");
+    var schema = cvRequest.RootElement.GetProperty("response_format").GetProperty("json_schema");
+    Check(schema.GetProperty("strict").GetBoolean()
+        && schema.GetProperty("schema").GetProperty("properties").TryGetProperty("extract", out _),
+        "CV calls request the extraction schema in strict mode");
+}
+outputHandler.Json = "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":\"{\\\"ok\\\":true}\"}}]}";
 Check((await outputClient.CompleteAsync("system", "user", maxOutputChars: 5,
     responseSchema: InterviewEvaluationPolicy.ResponseSchema("Technical"))).Content == "",
     "Over-limit provider output is rejected, never truncated into a partial JSON object");

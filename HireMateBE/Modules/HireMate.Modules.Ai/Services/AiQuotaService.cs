@@ -78,6 +78,8 @@ public class AiQuotaService(
     // Evaluation needs a complete evidence JSON. This changes only its per-call buffer;
     // plan entitlements and monthly character budgets remain unchanged.
     public const int InterviewEvaluationMaxOutputChars = 4000;
+    // CV extraction contains multiple sections, unlike a short text-assist reply.
+    public const int CvAnalysisMaxOutputChars = 8000;
     public string CurrentPeriodKey()
     {
         var now = DateTime.UtcNow;
@@ -204,9 +206,12 @@ public class AiQuotaService(
     {
         var snap = await GetSnapshotAsync(user);
         var kindMax = await config.GetIntAsync(settingKey, snap.MaxOutputChars);
-        var maxOut = kind == "interview_answer_analysis"
-            ? InterviewEvaluationMaxOutputChars
-            : Math.Min(snap.MaxOutputChars, kindMax);
+        var maxOut = kind switch
+        {
+            "interview_answer_analysis" => InterviewEvaluationMaxOutputChars,
+            "cv" => CvAnalysisMaxOutputChars,
+            _ => Math.Min(snap.MaxOutputChars, kindMax)
+        };
         var result = await ai.CompleteAsync(systemPrompt, userPrompt,
             maxOutputChars: maxOut, responseSchema: responseSchema);
 
