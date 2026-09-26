@@ -227,15 +227,45 @@
 }
 
 @media (max-width: 640px) {
+  .dashboard-main-content {
+    padding: 12px 10px 32px;
+  }
+  .dashboard-welcome-heading {
+    font-size: 1.45rem;
+  }
+  .dashboard-header-sub {
+    font-size: 0.85rem;
+  }
+  .dashboard-status-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .quick-action-card {
+    padding: 14px 16px;
+  }
+  .candidate-profile-card {
+    padding: 16px 12px;
+    border-radius: 16px;
+  }
   .profile-card-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
   }
   .profile-segmented-nav {
     width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px;
+  }
+  .profile-segmented-nav::-webkit-scrollbar {
+    display: none;
   }
   .segmented-tab-btn {
-    flex: 1;
-    justify-content: center;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 }

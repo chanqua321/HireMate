@@ -2,14 +2,12 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FileText,
   Sparkles,
   UploadCloud,
   CheckCircle2,
   X,
   ArrowRight,
   Bot,
-  Video,
 } from 'lucide-react';
 import './CvRequiredModal.css';
 
@@ -47,15 +45,6 @@ export const CvRequiredModal: React.FC<CvRequiredModalProps> = ({
       onSelectCreate();
     } else {
       navigate('/dashboard?tab=manual');
-    }
-  };
-
-  const handlePreviewAnyway = () => {
-    onClose();
-    if (onContinueAnyway) {
-      onContinueAnyway();
-    } else {
-      navigate('/interview-setup');
     }
   };
 
@@ -161,17 +150,6 @@ export const CvRequiredModal: React.FC<CvRequiredModalProps> = ({
                 </p>
               </div>
               <ArrowRight size={16} className="cv-req-action-arrow" />
-            </button>
-          </div>
-
-          {/* Bottom dismiss / skip preview */}
-          <div className="cv-req-footer">
-            <button
-              type="button"
-              className="cv-req-skip-btn"
-              onClick={handlePreviewAnyway}
-            >
-              Tôi vẫn muốn xem trước phòng phỏng vấn →
             </button>
           </div>
         </motion.div>

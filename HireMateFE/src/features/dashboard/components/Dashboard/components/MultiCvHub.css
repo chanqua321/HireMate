@@ -906,3 +906,67 @@
   cursor: not-allowed;
 }
 
+/* Responsive for MultiCvHub */
+@media (max-width: 768px) {
+  .multi-cv-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .add-cv-toggle-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .active-cv-spotlight-card {
+    padding: 16px 14px;
+    border-radius: 14px;
+  }
+
+  .active-cv-top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .active-cv-body {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .active-cv-actions-right {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .action-btn-interview,
+  .action-btn-detail,
+  .action-btn-match {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .multi-cv-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .cv-item-card {
+    padding: 14px;
+  }
+
+  .other-cvs-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .other-cvs-scroll-box {
+    max-height: 480px;
+    padding-right: 4px;
+  }
+}
+

@@ -191,3 +191,38 @@
   gap: 6px;
   cursor: pointer;
 }
+
+@media (max-width: 640px) {
+  .cv-detail-modal-overlay {
+    padding: 12px;
+  }
+
+  .cv-detail-modal-card {
+    padding: 24px 16px 20px;
+    border-radius: 18px;
+    max-height: 92vh;
+  }
+
+  .cv-detail-scores-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .cv-detail-meta-two-col {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .cv-detail-actions-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cv-detail-interview-btn,
+  .cv-detail-set-active-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

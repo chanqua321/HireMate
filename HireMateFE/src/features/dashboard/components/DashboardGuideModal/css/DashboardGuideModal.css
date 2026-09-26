@@ -756,3 +756,57 @@
     justify-content: space-between;
   }
 }
+
+@media (max-width: 560px) {
+  .guide-modal-overlay {
+    padding: 8px;
+  }
+
+  .guide-modal-card {
+    width: 98vw;
+    border-radius: 16px;
+    max-height: 94vh;
+  }
+
+  .guide-modal-header {
+    padding: 12px 14px;
+  }
+
+  .guide-header-title {
+    font-size: 1rem;
+  }
+
+  .guide-header-sub {
+    font-size: 0.76rem;
+  }
+
+  .guide-stepper-bar {
+    padding: 8px 12px;
+  }
+
+  .guide-step-node {
+    padding: 6px 8px;
+  }
+
+  .guide-modal-body {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .single-column-body {
+    padding: 14px;
+  }
+
+  .guide-image-container {
+    height: 200px;
+  }
+
+  .guide-modal-footer {
+    padding: 12px 14px;
+  }
+
+  .guide-footer-left {
+    display: none;
+  }
+}
+
