@@ -29,6 +29,8 @@
   box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
   width: 100%;
   max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
   padding: 36px 32px 28px;
   text-align: center;
   font-family: 'Be Vietnam Pro', 'Inter', -apple-system, sans-serif;
@@ -200,3 +202,41 @@
   color: #94a3b8;
   font-weight: 500;
 }
+
+@media (max-width: 640px) {
+  .auth-modal-backdrop {
+    padding: 12px;
+  }
+
+  .auth-modal-card {
+    padding: 24px 16px 20px;
+    border-radius: 18px;
+    max-height: 92vh;
+  }
+
+  .auth-modal-icon-ring {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 14px;
+    border-radius: 16px;
+  }
+
+  .auth-modal-title {
+    font-size: 1.15rem;
+  }
+
+  .auth-modal-desc {
+    font-size: 0.82rem;
+  }
+
+  .auth-modal-benefits {
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    gap: 8px;
+  }
+
+  .benefit-item {
+    font-size: 0.8rem;
+  }
+}
+

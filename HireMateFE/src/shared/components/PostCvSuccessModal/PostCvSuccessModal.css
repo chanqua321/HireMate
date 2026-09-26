@@ -21,13 +21,14 @@
   position: relative;
   width: 100%;
   max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   border-radius: 24px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   box-shadow:
     0 25px 60px -12px rgba(15, 23, 42, 0.25),
     0 0 0 1px rgba(2, 132, 199, 0.08);
-  overflow: hidden;
   padding: 36px 32px 30px;
 }
 
@@ -411,3 +412,36 @@
   margin-bottom: 18px;
   line-height: 1.5;
 }
+
+@media (max-width: 640px) {
+  .pcv-overlay {
+    padding: 12px;
+  }
+
+  .pcv-modal {
+    padding: 24px 16px 20px;
+    border-radius: 18px;
+    max-height: 92vh;
+  }
+
+  .pcv-title {
+    font-size: 1.15rem;
+  }
+
+  .pcv-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .pcv-score-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .pcv-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+    margin-bottom: 10px;
+  }
+}
+
