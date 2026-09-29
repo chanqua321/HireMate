@@ -49,6 +49,65 @@ const displayBirthDate = (value?: string): string => {
   return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : value || '';
 };
 
+const formatBirthDateInput = (rawValue: string, prevValue: string = ''): string => {
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawValue)) {
+    const parts = rawValue.slice(0, 10).split('-');
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+
+  const cleanDigits = rawValue.replace(/\D/g, '').slice(0, 8);
+  if (!cleanDigits) return '';
+
+  const isDeleting = rawValue.length < prevValue.length;
+
+  if (isDeleting) {
+    if (cleanDigits.length <= 2) {
+      return cleanDigits;
+    }
+    if (cleanDigits.length <= 4) {
+      return `${cleanDigits.slice(0, 2)}/${cleanDigits.slice(2)}`;
+    }
+    return `${cleanDigits.slice(0, 2)}/${cleanDigits.slice(2, 4)}/${cleanDigits.slice(4)}`;
+  }
+
+  if (cleanDigits.length === 1) {
+    const firstDigit = Number(cleanDigits);
+    if (firstDigit > 3) {
+      return `0${firstDigit}/`;
+    }
+    return cleanDigits;
+  }
+
+  if (cleanDigits.length === 2) {
+    let day = Number(cleanDigits);
+    if (day > 31) day = 31;
+    if (day === 0) day = 1;
+    return `${String(day).padStart(2, '0')}/`;
+  }
+
+  if (cleanDigits.length === 3) {
+    const day = cleanDigits.slice(0, 2);
+    const monthDigit = Number(cleanDigits.slice(2));
+    if (monthDigit > 1) {
+      return `${day}/0${monthDigit}/`;
+    }
+    return `${day}/${cleanDigits.slice(2)}`;
+  }
+
+  if (cleanDigits.length === 4) {
+    const day = cleanDigits.slice(0, 2);
+    let month = Number(cleanDigits.slice(2, 4));
+    if (month > 12) month = 12;
+    if (month === 0) month = 1;
+    return `${day}/${String(month).padStart(2, '0')}/`;
+  }
+
+  const day = cleanDigits.slice(0, 2);
+  const month = cleanDigits.slice(2, 4);
+  const year = cleanDigits.slice(4, 8);
+  return `${day}/${month}/${year}`;
+};
+
 interface CustomComboboxProps {
   value: string;
   onChange: (val: string) => void;
@@ -788,7 +847,26 @@ export const CvWizardModal: React.FC<CvWizardModalProps> = ({
           <label>Số điện thoại *<input required type="tel" value={form.phone || ''} onChange={e => set('phone', e.target.value)}/></label>
           <label>Email *<input required type="email" value={form.email || ''} onChange={e => set('email', e.target.value)}/></label>
           <label>Địa chỉ<input value={form.address || ''} onChange={e => set('address', e.target.value)}/></label>
-          <label>Ngày sinh (DD/MM/YYYY)<input type="text" inputMode="numeric" autoComplete="bday" placeholder="DD/MM/YYYY" maxLength={10} value={birthDateText} onChange={e => { const text = e.target.value.replace(/[^\d/-]/g, '').slice(0, 10); setBirthDateText(text); set('dateOfBirth', parseBirthDate(text) || ''); }} onBlur={() => { const iso = parseBirthDate(birthDateText); if (iso) setBirthDateText(displayBirthDate(iso)); }}/></label>
+          <label>
+            Ngày sinh (DD/MM/YYYY)
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="bday"
+              placeholder="DD/MM/YYYY"
+              maxLength={10}
+              value={birthDateText}
+              onChange={(e) => {
+                const formatted = formatBirthDateInput(e.target.value, birthDateText);
+                setBirthDateText(formatted);
+                set('dateOfBirth', parseBirthDate(formatted) || '');
+              }}
+              onBlur={() => {
+                const iso = parseBirthDate(birthDateText);
+                if (iso) setBirthDateText(displayBirthDate(iso));
+              }}
+            />
+          </label>
           <label>
             Giới tính
             <CustomSelect
