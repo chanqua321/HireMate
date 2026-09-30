@@ -344,6 +344,41 @@
   box-shadow: 0 4px 12px rgba(3, 191, 255, 0.12);
 }
 
+.pricing-card.is-current {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.18);
+}
+
+.current-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.plan-lock-note {
+  margin: 0 0 10px;
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.plan-cta-btn--current,
+.plan-cta-btn:disabled {
+  background: #e2e8f0;
+  color: #475569;
+  border: none;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* ── Trust / Guarantees Banner ── */
 .pricing-trust-banner {
   max-width: 1000px;

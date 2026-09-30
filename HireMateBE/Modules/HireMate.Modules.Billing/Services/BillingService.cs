@@ -85,6 +85,13 @@ public class BillingService(
         var targetRank = PlanTier.Rank(plan.Code);
         var targetCode = plan.Code.Trim().ToLowerInvariant();
 
+        // Already on Free: do not mint another 0đ invoice or a PayOS order.
+        if (targetRank == 0 && currentRank == 0 && user.PlanSelectedAt != null)
+        {
+            return new ServiceResult(Const.FAIL_CREATE_CODE,
+                "Bạn đang dùng gói Miễn phí. Không tạo thêm hóa đơn 0đ.");
+        }
+
         if (currentRank > 0)
         {
             var snap = await aiQuota.GetSnapshotAsync(user);

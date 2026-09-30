@@ -19,6 +19,11 @@ interface PostCvSuccessModalProps {
   onViewDetail?: (cv: CvItemDto) => void;
 }
 
+function atsScore(cv: CvItemDto) {
+  const readiness = (cv as CvItemDto & { readinessScore?: number }).readinessScore;
+  return cv.overallScore ?? readiness;
+}
+
 function scoreColor(score?: number) {
   if (score == null) return '';
   if (score >= 75) return 'green';
@@ -41,6 +46,7 @@ export const PostCvSuccessModal: React.FC<PostCvSuccessModalProps> = ({
   onViewDetail,
 }) => {
   const [activating, setActivating] = React.useState(false);
+  const [actionError, setActionError] = React.useState('');
 
   const handleReady = useCallback(() => {
     // nothing — just re-render with ready state
@@ -56,8 +62,12 @@ export const PostCvSuccessModal: React.FC<PostCvSuccessModalProps> = ({
   const handleActivate = async () => {
     if (!cv || activating) return;
     setActivating(true);
+    setActionError('');
     try {
       await onActivateAndInterview(cv);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Không vào được phòng phỏng vấn.';
+      setActionError(message || 'Không vào được phòng phỏng vấn.');
     } finally {
       setActivating(false);
     }
@@ -210,8 +220,8 @@ export const PostCvSuccessModal: React.FC<PostCvSuccessModalProps> = ({
                 <div className="pcv-score-grid">
                   <div className="pcv-score-card">
                     <span className="pcv-score-label">ATS Score</span>
-                    <span className={`pcv-score-value ${scoreColor(cv.overallScore)}`}>
-                      {scoreLabel(cv.overallScore)}
+                    <span className={`pcv-score-value ${scoreColor(atsScore(cv))}`}>
+                      {scoreLabel(atsScore(cv))}
                     </span>
                   </div>
                   <div className="pcv-score-card">
@@ -268,8 +278,13 @@ export const PostCvSuccessModal: React.FC<PostCvSuccessModalProps> = ({
                   </div>
                 </div>
 
+                {actionError && (
+                  <div className="pcv-parse-warn" role="alert">{actionError}</div>
+                )}
+
                 <div className="pcv-actions">
                   <button
+                    type="button"
                     className="pcv-btn-primary green-btn"
                     onClick={handleActivate}
                     disabled={activating}

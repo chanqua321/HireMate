@@ -69,8 +69,9 @@ export const OnboardingSummary: React.FC = () => {
           cvs.find((c: any) => c.isActive) ||
           null;
 
-        // Analyze + gợi ý sửa chỉ làm lúc tạo/upload CV — không kẹt ở bước này
-        if (next === 'upload_cv' || next === 'analyze' || cvs.length === 0) {
+        // Chỉ quay Kho CV khi hồ sơ thật sự chưa có CV đã phân tích.
+        // List lỗi (mảng rỗng giả) không được đá người vừa bấm "Bắt đầu phỏng vấn" về dashboard.
+        if (next === 'upload_cv' || next === 'analyze' || (!next && cvs.length === 0)) {
           navigate('/dashboard?tab=scan', { replace: true });
           return;
         }

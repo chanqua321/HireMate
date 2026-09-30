@@ -7,7 +7,29 @@ import { AuthRequiredModal } from '../../../../shared/components/AuthRequiredMod
 import { useApp } from '../../../../app/context/AppContext';
 import { billingService } from '../../api/billing.service';
 import { publicService } from '../../../../shared/services';
+import { authService } from '../../../auth/api/auth.service';
 import './css/Pricing.css';
+
+function normalizePlan(code: string) {
+  const value = code.trim().toLowerCase();
+  if (value === 'free' || value === '') return 'free';
+  if (value === 'combo' || value === 'pro' || value === 'cao-cap') return 'combo';
+  if (value === 'premium' || value === 'basic' || value === 'tieu-chuan') return 'premium';
+  return value;
+}
+
+function planRank(code: string) {
+  const value = normalizePlan(code);
+  if (value === 'free') return 0;
+  if (value === 'combo') return 2;
+  return 1;
+}
+
+interface PlanEntitlement {
+  code: string;
+  hasSelectedPlan: boolean;
+  planExpired: boolean;
+}
 
 const PRICING_FAQS = [
   {
@@ -100,12 +122,19 @@ const COMPARISON_ROWS = [
 ];
 
 export const Pricing: React.FC = () => {
-  const { isLoggedIn } = useApp();
+  const { isLoggedIn, refreshProfile } = useApp();
   const navigate = useNavigate();
   const [plans, setPlans] = useState(DEFAULT_PLANS);
   const [faqs, setFaqs] = useState(PRICING_FAQS);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authFeatureName, setAuthFeatureName] = useState('Bảng giá & Gói dịch vụ');
+  const [entitlement, setEntitlement] = useState<PlanEntitlement | null>(null);
+
+  const activeCode = entitlement?.planExpired
+    ? 'free'
+    : normalizePlan(entitlement?.code || 'free');
+  const hasActivePlan = Boolean(entitlement?.hasSelectedPlan || entitlement?.planExpired);
+  const activeRank = hasActivePlan ? planRank(activeCode) : -1;
 
   const handlePlanAction = (plan: (typeof DEFAULT_PLANS)[0]) => {
     if (!isLoggedIn) {
@@ -113,8 +142,32 @@ export const Pricing: React.FC = () => {
       setShowAuthModal(true);
       return;
     }
+    if (hasActivePlan && planRank(plan.id) <= activeRank) return;
     navigate(plan.monthlyPrice <= 0 || plan.id === 'free' ? '/activate-free' : `/checkout?plan=${plan.id}`);
   };
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setEntitlement(null);
+      return;
+    }
+    let alive = true;
+    authService.getMe().then((res) => {
+      if (!alive || !res.ok || !res.data) return;
+      const data = res.data as Record<string, unknown>;
+      const code = String(data.currentPlanCode || data.CurrentPlanCode || 'free').toLowerCase();
+      const selectedAt = data.planSelectedAt || data.PlanSelectedAt;
+      setEntitlement({
+        code,
+        hasSelectedPlan: Boolean(data.hasSelectedPlan ?? data.HasSelectedPlan ?? selectedAt),
+        planExpired: Boolean(data.planExpired ?? data.PlanExpired),
+      });
+    }).catch(() => {});
+    refreshProfile().catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isLoggedIn, refreshProfile]);
 
   useEffect(() => {
     billingService.getPlans().then((res) => {
@@ -200,6 +253,10 @@ export const Pricing: React.FC = () => {
               const displayPrice = hasPrice ? `${plan.monthlyPrice.toLocaleString('vi-VN')}đ` : '0đ';
               const displayPeriod = '/tháng';
               const displaySubtext = hasPrice ? 'Thanh toán theo từng tháng' : 'Miễn phí trải nghiệm';
+              const rank = planRank(plan.id);
+              const isCurrent = hasActivePlan && normalizePlan(plan.id) === activeCode;
+              const isBlocked = hasActivePlan && !isCurrent && rank <= activeRank;
+              const ctaLabel = isCurrent ? 'Đang sử dụng' : isBlocked ? 'Không thể hạ gói' : plan.cta;
 
               return (
                 <motion.div
@@ -209,7 +266,7 @@ export const Pricing: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.45, delay: i * 0.12 }}
                 >
-                  <div className={`pricing-card ${plan.featured ? 'featured' : ''}`}>
+                  <div className={`pricing-card ${plan.featured ? 'featured' : ''} ${isCurrent ? 'is-current' : ''}`}>
                     {/* Featured Ribbon */}
                     {plan.badge && (
                       <div className="featured-badge">
@@ -220,6 +277,7 @@ export const Pricing: React.FC = () => {
 
                     {/* Header */}
                     <div className="plan-header">
+                      {isCurrent && <div className="current-plan-badge">Gói hiện tại</div>}
                       <h3 className="plan-label">{plan.label}</h3>
                       <p className="plan-desc">{plan.description}</p>
                     </div>
@@ -244,15 +302,19 @@ export const Pricing: React.FC = () => {
                     </ul>
 
                     {/* CTA Button */}
+                    {isBlocked && (
+                      <p className="plan-lock-note">Không thể hạ gói khi gói hiện tại còn hiệu lực</p>
+                    )}
                     <button
                       type="button"
                       onClick={() => handlePlanAction(plan)}
-                      className={`plan-cta-btn ${plan.featured ? 'plan-cta-btn--primary' : 'plan-cta-btn--outline'}`}
-                      style={{ cursor: 'pointer', border: 'none', width: '100%', fontFamily: 'inherit' }}
+                      disabled={isCurrent || isBlocked}
+                      className={`plan-cta-btn ${isCurrent || isBlocked ? 'plan-cta-btn--current' : plan.featured ? 'plan-cta-btn--primary' : 'plan-cta-btn--outline'}`}
+                      style={{ border: 'none', width: '100%', fontFamily: 'inherit' }}
                     >
                       {!isLoggedIn && <Lock size={16} style={{ marginRight: '4px' }} />}
-                      <span>{plan.cta}</span>
-                      <ArrowRight size={18} />
+                      <span>{ctaLabel}</span>
+                      {!isCurrent && !isBlocked && <ArrowRight size={18} />}
                     </button>
                   </div>
                 </motion.div>

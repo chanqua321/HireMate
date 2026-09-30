@@ -854,10 +854,9 @@ export const Dashboard: React.FC = () => {
     setUserCvs(prev => prev.map(cv => cv.id === updated.id
       ? parseCvDocumentFromBackend({ ...updated, isActive: cv.isActive }) : cv));
   };
-  /** Activate CV từ PostCvSuccessModal rồi navigate vào interview-setup */
+  /** Activate CV từ PostCvSuccessModal rồi vào đúng bước tiếp theo (gói hoặc phòng phỏng vấn). */
   const handleActivateAndInterview = async (cv: CvItemDto) => {
-    if (!cv.id) return;
-    // Gọi activate API
+    if (!cv.id) throw new Error('Không xác định được CV vừa phân tích.');
     const res = await cvService.activateCv(cv.id);
     if (!res.ok) throw new Error(res.message || 'Không kích hoạt được CV.');
 
@@ -875,9 +874,21 @@ export const Dashboard: React.FC = () => {
     const activatedCard = { id: activeId, isActive: true, isConfirmed: true } as any;
     localStorage.setItem('hm_active_cv', JSON.stringify(activatedCard));
 
-    // Đóng modal rồi navigate
+    const ready = await ensureInterviewReady(activeId);
+    if (!ready.ok) {
+      setToastMsg(ready.message);
+      setTimeout(() => setToastMsg(null), 4500);
+      if (ready.reason === 'need_plan') {
+        sessionStorage.setItem('hm_post_onboarding', '/interview-setup');
+        setPostCvModalCvId(null);
+        navigate('/pricing');
+        return;
+      }
+      throw new Error(ready.message);
+    }
+
     setPostCvModalCvId(null);
-    navigate('/interview-setup', { state: { fromCv: cv } });
+    navigate('/interview-setup', { state: { fromCv: { ...cv, id: activeId } } });
   };
 
   const refreshQuota = async () => {

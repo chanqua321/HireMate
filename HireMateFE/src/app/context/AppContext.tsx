@@ -152,6 +152,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     try {
       const meRes = await authService.getMe();
+      const serverPlan = meRes.ok && meRes.data
+        ? String(meRes.data.currentPlanCode || meRes.data.CurrentPlanCode || 'free')
+        : '';
+      const serverPremium = meRes.ok && meRes.data
+        ? Boolean(meRes.data.isPremium ?? meRes.data.IsPremium)
+        : false;
       if (meRes.ok && meRes.data) {
         setIsLoggedIn(true);
         const me = meRes.data;
@@ -161,8 +167,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             name: me.fullName || prev.name,
             avatarUrl: me.avatarUrl || prev.avatarUrl || '',
             email: me.email || prev.email,
-            currentPlanCode: me.currentPlanCode || prev.currentPlanCode || 'free',
-            isPremium: Boolean(me.isPremium ?? prev.isPremium),
+            currentPlanCode: serverPlan || 'free',
+            isPremium: serverPremium,
           };
           if (me.avatarUrl) {
             localStorage.setItem('hm_avatar_url', String(me.avatarUrl));
@@ -196,8 +202,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             bio: beData.bio !== null && beData.bio !== undefined ? beData.bio : prev.bio,
             education: mappedEducation,
             skills: mappedSkills,
-            isPremium: Boolean(beData.isPremium),
-            currentPlanCode: beData.currentPlanCode || 'free',
+            isPremium: serverPlan ? serverPremium : Boolean(beData.isPremium),
+            currentPlanCode: serverPlan || beData.currentPlanCode || 'free',
           });
           safeStoreJSON(STORAGE_KEYS.PROFILE, next);
           return next;

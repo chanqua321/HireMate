@@ -84,6 +84,7 @@ await CvUploadSmoke.RunAsync(Check);
 await CvEditSmoke.RunAsync(Check);
 await CvAnalysisSmoke.RunAsync(Check);
 await PayOsSettlementSmoke.RunAsync(Check);
+await PlanCheckoutGuardSmoke.RunAsync(Check);
 
 var en = """
 John Nguyen
