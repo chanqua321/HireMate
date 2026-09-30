@@ -1,16 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
+import { FileText, MoreHorizontal, Plus, RefreshCw } from 'lucide-react';
 import { adminService } from '../../shared/services/admin.service';
+import { authenticatedFetch, getFileUrl } from '../../shared/api/apiClient';
 import { BlogPost, BlogWrite, blogDate, blogSlug } from '../../shared/types/blog';
 import { BlogArticle, BlogCover } from '../../shared/components/BlogArticle';
 import './admin.css';
 
 const empty = (): BlogWrite => ({ title: '', slug: '', tag: '', summary: '', body: '', isPublished: false });
 const message = (e: unknown) => e instanceof Error ? e.message : 'Không thể kết nối API. Hãy thử lại.';
+
+function CoverThumb({ url }: { url: string | null }) {
+  const [source, setSource] = useState('');
+  useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+    if (!url) return undefined;
+    authenticatedFetch(getFileUrl(url)).then(async (response) => {
+      if (!response.ok) return;
+      const blob = await response.blob();
+      if (active) { objectUrl = URL.createObjectURL(blob); setSource(objectUrl); }
+    }).catch(() => undefined);
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url]);
+  if (!source) return <span className="adm-thumb adm-thumb-empty" aria-hidden="true"><FileText size={14} /></span>;
+  return <img className="adm-thumb" src={source} alt="" />;
+}
+
 export default function AdminBlog() {
   const [blogs, setBlogs] = useState<BlogPost[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<BlogPost | null>(null);
@@ -24,6 +45,10 @@ export default function AdminBlog() {
   const [cover, setCover] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [removeCover, setRemoveCover] = useState(false);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'published'>('all');
+  const [tagFilter, setTagFilter] = useState('');
+  const [menuId, setMenuId] = useState<string | null>(null);
   useEffect(() => {
     if (!cover) { setCoverPreview(null); return; }
     const url = URL.createObjectURL(cover); setCoverPreview(url);
@@ -40,9 +65,9 @@ export default function AdminBlog() {
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
-  async function openForm(id?: string) {
+  async function openForm(id?: string, startPreview = false) {
     if (lock.current) return;
-    lock.current = true; setBusy(true); setError(''); setNotice('');
+    lock.current = true; setBusy(true); setActionError(''); setNotice('');
     try {
       let post: BlogPost | null = null;
       if (id) {
@@ -52,8 +77,8 @@ export default function AdminBlog() {
       }
       editingId.current = post?.id; setEditing(post);
       setForm(post ? { title: post.title, slug: post.slug, tag: post.tag || '', summary: post.summary, body: post.body, isPublished: post.isPublished } : { ...empty(), tag: categories[0] || '' });
-      setManualSlug(!!post); setCover(null); setRemoveCover(false); setFormError(''); setPreview(false); setOpen(true);
-    } catch (e) { setError(message(e)); }
+      setManualSlug(!!post); setCover(null); setRemoveCover(false); setFormError(''); setPreview(startPreview); setOpen(true);
+    } catch (e) { setActionError(message(e)); }
     finally { lock.current = false; setBusy(false); }
   }
   async function save(publish: boolean) {
@@ -77,31 +102,141 @@ export default function AdminBlog() {
     } catch (e) { setFormError((saved ? 'Nội dung đã lưu; ảnh bìa chưa cập nhật. Thử lưu lại sẽ cập nhật cùng bài viết. ' : '') + message(e)); }
     finally { lock.current = false; setBusy(false); }
   }
+  async function setPublished(post: BlogPost, publish: boolean) {
+    if (lock.current) return;
+    if (publish && !post.body.trim()) { setActionError('Cần nhập nội dung trước khi xuất bản.'); setMenuId(null); return; }
+    lock.current = true; setBusy(true); setActionError(''); setNotice(''); setMenuId(null);
+    try {
+      const res = await adminService.upsertBlog({
+        title: post.title, slug: post.slug, tag: post.tag, summary: post.summary, body: post.body, isPublished: publish,
+      }, post.id);
+      if (!res.ok) throw new Error(res.message || 'Không cập nhật được trạng thái.');
+      setNotice(publish ? 'Đã xuất bản bài viết.' : 'Đã chuyển về bản nháp.');
+      await load();
+    } catch (e) { setActionError(message(e)); }
+    finally { lock.current = false; setBusy(false); }
+  }
   async function deletePost(post: BlogPost) {
     if (lock.current || !window.confirm(`Xóa bài viết “${post.title}”? Thao tác này không thể hoàn tác.`)) return;
-    lock.current = true; setBusy(true); setError(''); setNotice('');
+    lock.current = true; setBusy(true); setActionError(''); setNotice(''); setMenuId(null);
     try {
       const res = await adminService.deleteBlog(post.id);
       if (!res.ok) throw new Error(res.message || 'Không xóa được bài viết.');
       setBlogs(prev => prev.filter(p => p.id !== post.id)); setNotice('Đã xóa bài viết.');
-    } catch (e) { setError(message(e)); }
+    } catch (e) { setActionError(message(e)); }
     finally { lock.current = false; setBusy(false); }
   }
   const imageUrl = coverPreview || (removeCover ? null : editing?.coverUrl || null);
-  return <div>
-    <div className="admin-page-header"><h1 className="admin-page-title">Quản lý Blog</h1>
-      <p className="admin-page-subtitle">Soạn bản nháp, xem trước và xuất bản bài viết.</p>
-      <button className="admin-btn admin-btn-primary" disabled={busy || loading || !categories.length} onClick={() => void openForm()}>Tạo bài viết mới</button>{' '}
-      <button className="admin-btn admin-btn-secondary" disabled={busy || loading} onClick={() => void load()}>Làm mới</button></div>
-    {notice && <p role="status">{notice}</p>}
-    {error && <div role="alert">{error} <button className="admin-btn admin-btn-secondary" disabled={busy || loading} onClick={() => void load()}>Thử lại</button></div>}
-    {loading ? <p role="status">Đang tải bài viết...</p> : !error && blogs.length === 0 ? <p>Chưa có bài viết.</p> : null}
-    {!loading && blogs.map(post => <div className="admin-card" key={post.id} style={{ padding: 20, marginBottom: 12 }}>
-      <span className={`admin-badge ${post.isPublished ? 'success' : 'warning'}`}>{post.isPublished ? 'Đã xuất bản' : 'Bản nháp'}</span>
-      <h2>{post.title}</h2><p>{post.tag} · /blog/{post.slug}</p><p>{post.summary}</p>
-      {post.author && <p>Tác giả: {post.author}</p>}{post.publishedAt && <p>Xuất bản: {blogDate(post.publishedAt)}</p>}
-      <button className="admin-btn admin-btn-secondary" disabled={busy} onClick={() => void openForm(post.id)}>Chỉnh sửa / Trạng thái</button>{' '}
-      <button className="admin-btn admin-btn-danger" disabled={busy} onClick={() => void deletePost(post)}>Xóa</button></div>)}
+  const needle = query.trim().toLowerCase();
+  const visible = blogs.filter((post) => {
+    if (needle && !post.title.toLowerCase().includes(needle)) return false;
+    if (statusFilter === 'draft' && post.isPublished) return false;
+    if (statusFilter === 'published' && !post.isPublished) return false;
+    if (tagFilter && post.tag !== tagFilter) return false;
+    return true;
+  });
+  const tags = Array.from(new Set([...categories, ...blogs.map((post) => post.tag).filter(Boolean)]));
+  return <div className="adm-page">
+    <div className="admin-page-header">
+      <div>
+        <h1 className="admin-page-title">Quản lý Blog</h1>
+        <p className="admin-page-subtitle">Tạo, chỉnh sửa và quản lý nội dung bài viết.</p>
+      </div>
+      <div className="adm-actions">
+        <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" disabled={busy || loading} onClick={() => void load()} aria-label="Làm mới danh sách bài viết">
+          <RefreshCw size={14} className={loading ? 'spin' : ''} /> Làm mới
+        </button>
+        <button type="button" className="admin-btn admin-btn-primary admin-btn-sm" disabled={busy || loading || !categories.length} onClick={() => void openForm()}>
+          <Plus size={14} /> Tạo bài viết
+        </button>
+      </div>
+    </div>
+    {notice && <p className="adm-notice" role="status">{notice}</p>}
+    {actionError && <p className="adm-filter-error" role="alert">{actionError}</p>}
+    {loading && <div className="adm-skeleton" aria-busy="true" aria-live="polite"><span className="sr-only">Đang tải danh sách bài viết</span></div>}
+    {!loading && error && <div className="adm-error" role="alert"><p>Không thể tải danh sách bài viết.</p><button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" disabled={busy} onClick={() => void load()}>Thử lại</button></div>}
+    {!loading && !error && blogs.length === 0 && (
+      <div className="adm-card adm-empty">
+        <FileText size={28} aria-hidden="true" />
+        <h2>Chưa có bài viết</h2>
+        <p>Tạo bài viết đầu tiên để bắt đầu xây dựng nội dung HireMate.</p>
+        <button type="button" className="admin-btn admin-btn-primary admin-btn-sm" disabled={busy || !categories.length} onClick={() => void openForm()}><Plus size={14} /> Tạo bài viết</button>
+      </div>
+    )}
+    {!loading && !error && blogs.length > 0 && <>
+      <section className="adm-card adm-filter" aria-label="Bộ lọc bài viết">
+        <div className="adm-filter-row adm-blog-filters">
+          <label className="adm-field adm-field-search">
+            <span>Tìm kiếm</span>
+            <input className="admin-input" placeholder="Tìm theo tiêu đề..." value={query} onChange={(e) => setQuery(e.target.value)} />
+          </label>
+          <label className="adm-field">
+            <span>Trạng thái</span>
+            <select className="admin-select" aria-label="Lọc trạng thái bài viết" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | 'draft' | 'published')}>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="draft">Bản nháp</option>
+              <option value="published">Đã xuất bản</option>
+            </select>
+          </label>
+          <label className="adm-field">
+            <span>Danh mục</span>
+            <select className="admin-select" aria-label="Lọc danh mục" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+              <option value="">Tất cả danh mục</option>
+              {tags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+            </select>
+          </label>
+        </div>
+      </section>
+      {visible.length === 0 ? <div className="adm-card adm-empty"><p>Không có bài viết khớp bộ lọc.</p></div> : (
+        <div className="adm-card">
+          <div className="admin-table-container">
+            <table className="admin-table adm-table adm-blog-table">
+              <thead>
+                <tr><th>Bài viết</th><th>Danh mục</th><th>Trạng thái</th><th>Cập nhật</th><th>Thao tác</th></tr>
+              </thead>
+              <tbody>
+                {visible.map((post) => {
+                  const updated = post.updatedAt || post.publishedAt || post.createdAt;
+                  return (
+                    <tr key={post.id}>
+                      <td>
+                        <div className="adm-post">
+                          <CoverThumb url={post.coverUrl} />
+                          <div>
+                            <div className="adm-strong">{post.title}</div>
+                            <div className="adm-sub">/{post.slug}{post.author ? ` · ${post.author}` : ''}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{post.tag || '—'}</td>
+                      <td><span className={`admin-badge ${post.isPublished ? 'success' : 'warning'}`}>{post.isPublished ? 'Đã xuất bản' : 'Bản nháp'}</span></td>
+                      <td>{updated ? blogDate(updated) : '—'}</td>
+                      <td>
+                        <div className="adm-row-actions">
+                          <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" disabled={busy} onClick={() => void openForm(post.id, true)}>Xem trước</button>
+                          <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" disabled={busy} onClick={() => void openForm(post.id)}>Chỉnh sửa</button>
+                          <div className="adm-menu">
+                            <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm adm-icon-btn" aria-label={`Thao tác khác cho ${post.title}`} aria-expanded={menuId === post.id} onClick={() => setMenuId(menuId === post.id ? null : post.id)}>
+                              <MoreHorizontal size={16} />
+                            </button>
+                            {menuId === post.id && (
+                              <div className="adm-menu-pop" role="menu">
+                                <button type="button" role="menuitem" disabled={busy} onClick={() => void setPublished(post, !post.isPublished)}>{post.isPublished ? 'Chuyển về bản nháp' : 'Xuất bản'}</button>
+                                <button type="button" role="menuitem" className="is-danger" disabled={busy} onClick={() => { setMenuId(null); void deletePost(post); }}>Xóa</button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>}
     {open && <div className="admin-modal-overlay"><section className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="blog-dialog-title" style={{ maxWidth: 800 }}>
       <div className="admin-modal-header"><h2 id="blog-dialog-title">{editingId.current ? 'Chỉnh sửa bài viết' : 'Tạo bài viết mới'}</h2>
         <button className="admin-btn admin-btn-secondary" disabled={busy} onClick={() => { setOpen(false); setCover(null); }}>Đóng</button></div>

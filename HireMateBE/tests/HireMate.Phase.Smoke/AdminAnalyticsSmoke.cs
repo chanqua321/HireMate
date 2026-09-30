@@ -77,6 +77,53 @@ internal static class AdminAnalyticsSmoke
         check(body.Contains("\"successfulPayments\":1"), "Boundary end is excluded");
         check(body.Contains("\"premium\"") && body.Contains("\"count\":1"), "Plan distribution uses stored plan code");
 
+        var freeUserId = Guid.NewGuid();
+        db.Users.Add(new UserAccount
+        {
+            Id = freeUserId, UserName = "free@test.local", Email = "free@test.local", FullName = "Free User",
+            CreatedAt = todayRange.StartUtc, CurrentPlanCode = "free", IsPremium = false
+        });
+        var freePlanId = Guid.NewGuid();
+        var comboPlanId = Guid.NewGuid();
+        db.Set<SubscriptionPlan>().AddRange(
+            new SubscriptionPlan { Id = freePlanId, Code = "free", Name = "Miễn phí", PriceVnd = 0 },
+            new SubscriptionPlan { Id = comboPlanId, Code = "combo", Name = "Cao cấp", PriceVnd = 149000 });
+        var day = new DateTime(2026, 9, 15, 3, 0, 0, DateTimeKind.Utc);
+        db.Set<Invoice>().AddRange(
+            InvoiceAt(freeUserId, freePlanId, 0, InvoiceStatuses.Paid, todayRange.StartUtc, "Free"),
+            InvoiceAt(freeUserId, freePlanId, 0, InvoiceStatuses.Paid, day, "Free"),
+            InvoiceAt(userId, planId, 79000, InvoiceStatuses.Paid, day, "PayOS"),
+            InvoiceAt(userId, comboPlanId, 149000, InvoiceStatuses.Paid, day, "PayOS"),
+            InvoiceAt(userId, planId, 79000, InvoiceStatuses.Pending, day, "PayOS"),
+            InvoiceAt(userId, comboPlanId, 149000, InvoiceStatuses.Failed, day, "PayOS"));
+        await db.SaveChangesAsync();
+
+        var dashAfterFree = await admin.DashboardAsync("today", null, null, null);
+        var dashAfterJson = System.Text.Json.JsonSerializer.Serialize(dashAfterFree.Data);
+        check(dashAfterJson.Contains("\"totalVnd\":158000") && dashAfterJson.Contains("\"successfulPayments\":1"),
+            "A Free 0 VND invoice on the same day does not change revenue or successful payment count");
+        check(dashAfterJson.Contains("\"activePaidUsers\":1"), "Free user is not an active paid user");
+
+        var payments = await admin.PaymentsAsync(null, null, null, new DateTime(2026, 9, 15), new DateTime(2026, 9, 15), 1, 20);
+        using var paymentDoc = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(payments.Data));
+        var paymentRoot = paymentDoc.RootElement;
+        check(payments.Status == 1 && paymentRoot.GetProperty("total").GetInt32() == 4, "Payments total excludes Free 0 VND and keeps paid, pending and failed plan invoices");
+        check(paymentRoot.GetProperty("items").EnumerateArray().All(item => item.GetProperty("AmountVnd").GetDecimal() > 0), "Payments page items are financial amounts");
+        var paidOnly = await admin.PaymentsAsync(null, InvoiceStatuses.Paid, null, new DateTime(2026, 9, 15), new DateTime(2026, 9, 15), 1, 20);
+        using var paidDoc = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(paidOnly.Data));
+        check(paidDoc.RootElement.GetProperty("total").GetInt32() == 2, "Paid filter counts only the 79k and 149k invoices");
+
+        var series = await admin.RevenueSeriesAsync("day", new DateTime(2026, 9, 15), new DateTime(2026, 9, 15));
+        using var seriesDoc = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(series.Data));
+        var summary = seriesDoc.RootElement.GetProperty("summary");
+        var bucket = seriesDoc.RootElement.GetProperty("buckets")[0];
+        check(summary.GetProperty("totalRevenue").GetDecimal() == 228000m, "Revenue is 79k + 149k");
+        check(summary.GetProperty("paidInvoices").GetInt32() == 2, "Paid financial invoice count excludes Free, Pending and Failed");
+        check(summary.GetProperty("arpu").GetDecimal() == 228000m, "ARPU uses paying users only");
+        check(summary.GetProperty("premiumUsers").GetInt32() == 1, "Premium count uses IsPremium, not Free activation");
+        check(bucket.GetProperty("revenue").GetDecimal() == 228000m && bucket.GetProperty("invoices").GetInt32() == 2, "Revenue bucket ignores the Free invoice");
+        check(seriesDoc.RootElement.GetProperty("invoices").GetArrayLength() == 4, "Revenue invoice list keeps real payment attempts and drops Free");
+
         var controller = typeof(APIs.Controllers.Admin.AdminController);
         var policy = controller.GetCustomAttribute<AuthorizeAttribute>()?.Policy;
         check(policy == AppPolicies.AdminOnly, "Dashboard, users and payments require AdminOnly on the controller");
@@ -94,7 +141,7 @@ internal static class AdminAnalyticsSmoke
         check(ok && range.FromDate == expectedFrom && range.ToDate == expectedTo && range.Granularity == grain, $"{key} filter");
     }
 
-    private static Invoice InvoiceAt(Guid userId, Guid planId, decimal amount, string status, DateTime paidAt) => new()
+    private static Invoice InvoiceAt(Guid userId, Guid planId, decimal amount, string status, DateTime paidAt, string method = "Mock") => new()
     {
         Id = Guid.NewGuid(),
         UserId = userId,
@@ -102,6 +149,7 @@ internal static class AdminAnalyticsSmoke
         InvoiceNumber = Guid.NewGuid().ToString("N")[..8],
         AmountVnd = amount,
         Status = status,
+        PaymentMethod = method,
         PaidAt = status == InvoiceStatuses.Paid ? paidAt : null,
         CreatedAt = paidAt
     };

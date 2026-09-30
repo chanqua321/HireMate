@@ -56,7 +56,7 @@ public partial class AdminService
                 _ => cursor.AddMonths(1)
             };
             if (next > end) next = end;
-            var paid = invoices.Where(i => i.Status == "Paid" && InRange(i, cursor, next)).ToList();
+            var paid = invoices.Where(i => IsPaidFinancial(i) && InRange(i, cursor, next)).ToList();
             buckets.Add(new
             {
                 label = BucketLabel(cursor, next, grain),
@@ -70,7 +70,7 @@ public partial class AdminService
         }
 
         var inRange = invoices
-            .Where(i => InRange(i, start, end))
+            .Where(i => IsFinancial(i) && InRange(i, start, end))
             .OrderByDescending(i => i.PaidAt ?? i.CreatedAt)
             .Take(200)
             .Select(i =>
@@ -96,7 +96,7 @@ public partial class AdminService
 
         var usersCount = Math.Max(1, await users.Users.CountAsync(u => !u.IsDeleted));
         var premium = await users.Users.CountAsync(u => u.IsPremium && !u.IsDeleted);
-        var payingUsers = invoices.Where(i => i.Status == "Paid" && InRange(i, start, end))
+        var payingUsers = invoices.Where(i => IsPaidFinancial(i) && InRange(i, start, end))
             .Select(i => i.UserId).Distinct().Count();
 
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new
@@ -109,9 +109,9 @@ public partial class AdminService
                 totalRevenue = currentRevenue,
                 previousRevenue,
                 changePercent,
-                paidInvoices = invoices.Count(i => i.Status == "Paid" && InRange(i, start, end)),
-                allTimeRevenue = invoices.Where(i => i.Status == "Paid").Sum(i => i.AmountVnd),
-                mrr = invoices.Where(i => i.Status == "Paid" && (i.PaidAt ?? i.CreatedAt) >= DateTime.UtcNow.AddDays(-30)).Sum(i => i.AmountVnd),
+                paidInvoices = invoices.Count(i => IsPaidFinancial(i) && InRange(i, start, end)),
+                allTimeRevenue = invoices.Where(IsPaidFinancial).Sum(i => i.AmountVnd),
+                mrr = invoices.Where(i => IsPaidFinancial(i) && (i.PaidAt ?? i.CreatedAt) >= DateTime.UtcNow.AddDays(-30)).Sum(i => i.AmountVnd),
                 arpu = Math.Round(currentRevenue / Math.Max(1, payingUsers), 0),
                 conversionRate = Math.Round(100.0 * premium / usersCount, 1),
                 premiumUsers = premium
@@ -227,8 +227,14 @@ public partial class AdminService
         return at >= start && at < end;
     }
 
+    private static bool IsFinancial(Invoice invoice)
+        => InvoiceFinance.IsFinancial(invoice.AmountVnd, invoice.PaymentMethod);
+
+    private static bool IsPaidFinancial(Invoice invoice)
+        => invoice.Status == InvoiceStatuses.Paid && IsFinancial(invoice);
+
     private static decimal SumPaid(IEnumerable<Invoice> invoices, DateTime start, DateTime end)
-        => invoices.Where(i => i.Status == "Paid" && InRange(i, start, end)).Sum(i => i.AmountVnd);
+        => invoices.Where(i => IsPaidFinancial(i) && InRange(i, start, end)).Sum(i => i.AmountVnd);
 
     private static string BucketLabel(DateTime start, DateTime end, string grain) => grain switch
     {

@@ -157,7 +157,8 @@ public partial class AdminService
             end = window.EndUtc;
         }
 
-        var query = uow.InvoiceRepository.GetQueryable().AsNoTracking();
+        var query = uow.InvoiceRepository.GetQueryable().AsNoTracking()
+            .Where(i => i.AmountVnd > 0 && i.PaymentMethod != InvoiceFinance.FreeMethod);
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(i => i.Status == status.Trim());
         if (start != null && end != null)
@@ -220,7 +221,8 @@ public partial class AdminService
     }
 
     private IQueryable<Invoice> PaidInvoices()
-        => uow.InvoiceRepository.GetQueryable().AsNoTracking().Where(i => i.Status == InvoiceStatuses.Paid);
+        => uow.InvoiceRepository.GetQueryable().AsNoTracking()
+            .Where(i => i.Status == InvoiceStatuses.Paid && i.AmountVnd > 0 && i.PaymentMethod != InvoiceFinance.FreeMethod);
 
     private IQueryable<Invoice> PaidInWindow(DateTime start, DateTime end)
         => PaidInvoices().Where(i =>

@@ -20,7 +20,8 @@ public partial class AdminService(IUnitOfWork uow, UserManager<UserAccount> user
         var usersCount = await users.Users.CountAsync(u => !u.IsDeleted);
         var sessions = await uow.InterviewSessionRepository.GetQueryable().AsNoTracking().ToListAsync();
         var completed = sessions.Count(s => s.Status == "Completed");
-        var invoices = await uow.InvoiceRepository.GetQueryable().AsNoTracking().CountAsync(i => i.Status == "Paid");
+        var invoices = await uow.InvoiceRepository.GetQueryable().AsNoTracking()
+            .CountAsync(i => i.Status == InvoiceStatuses.Paid && i.AmountVnd > 0 && i.PaymentMethod != InvoiceFinance.FreeMethod);
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new
         {
             registrations = usersCount,
@@ -158,7 +159,8 @@ public partial class AdminService(IUnitOfWork uow, UserManager<UserAccount> user
     public async Task<IServiceResult> RevenueAsync()
     {
         var paid = await uow.InvoiceRepository.GetQueryable().AsNoTracking()
-            .Where(i => i.Status == "Paid").ToListAsync();
+            .Where(i => i.Status == InvoiceStatuses.Paid && i.AmountVnd > 0 && i.PaymentMethod != InvoiceFinance.FreeMethod)
+            .ToListAsync();
         var mrr = paid.Where(i => i.PaidAt >= DateTime.UtcNow.AddDays(-30)).Sum(i => i.AmountVnd);
         var usersCount = Math.Max(1, await users.Users.CountAsync(u => !u.IsDeleted));
         var premium = await users.Users.CountAsync(u => u.IsPremium && !u.IsDeleted);
