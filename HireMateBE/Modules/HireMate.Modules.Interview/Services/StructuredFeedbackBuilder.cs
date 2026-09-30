@@ -15,8 +15,10 @@ public static class StructuredFeedbackBuilder
         string language = "vi")
     {
         var en = language == "en";
+        var required = answers.Where(a => !a.IsFollowUp).ToList();
+        var answered = required.Where(IsAnswered).ToList();
         var analyzed = answers
-            .Where(a => !a.Skipped && InterviewEvaluationPolicy.WeightedScore(a).HasValue)
+            .Where(a => IsAnswered(a) && InterviewEvaluationPolicy.WeightedScore(a).HasValue)
             .OrderBy(a => a.OrderIndex)
             .ToList();
 
@@ -36,8 +38,13 @@ public static class StructuredFeedbackBuilder
             .Where(x => x.Composite.HasValue)
             .ToList();
 
-        var overall = perAnswer.Count > 0
+        var answerQuality = perAnswer.Count > 0
             ? (int?)Math.Round(perAnswer.Average(x => x.Composite!.Value))
+            : null;
+        var completion = required.Count == 0 ? 0d : answered.Count / (double)required.Count;
+        // Final score applies completion only. Category scores stay on evaluated answers.
+        var overall = answerQuality.HasValue && required.Count > 0
+            ? (int?)Math.Round(answerQuality.Value * completion)
             : null;
 
         var strengths = BuildStrengths(cat, analyzed, en);
@@ -48,15 +55,25 @@ public static class StructuredFeedbackBuilder
         var cvSummary = BuildCvConsistencySummary(analyzed, cat.CvConsistency, en);
         var improvements = BuildImprovements(weaknesses, evidenceGaps, cat, en);
 
-        var summary = overall == null && analyzed.Count == 0
-            ? T(en, "Chưa đủ dữ liệu phân tích từng câu trả lời để tạo feedback đầy đủ.",
+        var completionNote = required.Count == 0 ? "" : T(en,
+            $"Bạn đã hoàn thành {answered.Count}/{required.Count} câu hỏi. ",
+            $"You completed {answered.Count}/{required.Count} questions. ");
+        var summary = answerQuality == null
+            ? completionNote + T(en, "Chưa đủ dữ liệu phân tích từng câu trả lời để tạo feedback đầy đủ.",
                 "Not enough analyzed answers to produce a full report.")
-            : BuildDeterministicSummary(overall, strengths, weaknesses, evidenceGaps.Count, en);
+            : completionNote + (completion < 1
+                ? T(en, $"Chất lượng câu trả lời: {answerQuality}/100. Điểm tổng sau mức độ hoàn thành: {overall}/100. ",
+                    $"Answer quality: {answerQuality}/100. Final score after completion: {overall}/100. ")
+                : "")
+            + BuildDeterministicSummary(overall, strengths, weaknesses, evidenceGaps.Count, en);
 
         return new StructuredFeedbackDto
         {
             SessionId = session.Id,
             OverallScore = overall,
+            AnswerQuality = answerQuality,
+            AnsweredRequired = answered.Count,
+            RequiredQuestions = required.Count,
             Summary = summary,
             AiSummaryAvailable = false,
             CategoryScores = cat,
@@ -78,6 +95,9 @@ public static class StructuredFeedbackBuilder
             .Select(a => a.CommunicationScore));
         return (null, null, null, null, clarity);
     }
+
+    private static bool IsAnswered(InterviewAnswer answer) =>
+        !answer.Skipped && !string.IsNullOrWhiteSpace(answer.AnswerText);
 
     private static int? AnswerComposite(InterviewAnswer a)
     {

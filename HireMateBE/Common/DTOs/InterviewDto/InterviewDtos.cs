@@ -185,6 +185,10 @@ public class StructuredFeedbackDto
     public CoachReportDto? CoachReport { get; set; }
     public Guid SessionId { get; set; }
     public int? OverallScore { get; set; }
+    /// <summary>Average of successful evaluations, before the completion multiplier.</summary>
+    public int? AnswerQuality { get; set; }
+    public int AnsweredRequired { get; set; }
+    public int RequiredQuestions { get; set; }
     public string? Summary { get; set; }
     public bool AiSummaryAvailable { get; set; }
     public CategoryScoresDto CategoryScores { get; set; } = new();

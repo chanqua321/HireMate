@@ -367,8 +367,57 @@ Check(InterviewEvaluationPolicy.EvidenceQuote(answerA, "technicalKnowledge") == 
     "Persisted analysis traces dimension score to answer quote");
 var skippedAnswer = new InterviewAnswer { Id = Guid.NewGuid(), Skipped = true, AnswerText = null };
 var session = new InterviewSession { Id = Guid.NewGuid(), Position = "Backend Developer" };
-Check(StructuredFeedbackBuilder.Build(session, [answerA, answerB, skippedAnswer]).OverallScore == 87,
-    "Backend aggregates only evidence-backed applicable scores");
+var completionMix = StructuredFeedbackBuilder.Build(session, [answerA, answerB, skippedAnswer]);
+Check(completionMix.AnswerQuality == 87 && completionMix.OverallScore == 58
+    && completionMix.AnsweredRequired == 2 && completionMix.RequiredQuestions == 3
+    && completionMix.CategoryScores.Technical == answerA.TechnicalKnowledgeScore,
+    "Skipped required questions reduce the final score and leave category quality unchanged");
+InterviewAnswer Rated(int score, bool skipped = false, bool followUp = false, bool failed = false, bool blank = false)
+{
+    var parsed = skipped || failed || blank ? null : InterviewEvaluationPolicy.TryParse(
+        Payload("Technical", score), "Technical", "Explain SQL JOIN.", answerText, null);
+    return new InterviewAnswer
+    {
+        Id = Guid.NewGuid(), IsFollowUp = followUp, Skipped = skipped,
+        AnswerText = skipped || blank ? (blank ? "   " : null) : answerText,
+        AnalysisAvailable = parsed != null,
+        AnalysisJson = parsed == null ? null : JsonSerializer.Serialize(parsed),
+        QuestionCategory = "Technical", QuestionText = "Explain SQL JOIN.",
+        RelevanceScore = failed ? 0 : parsed?.Relevance,
+        CompletenessScore = parsed?.Completeness,
+        TechnicalKnowledgeScore = parsed?.TechnicalKnowledge,
+        ProblemSolvingScore = parsed?.ProblemSolving,
+        CommunicationScore = parsed?.Communication
+    };
+}
+var full = StructuredFeedbackBuilder.Build(session, [Rated(90), Rated(90), Rated(90), Rated(90)]);
+Check(full is { AnswerQuality: 90, OverallScore: 90, AnsweredRequired: 4, RequiredQuestions: 4 },
+    "4/4 answered keeps the final score equal to answer quality");
+var half = StructuredFeedbackBuilder.Build(session, [Rated(90), Rated(90), Rated(0, skipped: true), Rated(0, skipped: true)]);
+Check(half is { AnswerQuality: 90, OverallScore: 45, AnsweredRequired: 2, RequiredQuestions: 4 }
+    && half.CategoryScores.Relevance == 90
+    && half.Strengths.All(item => item.RelatedAnswerIds.All(id => id != Guid.Empty)),
+    "2/4 answered scores 45 and does not invent a skipped weakness");
+var quarter = StructuredFeedbackBuilder.Build(session, [Rated(100), Rated(0, skipped: true), Rated(0, skipped: true), Rated(0, skipped: true)]);
+Check(quarter is { AnswerQuality: 100, OverallScore: 25, AnsweredRequired: 1, RequiredQuestions: 4 },
+    "1/4 answered scores 25");
+var none = StructuredFeedbackBuilder.Build(session, [Rated(0, skipped: true), Rated(0, skipped: true), Rated(0, skipped: true), Rated(0, skipped: true)]);
+Check(none.OverallScore == null && none.AnswerQuality == null && none.AnsweredRequired == 0
+    && none.RequiredQuestions == 4 && none.Summary?.Contains("0/4") == true && none.Strengths.Count == 0,
+    "0/4 answered does not receive a quality score");
+var aiFailure = StructuredFeedbackBuilder.Build(session, [Rated(90), Rated(90), Rated(90), Rated(0, failed: true)]);
+Check(aiFailure is { AnswerQuality: 90, OverallScore: 90, AnsweredRequired: 4, RequiredQuestions: 4 },
+    "An evaluation failure stays in the completion rate and is not scored as zero");
+var threeOfFour = StructuredFeedbackBuilder.Build(session, [Rated(90), Rated(90), Rated(90), Rated(0, skipped: true)]);
+Check(threeOfFour is { AnswerQuality: 90, OverallScore: 68, AnsweredRequired: 3, RequiredQuestions: 4 },
+    "3 answered and 1 skipped is a 75 percent completion rate");
+var withFollowUp = StructuredFeedbackBuilder.Build(session, [
+    Rated(90), Rated(90), Rated(0, skipped: true), Rated(0, skipped: true), Rated(90, followUp: true)]);
+Check(withFollowUp is { AnswerQuality: 90, OverallScore: 45, AnsweredRequired: 2, RequiredQuestions: 4 },
+    "Adaptive follow-up stays out of the required-question denominator");
+var blank = StructuredFeedbackBuilder.Build(session, [Rated(0, blank: true), Rated(0, skipped: true)]);
+Check(blank.AnsweredRequired == 0 && blank.OverallScore == null,
+    "Whitespace is not a completed answer");
 Check(StructuredFeedbackBuilder.Build(session, [skippedAnswer]).OverallScore == null,
     "Unavailable analyses do not create an overall score");
 var failedEvaluation = new InterviewAnswer

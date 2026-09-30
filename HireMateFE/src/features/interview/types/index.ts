@@ -194,6 +194,9 @@ export interface StructuredFeedback {
   coachReport?: CoachReport | null;
   sessionId: string;
   overallScore?: number | null;
+  answerQuality?: number | null;
+  answeredRequired?: number;
+  requiredQuestions?: number;
   summary?: string | null;
   aiSummaryAvailable?: boolean;
   categoryScores?: CategoryScores;

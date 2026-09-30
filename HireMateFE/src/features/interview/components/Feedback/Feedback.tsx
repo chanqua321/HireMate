@@ -14,7 +14,9 @@ type AnalysisDetails = { dimensions: Dimension[]; comment: string; starTip: stri
 
 const labels: Record<Language, Record<string, string>> = {
   vi: {
-    title: 'Phản hồi phỏng vấn', overview: 'Tổng quan', score: 'Điểm theo tiêu chí',
+    title: 'Phản hồi phỏng vấn', overview: 'Tổng quan', score: 'Chất lượng câu trả lời',
+    finalScore: 'Điểm tổng', answered: 'Đã trả lời', completion: 'Mức độ hoàn thành',
+    quality: 'Chất lượng câu trả lời', afterCompletion: 'Điểm tổng sau mức độ hoàn thành',
     strengths: 'Điểm mạnh', evidence: 'Bằng chứng', improve: 'Cần cải thiện',
     advice: 'Gợi ý cải thiện', followUp: 'Câu hỏi tiếp theo', answers: 'Phân tích từng câu trả lời',
     question: 'Câu', answer: 'Câu trả lời', unavailable: 'Chưa thể phân tích câu trả lời.',
@@ -38,7 +40,9 @@ const labels: Record<Language, Record<string, string>> = {
     mention: 'Được đề cập trong câu trả lời',
   },
   en: {
-    title: 'Interview feedback', overview: 'Overview', score: 'Scores by criterion',
+    title: 'Interview feedback', overview: 'Overview', score: 'Answer quality',
+    finalScore: 'Final score', answered: 'Answered', completion: 'Completion',
+    quality: 'Answer quality', afterCompletion: 'Final score after completion',
     strengths: 'Strengths', evidence: 'Evidence', improve: 'Areas to improve',
     advice: 'How to improve', followUp: 'Follow-up question', answers: 'Answer-by-answer analysis',
     question: 'Question', answer: 'Answer', unavailable: 'This answer could not be analyzed.',
@@ -217,6 +221,13 @@ export const Feedback: React.FC = () => {
         <div className="feedback-explain-score">
           <strong>{overall == null ? '—' : overall}</strong><span>{overall == null ? '' : '/ 100'}</span>
           {band && <small>{band}</small>}
+          {(feedback?.requiredQuestions ?? 0) > 0 && <p className="feedback-completion">
+            {l.answered}: {feedback?.answeredRequired ?? 0}/{feedback?.requiredQuestions} {l.question.toLowerCase()}
+            <br />{l.completion}: {Math.round(((feedback?.answeredRequired ?? 0) / (feedback?.requiredQuestions || 1)) * 100)}%
+            {feedback?.answerQuality != null && <>
+              <br />{l.quality}: {feedback.answerQuality}/100
+            </>}
+          </p>}
         </div>
       </header>
 
