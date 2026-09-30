@@ -245,10 +245,50 @@ Check(InterviewEvaluationPolicy.TryParse("```json\n" + Payload("Technical", 92) 
 Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92).Replace("\"score\":92", "\"score\":92.0"),
     "Technical", "Explain SQL JOIN.", answerText, null)?.WeightedScore == 92,
     "Integral JSON numbers written as 92.0 keep the same score");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92),
+    "Technical", "Explain SQL JOIN.", answerText, null) is { AnalysisAvailable: true },
+    "A exact quote is accepted");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 88, "SQL   JOIN\nto   combine matching records"),
+    "Technical", "Explain SQL JOIN.", answerText, null)?.WeightedScore == 88,
+    "B whitespace differences are accepted");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 86, "SQL JOIN, to combine matching records."),
+    "Technical", "Explain SQL JOIN.", answerText, null)?.WeightedScore == 86,
+    "D punctuation differences are accepted");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 84, "SQL output"),
+    "Technical", "Explain SQL JOIN.", answerText, null)?.WeightedScore == 84,
+    "F quote words in answer order are accepted");
 Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92, "Redis caching"),
     "Technical", "Explain SQL JOIN.", answerText, null, out var ungrounded) == null
     && ungrounded == "ungrounded_quote",
-    "Ungrounded evidence is a parse rejection, not a weak-answer score");
+    "G invented Redis caching is rejected");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 70, "records matching combine"),
+    "Technical", "Explain SQL JOIN.", answerText, null, out var reordered) == null
+    && reordered == "ungrounded_quote",
+    "H significantly reordered words are rejected");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 90, "Kubernetes cluster orchestration"),
+    "Technical", "Explain SQL JOIN.", answerText, null, out var invented) == null
+    && invented == "ungrounded_quote",
+    "I invented technical claim is rejected");
+var markdownAnswer = "**Redis** giữ cache.\n\n### Cách làm\n- dùng TTL\n\n```javascript\nfunction test() {\n    return true;\n}\n```";
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 80, "function test() { return true; }"),
+    "Technical", "Show a cache example.", markdownAnswer, null) is { AnalysisAvailable: true, WeightedScore: 80 },
+    "JavaScript code block answer stays evaluable when the quote omits the fence");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 78, "Redis giữ cache"),
+    "Technical", "Show a cache example.", markdownAnswer, null)?.WeightedScore == 78,
+    "Markdown answer stays evaluable when the quote omits bold markers");
+var longAnswer = new string('a', 2500) + " " + answerText;
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 70),
+    "Technical", "Explain SQL JOIN.", longAnswer, null)?.WeightedScore == 70,
+    "Long technical answer still grounds the quoted evidence");
+Check(InterviewEvaluationPolicy.TryParse("\n\n" + Payload("Technical", 92) + "\n",
+    "Technical", "Explain SQL JOIN.", answerText, null)?.WeightedScore == 92,
+    "Leading and trailing whitespace around JSON still parses");
+Check(InterviewEvaluationPolicy.TryParse("   ", "Technical", "Q", answerText, null, out var emptyJson) == null
+    && emptyJson == "malformed_json",
+    "Empty AI response does not create a score");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 0),
+    "Technical", "Explain SQL JOIN.", answerText, null) is { AnalysisAvailable: true, WeightedScore: 0 },
+    "A real zero score stays zero and is not an evaluation failure");
 Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92),
     "Technical", "Q", "", null) == null, "Empty answer cannot produce analysis");
 Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 70, confidence: 0.35),
@@ -331,6 +371,21 @@ Check(StructuredFeedbackBuilder.Build(session, [answerA, answerB, skippedAnswer]
     "Backend aggregates only evidence-backed applicable scores");
 Check(StructuredFeedbackBuilder.Build(session, [skippedAnswer]).OverallScore == null,
     "Unavailable analyses do not create an overall score");
+var failedEvaluation = new InterviewAnswer
+{
+    Id = Guid.NewGuid(), QuestionCategory = "Technical", QuestionText = "Explain SQL JOIN.",
+    AnswerText = answerText, AnalysisAvailable = false,
+    RelevanceScore = 0, CompletenessScore = 0, CommunicationScore = 0,
+    TechnicalKnowledgeScore = 0, ProblemSolvingScore = 0
+};
+var partial = StructuredFeedbackBuilder.Build(session, [answerA, failedEvaluation]);
+Check(partial.OverallScore == 92 && partial.Summary?.Contains("Chưa đủ dữ liệu") != true,
+    "One failed evaluation is excluded from the overall and is not scored as zero");
+var totalFailure = StructuredFeedbackBuilder.Build(session, [failedEvaluation]);
+Check(totalFailure.OverallScore == null
+    && totalFailure.Summary?.Contains("Chưa đủ dữ liệu phân tích") == true
+    && totalFailure.Strengths.Count == 0 && totalFailure.EvidenceGaps.Count == 0,
+    "No successful evaluation leaves overall null and does not invent strengths");
 var malformedPersisted = new InterviewAnswer { AnalysisAvailable = true,
     QuestionCategory = "Technical", QuestionText = "What is authentication?",
     AnalysisJson = "{\"Dimensions\":null}" };

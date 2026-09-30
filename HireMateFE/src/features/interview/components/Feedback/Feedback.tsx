@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Lightbulb, Loader2, RotateCcw, Sparkles } 
 import { useApp } from '../../../../app/context/AppContext';
 import { interviewService } from '../../api/interview.service';
 import type { InterviewAnswerDetail, InterviewSessionDetail, StructuredFeedback } from '../../types';
+import { AnswerMarkdown } from '../AnswerMarkdown';
 import { InterviewStepper } from '../InterviewStepper/InterviewStepper';
 import './css/Feedback.css';
 
@@ -285,7 +286,7 @@ export const Feedback: React.FC = () => {
           const linkedFollowUp = answers.find(next => next.isFollowUp && next.orderIndex === a.orderIndex + 1)?.questionText;
           return <article className="feedback-answer-card" key={a.id ?? i}>
             <h3>{l.question} {a.orderIndex + 1}: {a.questionText}</h3>
-            <p className="feedback-answer-text"><strong>{l.answer}: </strong>{a.skipped ? l.skipped : a.answerText || '—'}</p>
+            <div className="feedback-answer-text"><strong>{l.answer}: </strong>{a.skipped ? l.skipped : a.answerText ? <AnswerMarkdown text={a.answerText} /> : '—'}</div>
             {!a.skipped && (!a.analysisAvailable ? <p className="feedback-empty">{l.unavailable}</p> : <>
               {analysis.comment && <p className="feedback-answer-comment">{analysis.comment}</p>}
               {analysis.dimensions.length > 0 && <div className="feedback-answer-dimensions">

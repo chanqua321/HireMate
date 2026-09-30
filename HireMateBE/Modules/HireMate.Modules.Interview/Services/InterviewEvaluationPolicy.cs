@@ -221,7 +221,7 @@ public static class InterviewEvaluationPolicy
                     var text = quote.GetString()?.Trim();
                     if (string.IsNullOrWhiteSpace(text) || text.Length is < 3 or > 240)
                         return Reject(ref rejection, "invalid_evidence");
-                    if (!Normalized(answer).Contains(Normalized(text), StringComparison.Ordinal))
+                    if (!QuoteIsGrounded(answer, text))
                         return Reject(ref rejection, "ungrounded_quote");
                     quotes.Add(text);
                 }
@@ -241,7 +241,7 @@ public static class InterviewEvaluationPolicy
             if (status != EvidenceStatus.CvInconsistency) cvQuote = null;
             if (status == EvidenceStatus.CvInconsistency
                 && (string.IsNullOrWhiteSpace(cvQuote) || string.IsNullOrWhiteSpace(cvContext)
-                    || !Normalized(cvContext).Contains(Normalized(cvQuote), StringComparison.Ordinal)))
+                    || !QuoteIsGrounded(cvContext, cvQuote)))
                 return Reject(ref rejection, "invalid_cv_quote");
             if (status == EvidenceStatus.CvInconsistency && !weights.ContainsKey("cvConsistency"))
                 return Reject(ref rejection, "invalid_cv_quote");
@@ -398,8 +398,44 @@ public static class InterviewEvaluationPolicy
             JsonValueKind.True => true, JsonValueKind.False => false, _ => null
         } : null;
 
-    private static string Normalized(string? value) =>
-        string.Join(' ', (value ?? "").Normalize(NormalizationForm.FormC).ToLowerInvariant()
-            .Split((char[]?)null,
-            StringSplitOptions.RemoveEmptyEntries));
+    /// <summary>
+    /// Every quote word must occur, in order, in the source. Markdown, code fences,
+    /// punctuation and extra whitespace are ignored. A word the candidate did not write still fails.
+    /// </summary>
+    private static bool QuoteIsGrounded(string? source, string? quote)
+    {
+        var needle = Words(quote);
+        var haystack = Words(source);
+        if (needle.Count == 0 || haystack.Count == 0) return false;
+        var start = 0;
+        foreach (var token in needle)
+        {
+            var found = -1;
+            for (var i = start; i < haystack.Count; i++)
+            {
+                if (haystack[i] == token) { found = i; break; }
+            }
+            if (found < 0) return false;
+            start = found + 1;
+        }
+        return true;
+    }
+
+    private static List<string> Words(string? value)
+    {
+        var text = (value ?? "").Normalize(NormalizationForm.FormC).ToLowerInvariant();
+        var words = new List<string>();
+        var current = new StringBuilder();
+        foreach (var ch in text)
+        {
+            if (char.IsLetterOrDigit(ch)) current.Append(ch);
+            else if (current.Length > 0)
+            {
+                words.Add(current.ToString());
+                current.Clear();
+            }
+        }
+        if (current.Length > 0) words.Add(current.ToString());
+        return words;
+    }
 }

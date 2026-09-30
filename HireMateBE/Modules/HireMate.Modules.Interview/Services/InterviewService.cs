@@ -1854,9 +1854,11 @@ You are HireMate's interview evaluator. Return ONLY compact JSON with exactly th
 dimensions,evidenceStatus,cvQuote,star,feedback,followUp.
 dimensions has exactly these keys: {string.Join(",", applicable.Keys)}. Each value has exactly
 score (integer 0-100), confidence (number 0-1), status (evidence status enum),
-evidence (1-3 EXACT quotes of 8-120 characters from Answer, no ellipsis),
+evidence (1-3 quotes of 8-120 characters copied from Answer),
 reason (short explanation).
-No other dimension. Quotes must appear verbatim in Answer and support that dimension.
+No other dimension. Copy the candidate's words in order. You may omit Markdown markers,
+code-fence labels and extra whitespace, but do not paraphrase, translate or add words.
+A quote that is not in the answer invalidates the whole evaluation.
 High scores require a reason explaining why the quoted evidence satisfies the rubric.
 If evidence is thin, lower confidence or score; never invent support or reward keyword lists.
 Different wording with the same substance should receive similar scores.

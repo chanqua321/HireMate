@@ -18,6 +18,7 @@ import { interviewService } from '../../api/interview.service';
 import type { AnswerAnalysis, SubmitAnswerResult } from '../../types';
 import { playInterviewSpeech, playQuestionAudio, stopInterviewSpeech, resolveInterviewVoice,
   InterviewLanguage, speechAudioKey, speechIssueMessage, SpeechIssue } from '../../../../shared/utils/interviewSpeech';
+import { AnswerMarkdown } from '../AnswerMarkdown';
 import { InterviewStepper } from '../InterviewStepper/InterviewStepper';
 import { RoomEntranceOverlay, RoomHeader, RoomSidebar } from './components';
 import './css/InterviewRoom.css';
@@ -1081,7 +1082,7 @@ export const InterviewRoom: React.FC = () => {
                     </div>
                   ) : (
                     <div className="msg-bubble-user">
-                      <div className="msg-text-content">{msg.text}</div>
+                      <div className="msg-text-content"><AnswerMarkdown text={msg.text} /></div>
                     </div>
                   )}
                 </motion.div>

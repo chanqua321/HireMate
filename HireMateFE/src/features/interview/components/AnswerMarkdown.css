@@ -1,0 +1,16 @@
+.answer-md { min-width: 0; overflow-wrap: anywhere; }
+.answer-md p, .answer-md h4, .answer-md ul { margin: 0 0 0.45rem; }
+.answer-md h4 { font-size: 1rem; line-height: 1.4; }
+.answer-md ul { padding-left: 1.2rem; }
+.answer-md li { margin: 0.15rem 0; }
+.answer-md pre {
+  margin: 0.45rem 0;
+  padding: 0.65rem 0.8rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.answer-md code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.88em; }
+.answer-md p code, .answer-md li code { background: #e2e8f0; color: #0f172a; padding: 0 0.25rem; border-radius: 4px; }
