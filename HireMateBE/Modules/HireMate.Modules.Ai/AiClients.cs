@@ -24,12 +24,12 @@ public class OpenAiCompatibleAiClient(
         var inputChars = systemPrompt.Length + userPrompt.Length;
 
         if (!_options.Enabled)
-            return AiCompletionResult.Fail(providerLabel, inputChars);
+            return AiCompletionResult.Fail(providerLabel, inputChars, stage: "disabled", model: _options.Model);
 
         if (string.IsNullOrWhiteSpace(_options.ApiKey))
         {
             _logger.LogWarning("OpenAI ApiKey missing");
-            return AiCompletionResult.Fail(providerLabel, inputChars);
+            return AiCompletionResult.Fail(providerLabel, inputChars, stage: "missing_api_key", model: _options.Model);
         }
 
         try
@@ -99,7 +99,8 @@ public class OpenAiCompatibleAiClient(
                 var errBody = await response.Content.ReadAsStringAsync(cts.Token);
                 _logger.LogWarning("{Provider} returned {Status}: {Body}", providerLabel, response.StatusCode,
                     errBody.Length > 400 ? errBody[..400] : errBody);
-                return AiCompletionResult.Fail(providerLabel, inputChars);
+                return AiCompletionResult.Fail(providerLabel, inputChars, stage: "http_error",
+                    httpStatus: (int)response.StatusCode, model: model);
             }
 
             var json = await response.Content.ReadFromJsonAsync<ChatResponse>(cancellationToken: cts.Token);
@@ -107,12 +108,18 @@ public class OpenAiCompatibleAiClient(
             if (responseSchema.HasValue
                 && string.Equals(choice?.FinishReason, "length", StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogWarning("{Provider} response stopped at max tokens", providerLabel);
-                return AiCompletionResult.Fail(providerLabel, inputChars);
+                _logger.LogWarning("{Provider} response stopped at max tokens. Model={Model}", providerLabel, model);
+                return AiCompletionResult.Fail(providerLabel, inputChars, stage: "max_tokens",
+                    httpStatus: (int)response.StatusCode, model: model);
             }
             var content = choice?.Message?.Content?.Trim();
             if (string.IsNullOrWhiteSpace(content))
-                return AiCompletionResult.Fail(providerLabel, inputChars);
+            {
+                _logger.LogWarning("{Provider} returned empty evaluation content. Model={Model} HttpStatus={HttpStatus}",
+                    providerLabel, model, (int)response.StatusCode);
+                return AiCompletionResult.Fail(providerLabel, inputChars, stage: "empty_content",
+                    httpStatus: (int)response.StatusCode, model: model);
+            }
 
             // A partial JSON object can accidentally parse as a valid but incomplete analysis.
             // Reject an over-budget response intact; never slice it into another payload.
@@ -120,9 +127,10 @@ public class OpenAiCompatibleAiClient(
             {
                 if (responseSchema.HasValue)
                 {
-                    _logger.LogWarning("{Provider} evaluation output exceeded character limit ({Length}>{Limit})",
-                        providerLabel, content.Length, maxOutputChars.Value);
-                    return AiCompletionResult.Fail(providerLabel, inputChars);
+                    _logger.LogWarning("{Provider} evaluation output exceeded character limit ({Length}>{Limit}). Model={Model}",
+                        providerLabel, content.Length, maxOutputChars.Value, model);
+                    return AiCompletionResult.Fail(providerLabel, inputChars, stage: "over_char_limit",
+                        httpStatus: (int)response.StatusCode, model: model);
                 }
                 content = TruncatePreservingJson(content, maxOutputChars.Value);
             }
@@ -131,6 +139,8 @@ public class OpenAiCompatibleAiClient(
             {
                 Content = content,
                 Provider = providerLabel,
+                Model = model,
+                HttpStatus = (int)response.StatusCode,
                 UsedFallback = false,
                 InputChars = inputChars,
                 OutputChars = content.Length
@@ -138,8 +148,8 @@ public class OpenAiCompatibleAiClient(
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "{Provider} unavailable", providerLabel);
-            return AiCompletionResult.Fail(providerLabel, inputChars);
+            _logger.LogWarning(ex, "{Provider} unavailable. Model={Model}", providerLabel, _options.Model);
+            return AiCompletionResult.Fail(providerLabel, inputChars, stage: "exception", model: _options.Model);
         }
     }
 

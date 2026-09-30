@@ -169,49 +169,60 @@ public static class InterviewEvaluationPolicy
 
     public static AnswerAnalysisDto? TryParse(string content, string category, string question,
         string answer, string? cvContext)
+        => TryParse(content, category, question, answer, cvContext, out _);
+
+    public static AnswerAnalysisDto? TryParse(string content, string category, string question,
+        string answer, string? cvContext, out string? rejection)
     {
+        rejection = null;
         try
         {
-            using var document = JsonDocument.Parse(content);
+            using var document = JsonDocument.Parse(UnwrapJsonFence(content));
             var root = document.RootElement;
             if (!ExactKeys(root, "dimensions", "evidenceStatus", "cvQuote", "star", "feedback", "followUp"))
-                return null;
+                return Reject(ref rejection, "unexpected_root");
             var weights = Weights(category, question);
             var rawDimensions = root.GetProperty("dimensions");
             if (rawDimensions.ValueKind != JsonValueKind.Object
                 || rawDimensions.EnumerateObject().Count() != weights.Count
                 || rawDimensions.EnumerateObject().Any(property => !weights.ContainsKey(property.Name)))
-                return null;
+                return Reject(ref rejection, "unexpected_dimensions");
             var dimensions = new Dictionary<string, EvaluationDimensionDto>();
             foreach (var name in weights.Keys)
             {
                 if (!rawDimensions.TryGetProperty(name, out var item)
                     || !ExactKeys(item, "score", "confidence", "status", "evidence", "reason"))
-                    return null;
+                    return Reject(ref rejection, "dimension_shape");
                 var score = item.GetProperty("score");
                 var confidence = item.GetProperty("confidence");
                 var evidence = item.GetProperty("evidence");
                 var reason = item.GetProperty("reason");
                 var dimensionStatus = ReadString(item, "status");
-                if (score.ValueKind != JsonValueKind.Number || !score.TryGetInt32(out var number)
-                    || number is < 0 or > 100 || confidence.ValueKind != JsonValueKind.Number
+                if (!TryReadScore(score, out var number))
+                    return Reject(ref rejection, "invalid_score");
+                if (confidence.ValueKind != JsonValueKind.Number
                     || !confidence.TryGetDouble(out var certainty) || !double.IsFinite(certainty)
-                    || certainty is < 0 or > 1 || dimensionStatus == null
-                    || !EvidenceStatus.All.Contains(dimensionStatus)
-                    || evidence.ValueKind != JsonValueKind.Array
-                    || evidence.GetArrayLength() is < 1 or > 3 || reason.ValueKind != JsonValueKind.String)
-                    return null;
+                    || certainty is < 0 or > 1)
+                    return Reject(ref rejection, "invalid_confidence");
+                if (dimensionStatus == null || !EvidenceStatus.All.Contains(dimensionStatus))
+                    return Reject(ref rejection, "invalid_status");
+                if (evidence.ValueKind != JsonValueKind.Array || evidence.GetArrayLength() is < 1 or > 3)
+                    return Reject(ref rejection, "invalid_evidence");
+                if (reason.ValueKind != JsonValueKind.String)
+                    return Reject(ref rejection, "invalid_reason");
                 var reasonText = reason.GetString()?.Trim();
                 if (string.IsNullOrWhiteSpace(reasonText) || reasonText.Length > 400)
-                    return null;
+                    return Reject(ref rejection, "invalid_reason");
                 var quotes = new List<string>();
                 foreach (var quote in evidence.EnumerateArray())
                 {
-                    if (quote.ValueKind != JsonValueKind.String) return null;
+                    if (quote.ValueKind != JsonValueKind.String)
+                        return Reject(ref rejection, "invalid_evidence");
                     var text = quote.GetString()?.Trim();
-                    if (string.IsNullOrWhiteSpace(text) || text.Length is < 3 or > 240
-                        || !Normalized(answer).Contains(Normalized(text), StringComparison.Ordinal))
-                        return null;
+                    if (string.IsNullOrWhiteSpace(text) || text.Length is < 3 or > 240)
+                        return Reject(ref rejection, "invalid_evidence");
+                    if (!Normalized(answer).Contains(Normalized(text), StringComparison.Ordinal))
+                        return Reject(ref rejection, "ungrounded_quote");
                     quotes.Add(text);
                 }
                 dimensions[name] = new EvaluationDimensionDto
@@ -222,7 +233,8 @@ public static class InterviewEvaluationPolicy
             }
 
             var status = ReadString(root, "evidenceStatus");
-            if (status == null || !EvidenceStatus.All.Contains(status)) return null;
+            if (status == null || !EvidenceStatus.All.Contains(status))
+                return Reject(ref rejection, "invalid_evidence_status");
             var cvQuote = ReadNullableString(root, "cvQuote");
             // A model may quote matching CV context even without a contradiction.
             // Keep the validated analysis, but never persist that quote as inconsistency evidence.
@@ -230,45 +242,51 @@ public static class InterviewEvaluationPolicy
             if (status == EvidenceStatus.CvInconsistency
                 && (string.IsNullOrWhiteSpace(cvQuote) || string.IsNullOrWhiteSpace(cvContext)
                     || !Normalized(cvContext).Contains(Normalized(cvQuote), StringComparison.Ordinal)))
-                return null;
+                return Reject(ref rejection, "invalid_cv_quote");
             if (status == EvidenceStatus.CvInconsistency && !weights.ContainsKey("cvConsistency"))
-                return null;
+                return Reject(ref rejection, "invalid_cv_quote");
             if (status == EvidenceStatus.CvInconsistency
                 && (dimensions["cvConsistency"].Confidence < 0.7
                     || dimensions["cvConsistency"].Score > 59))
-                return null;
+                return Reject(ref rejection, "invalid_cv_quote");
 
             bool? s = null, t = null, a = null, r = null;
             var star = root.GetProperty("star");
             if (weights.ContainsKey("star"))
             {
-                if (!ExactKeys(star, "situation", "task", "action", "result")) return null;
+                if (!ExactKeys(star, "situation", "task", "action", "result"))
+                    return Reject(ref rejection, "invalid_star");
                 s = ReadBool(star, "situation"); t = ReadBool(star, "task");
                 a = ReadBool(star, "action"); r = ReadBool(star, "result");
-                if (!s.HasValue || !t.HasValue || !a.HasValue || !r.HasValue) return null;
+                if (!s.HasValue || !t.HasValue || !a.HasValue || !r.HasValue)
+                    return Reject(ref rejection, "invalid_star");
             }
-            else if (star.ValueKind != JsonValueKind.Null) return null;
+            else if (star.ValueKind != JsonValueKind.Null)
+                return Reject(ref rejection, "invalid_star");
 
             var feedback = root.GetProperty("feedback");
-            if (!ExactKeys(feedback, "status", "comment", "starTip")) return null;
+            if (!ExactKeys(feedback, "status", "comment", "starTip"))
+                return Reject(ref rejection, "invalid_feedback");
             var feedbackStatus = ReadString(feedback, "status");
             var comment = ReadString(feedback, "comment");
             var tip = ReadNullableString(feedback, "starTip");
             if (feedbackStatus is not ("good" or "needs_improvement" or "invalid")
                 || string.IsNullOrWhiteSpace(comment) || comment.Length > 500
-                || (tip?.Length ?? 0) > 160) return null;
+                || (tip?.Length ?? 0) > 160)
+                return Reject(ref rejection, "invalid_feedback");
 
             string? trigger = null, followReason = null;
             var follow = root.GetProperty("followUp");
             if (follow.ValueKind != JsonValueKind.Null)
             {
-                if (!ExactKeys(follow, "trigger", "reason")) return null;
+                if (!ExactKeys(follow, "trigger", "reason"))
+                    return Reject(ref rejection, "invalid_follow_up");
                 trigger = ReadString(follow, "trigger");
                 followReason = ReadString(follow, "reason");
                 if (trigger is not ("EvidenceGap" or "TechnicalGap" or "WeakSTAR"
                     or "MissingResult" or "UnclearRole" or "CvInconsistency" or "LowConfidence")
                     || string.IsNullOrWhiteSpace(followReason) || followReason.Length > 250)
-                    return null;
+                    return Reject(ref rejection, "invalid_follow_up");
                 // An optional, unsupported follow-up must not discard otherwise valid scores.
                 var supported = trigger switch
                 {
@@ -286,8 +304,9 @@ public static class InterviewEvaluationPolicy
                 if (!supported) { trigger = null; followReason = null; }
             }
             var weighted = WeightedScore(dimensions, category, question);
-            if (!weighted.HasValue) return null;
-            if (feedbackStatus == "invalid" && weighted > 39) return null;
+            if (!weighted.HasValue) return Reject(ref rejection, "invalid_score");
+            if (feedbackStatus == "invalid" && weighted > 39)
+                return Reject(ref rejection, "invalid_feedback");
             return new AnswerAnalysisDto
             {
                 AnalysisAvailable = true,
@@ -313,8 +332,37 @@ public static class InterviewEvaluationPolicy
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
         {
+            rejection = "malformed_json";
             return null;
         }
+    }
+
+    private static AnswerAnalysisDto? Reject(ref string? rejection, string reason)
+    {
+        rejection = reason;
+        return null;
+    }
+
+    private static string UnwrapJsonFence(string content)
+    {
+        var text = content.Trim();
+        if (!text.StartsWith("```", StringComparison.Ordinal)) return text;
+        var firstNewline = text.IndexOf('\n');
+        var end = text.LastIndexOf("```", StringComparison.Ordinal);
+        if (firstNewline < 0 || end <= firstNewline) return text;
+        return text[(firstNewline + 1)..end].Trim();
+    }
+
+    private static bool TryReadScore(JsonElement score, out int number)
+    {
+        number = 0;
+        if (score.ValueKind != JsonValueKind.Number) return false;
+        if (score.TryGetInt32(out number)) return number is >= 0 and <= 100;
+        if (!score.TryGetDouble(out var value) || !double.IsFinite(value)) return false;
+        var rounded = Math.Round(value);
+        if (Math.Abs(value - rounded) > 0.0001 || rounded is < 0 or > 100) return false;
+        number = (int)rounded;
+        return true;
     }
 
     public static string RubricInstruction =>

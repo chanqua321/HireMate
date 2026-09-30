@@ -236,8 +236,19 @@ Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92).Replace("\"sco
 Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92).Replace("\"score\":92", "\"score\":-1"),
     "Technical", "Explain SQL JOIN.", answerText, null) == null,
     "Negative AI score is rejected");
-Check(InterviewEvaluationPolicy.TryParse("{bad json", "Technical", "Q", answerText, null) == null,
-    "Malformed AI JSON is rejected");
+Check(InterviewEvaluationPolicy.TryParse("{bad json", "Technical", "Q", answerText, null, out var malformed)
+    == null && malformed == "malformed_json",
+    "Malformed AI JSON is rejected without a score");
+Check(InterviewEvaluationPolicy.TryParse("```json\n" + Payload("Technical", 92) + "\n```",
+    "Technical", "Explain SQL JOIN.", answerText, null) is { AnalysisAvailable: true, WeightedScore: 92 },
+    "JSON inside a markdown fence still parses");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92).Replace("\"score\":92", "\"score\":92.0"),
+    "Technical", "Explain SQL JOIN.", answerText, null)?.WeightedScore == 92,
+    "Integral JSON numbers written as 92.0 keep the same score");
+Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92, "Redis caching"),
+    "Technical", "Explain SQL JOIN.", answerText, null, out var ungrounded) == null
+    && ungrounded == "ungrounded_quote",
+    "Ungrounded evidence is a parse rejection, not a weak-answer score");
 Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 92),
     "Technical", "Q", "", null) == null, "Empty answer cannot produce analysis");
 Check(InterviewEvaluationPolicy.TryParse(Payload("Technical", 70, confidence: 0.35),

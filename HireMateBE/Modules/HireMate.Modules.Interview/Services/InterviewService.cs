@@ -1843,7 +1843,11 @@ Use {(language == "en" ? "English" : "Vietnamese")} and address the candidate di
         try
         {
             var language = ReadContextLanguage(contextJson);
-            if (language is not ("vi" or "en")) return unavailable;
+            if (language is not ("vi" or "en"))
+            {
+                LogEvaluationUnavailable(session, answer, "language", "unsupported_language", null);
+                return unavailable;
+            }
             var applicable = InterviewEvaluationPolicy.Weights(category, answer.QuestionText);
             var system = $"""
 You are HireMate's interview evaluator. Return ONLY compact JSON with exactly these root keys:
@@ -1889,7 +1893,10 @@ Keep JSON short enough to fit the response limit. No overall score.
                 system.Length + Math.Min(userPrompt.Length, 10000),
                 AiQuotaService.InterviewEvaluationMaxOutputChars);
             if (block != null)
+            {
+                LogEvaluationUnavailable(session, answer, "quota", "blocked", null);
                 return unavailable;
+            }
 
             var clipped = userPrompt.Length > 10000 ? userPrompt[..10000] : userPrompt;
             var ai = await _aiQuota.CompleteAndLogAsync(
@@ -1899,16 +1906,34 @@ Keep JSON short enough to fit the response limit. No overall score.
 
             // Do not fabricate scores when AI is unavailable — AnalysisAvailable must stay false.
             if (ai.UsedFallback || string.IsNullOrWhiteSpace(ai.Content))
+            {
+                LogEvaluationUnavailable(session, answer, ai.Stage ?? "empty_content", null, ai);
                 return unavailable;
+            }
 
             var parsed = InterviewEvaluationPolicy.TryParse(
-                ai.Content, category, answer.QuestionText, answer.AnswerText ?? "", contextJson);
+                ai.Content, category, answer.QuestionText, answer.AnswerText ?? "", contextJson,
+                out var rejection);
+            if (parsed == null)
+                LogEvaluationUnavailable(session, answer, "parse", rejection ?? "rejected", ai);
             return parsed ?? unavailable;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex,
+                "Interview evaluation failed. Stage={Stage} SessionId={SessionId} AnswerId={AnswerId}",
+                "exception", session.Id, answer.Id);
             return unavailable;
         }
+    }
+
+    private void LogEvaluationUnavailable(InterviewSession session, InterviewAnswer answer,
+        string stage, string? parseFailure, AiCompletionResult? ai)
+    {
+        _logger.LogWarning(
+            "Interview evaluation unavailable. Provider={Provider} Model={Model} HttpStatus={HttpStatus} Stage={Stage} ParseFailure={ParseFailure} SessionId={SessionId} AnswerId={AnswerId}",
+            ai?.Provider ?? "n/a", ai?.Model ?? "n/a", ai?.HttpStatus, stage, parseFailure ?? "n/a",
+            session.Id, answer.Id);
     }
 
     private static string? NormalizeSeniority(string? value)

@@ -25,14 +25,22 @@ public class AiCompletionResult
 {
     public string Content { get; set; } = string.Empty;
     public string Provider { get; set; } = "gemini";
+    public string? Model { get; set; }
+    public int? HttpStatus { get; set; }
+    /// <summary>http_error, empty_content, max_tokens, over_char_limit, exception, missing_api_key, disabled.</summary>
+    public string? Stage { get; set; }
     public bool UsedFallback { get; set; }
     public int InputChars { get; set; }
     public int OutputChars { get; set; }
 
-    public static AiCompletionResult Fail(string provider, int inputChars = 0) => new()
+    public static AiCompletionResult Fail(string provider, int inputChars = 0,
+        string? stage = null, int? httpStatus = null, string? model = null) => new()
     {
         Content = string.Empty,
         Provider = provider,
+        Model = model,
+        HttpStatus = httpStatus,
+        Stage = stage,
         UsedFallback = false,
         InputChars = inputChars,
         OutputChars = 0
