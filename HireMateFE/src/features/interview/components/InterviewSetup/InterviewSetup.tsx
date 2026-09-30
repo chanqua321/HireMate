@@ -128,9 +128,9 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 };
 
 
-// Video hướng dẫn thực tế từ thư mục public/
+// Clip ~52s ghép từ ảnh thật trên web (public/assets/guide)
 const TUTORIAL_VIDEO_CONFIG = {
-  videoSrc: '/Recording 2026-09-15 010224.mp4', 
+  videoSrc: '/assets/guide/huong-dan-nhanh.mp4',
   videoType: 'mp4' as 'mp4' | 'youtube',
 };
 

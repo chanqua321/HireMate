@@ -1,4 +1,6 @@
 .env
 known_hosts
 *.pem
+*.pub
 *.tar.gz
+dbreader-access.txt

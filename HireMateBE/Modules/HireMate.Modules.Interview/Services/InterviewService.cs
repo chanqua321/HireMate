@@ -23,7 +23,9 @@ public class InterviewService(
     HireMateContext db,
     IAiQuotaService aiQuota,
     ISpeechToTextService speechToText,
-    ILogger<InterviewService> logger) : IInterviewService
+    ILogger<InterviewService> logger,
+    ITextToSpeechService? textToSpeech = null,
+    InterviewSpeechAudioCache? speechCache = null) : IInterviewService
 {
     private const int FreeMonthlyLimit = 3; // legacy alias — dùng PlanTier.MonthlyInterviewSessions
     private const long MaxVoiceAudioBytes = 10 * 1024 * 1024; // 10 MB
@@ -33,6 +35,8 @@ public class InterviewService(
     private readonly IAiQuotaService _aiQuota = aiQuota;
     private readonly ISpeechToTextService _speechToText = speechToText;
     private readonly ILogger<InterviewService> _logger = logger;
+    private readonly ITextToSpeechService? _textToSpeech = textToSpeech;
+    private readonly InterviewSpeechAudioCache _speechCache = speechCache ?? new InterviewSpeechAudioCache();
 
     public async Task<IServiceResult> BuildContextAsync(Guid userId, BuildInterviewContextDto dto)
     {
@@ -306,6 +310,64 @@ public class InterviewService(
             return new ServiceResult(Const.FAIL_READ_CODE, "Phiên phỏng vấn thiếu ngôn ngữ đã chọn");
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG,
             new { language, locale = language == "en" ? "en-US" : "vi-VN" });
+    }
+
+    public async Task<InterviewSpeechFile> SpeakQuestionAsync(
+        Guid userId, Guid sessionId, int orderIndex, Guid? questionId)
+    {
+        var session = await GetOwnedSessionAsync(userId, sessionId);
+        var language = session == null
+            ? null
+            : ReadContextLanguage(await LoadContextPayloadAsync(userId, sessionId));
+        var answer = session == null
+            ? null
+            : await _unitOfWork.InterviewAnswerRepository.GetQueryable().AsNoTracking()
+                .FirstOrDefaultAsync(a => a.SessionId == sessionId && a.OrderIndex == orderIndex);
+        var matches = answer != null
+            && (questionId == null || questionId == Guid.Empty || answer.QuestionId == questionId);
+        var gate = InterviewSpeechGate.Reject(session, userId, language, answer?.QuestionText, matches);
+        if (gate != null || language == null || answer == null)
+        {
+            var message = gate switch
+            {
+                "NOT_OWNER" => "Không tìm thấy phiên phỏng vấn",
+                "INACTIVE" => "Phiên phỏng vấn đã kết thúc",
+                "TTS_OVERSIZE" => "Câu hỏi quá dài để đọc thành tiếng",
+                "QUESTION_MISMATCH" => "Câu hỏi không thuộc phiên này",
+                _ => "Không thể phát giọng đọc. Bạn vẫn có thể đọc câu hỏi và tiếp tục phỏng vấn."
+            };
+            return new InterviewSpeechFile
+            {
+                Error = new ServiceResult(Const.FAIL_READ_CODE, message, new { errorCode = gate ?? "TTS_FAILED" })
+            };
+        }
+
+        var question = answer.QuestionText.Trim();
+        var key = InterviewSpeechAudioCache.Key(sessionId, orderIndex, language, question);
+        if (_speechCache.TryGet(key, out var cached))
+            return new InterviewSpeechFile { Audio = cached };
+
+        var audio = await _speechCache.GetOrCreateAsync(key, async () =>
+        {
+            if (!_speechCache.AllowNewProviderCall(userId))
+                return null;
+            if (_textToSpeech == null)
+                return null;
+            var spoken = await _textToSpeech.SynthesizeAsync(question, language);
+            return spoken.Ok ? spoken.Audio : null;
+        });
+
+        if (audio == null || audio.Length < 64)
+        {
+            return new InterviewSpeechFile
+            {
+                Error = new ServiceResult(Const.FAIL_READ_CODE,
+                    "Không thể phát giọng đọc. Bạn vẫn có thể đọc câu hỏi và tiếp tục phỏng vấn.",
+                    new { errorCode = "TTS_PROVIDER_FAILED" })
+            };
+        }
+
+        return new InterviewSpeechFile { Audio = audio };
     }
 
     public async Task<IServiceResult> SubmitAnswerAsync(Guid userId, Guid sessionId, SubmitAnswerDto dto)

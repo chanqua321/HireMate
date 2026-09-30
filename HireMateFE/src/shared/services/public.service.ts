@@ -1,3 +1,4 @@
+import { BlogPost } from '../types/blog';
 import { apiClient, ApiResponse } from '../api/apiClient';
 
 export interface WaitlistDto {
@@ -36,12 +37,12 @@ export const publicService = {
     return apiClient.get(`/Content/pages/${slug}`, { skipAuth: true });
   },
 
-  async getBlogList(): Promise<ApiResponse<any[]>> {
+  async getBlogList(): Promise<ApiResponse<BlogPost[]>> {
     return apiClient.get('/Blog', { skipAuth: true });
   },
 
-  async getBlogDetail(slug: string): Promise<ApiResponse<any>> {
-    return apiClient.get(`/Blog/${slug}`, { skipAuth: true });
+  async getBlogDetail(slug: string): Promise<ApiResponse<BlogPost>> {
+    return apiClient.get(`/Blog/${encodeURIComponent(slug)}`, { skipAuth: true });
   },
 
   async getFaqs(): Promise<ApiResponse<any[]>> {

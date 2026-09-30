@@ -110,5 +110,19 @@ public class PatchUserDto
 public class PatchTicketDto
 {
     [Required] public string Status { get; set; } = "Open";
+    public string? Reply { get; set; }
+}
+
+public class AdminResourceWriteDto
+{
+    public Guid Id { get; set; }
+    [Required, MaxLength(200)] public string Title { get; set; } = string.Empty;
+    [MaxLength(80)] public string Category { get; set; } = string.Empty;
+    [MaxLength(80)] public string? Type { get; set; }
+    [MaxLength(500)] public string? Url { get; set; }
+    [MaxLength(500)] public string? Description { get; set; }
+    public bool Free { get; set; } = true;
+    public bool Featured { get; set; }
+    public bool IsPublished { get; set; } = true;
 }
 

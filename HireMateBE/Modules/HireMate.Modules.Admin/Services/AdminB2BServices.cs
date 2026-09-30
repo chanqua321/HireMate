@@ -11,7 +11,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HireMate.Modules.Admin.Services;
 
-public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleManager<Role> roles) : IAdminService
+public partial class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleManager<Role> roles,
+    HireMate.Modules.Onboarding.Storage.IFileStorageService? blogStorage = null,
+    Microsoft.Extensions.Logging.ILogger<AdminService>? blogLogger = null) : IAdminService
 {
     public async Task<IServiceResult> AnalyticsAsync()
     {
@@ -47,12 +49,37 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
         });
     }
 
-    public async Task<IServiceResult> UsersAsync(string? q)
+    public async Task<IServiceResult> UsersAsync(string? q, string? role, string? plan, string? status, int page, int pageSize)
     {
         var query = users.Users.AsNoTracking().Where(u => !u.IsDeleted);
         if (!string.IsNullOrWhiteSpace(q))
             query = query.Where(u => u.Email!.Contains(q) || u.FullName.Contains(q));
-        var list = await query.OrderByDescending(u => u.CreatedAt).Take(100).ToListAsync();
+        if (!string.IsNullOrWhiteSpace(plan))
+        {
+            var code = plan.Trim().ToLowerInvariant();
+            query = code == "free"
+                ? query.Where(u => !u.IsPremium && (u.CurrentPlanCode == null || u.CurrentPlanCode == "" || u.CurrentPlanCode == "free"))
+                : query.Where(u => u.CurrentPlanCode == code);
+        }
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var now = DateTimeOffset.UtcNow;
+            var locked = status.Trim().Equals("locked", StringComparison.OrdinalIgnoreCase);
+            query = locked
+                ? query.Where(u => u.LockoutEnd != null && u.LockoutEnd > now)
+                : query.Where(u => u.LockoutEnd == null || u.LockoutEnd <= now);
+        }
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            var wanted = role.Trim();
+            var matched = await users.GetUsersInRoleAsync(wanted);
+            var ids = matched.Select(u => u.Id).ToList();
+            query = query.Where(u => ids.Contains(u.Id));
+        }
+        var size = Math.Clamp(pageSize, 1, 50);
+        var index = Math.Max(1, page);
+        var total = await query.CountAsync();
+        var list = await query.OrderByDescending(u => u.CreatedAt).Skip((index - 1) * size).Take(size).ToListAsync();
         var data = new List<object>();
         foreach (var u in list)
         {
@@ -63,14 +90,23 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
                 u.Email,
                 u.FullName,
                 u.IsPremium,
+                currentPlanCode = string.IsNullOrWhiteSpace(u.CurrentPlanCode) ? "free" : u.CurrentPlanCode,
                 u.OnboardingCompleted,
                 u.LockoutEnd,
+                u.CreatedAt,
+                u.LastLogin,
                 emailConfirmed = u.EmailConfirmed,
                 avatarUrl = u.AvatarUrl,
                 roles = r
             });
         }
-        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, data);
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, new
+        {
+            page = index,
+            pageSize = size,
+            total,
+            items = data
+        });
     }
 
     public async Task<IServiceResult> PatchUserAsync(Guid id, PatchUserDto dto)
@@ -140,7 +176,7 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
     {
         var list = await uow.SupportTicketRepository.GetQueryable().AsNoTracking()
             .OrderByDescending(t => t.CreatedAt).ToListAsync();
-        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list.Select(TicketView));
     }
 
     public async Task<IServiceResult> CreateTicketAsync(AdminCreateTicketDto dto)
@@ -172,31 +208,50 @@ public class AdminService(IUnitOfWork uow, UserManager<UserAccount> users, RoleM
     {
         var t = await uow.SupportTicketRepository.GetQueryable().FirstOrDefaultAsync(x => x.Id == id);
         if (t == null) return new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy ticket");
-        t.Status = dto.Status;
+        t.Status = NormalizeTicketStatus(dto.Status);
+        if (dto.Reply != null)
+        {
+            var (message, _) = SplitTicket(t.Body);
+            var reply = dto.Reply.Trim();
+            t.Body = string.IsNullOrEmpty(reply) ? message : message + TicketReplyMarker + reply;
+        }
         t.UpdatedAt = DateTime.UtcNow;
         await uow.SaveChangesAsync();
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, Const.SUCCESS_UPDATE_MSG, t);
+        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, Const.SUCCESS_UPDATE_MSG, TicketView(t));
     }
 
-    public async Task<IServiceResult> UpsertBlogAsync(BlogPost post)
+    private const string TicketReplyMarker = "\n\n[[ADMIN_REPLY]]\n";
+
+    private static string NormalizeTicketStatus(string? status)
     {
-        var existing = post.Id == Guid.Empty ? null : await uow.BlogPostRepository.GetQueryable().FirstOrDefaultAsync(b => b.Id == post.Id);
-        if (existing == null)
+        var value = (status ?? "open").Trim().ToLowerInvariant().Replace(' ', '_');
+        return value is "resolved" or "in_progress" or "open" ? value : "open";
+    }
+
+    private static (string Message, string? Reply) SplitTicket(string? body)
+    {
+        var text = body ?? string.Empty;
+        var index = text.IndexOf(TicketReplyMarker, StringComparison.Ordinal);
+        if (index < 0) return (text, null);
+        var reply = text[(index + TicketReplyMarker.Length)..].Trim();
+        return (text[..index].Trim(), string.IsNullOrEmpty(reply) ? null : reply);
+    }
+
+    private static object TicketView(SupportTicket ticket)
+    {
+        var (message, reply) = SplitTicket(ticket.Body);
+        return new
         {
-            post.Id = Guid.NewGuid();
-            await uow.BlogPostRepository.CreateAsync(post);
-        }
-        else
-        {
-            existing.Title = post.Title;
-            existing.Slug = post.Slug;
-            existing.Summary = post.Summary;
-            existing.Body = post.Body;
-            existing.Tag = post.Tag;
-            existing.IsPublished = post.IsPublished;
-        }
-        await uow.SaveChangesAsync();
-        return new ServiceResult(Const.SUCCESS_UPDATE_CODE, Const.SUCCESS_UPDATE_MSG, existing ?? post);
+            ticket.Id,
+            ticket.UserId,
+            ticket.Email,
+            ticket.Subject,
+            body = message,
+            reply,
+            status = NormalizeTicketStatus(ticket.Status),
+            ticket.CreatedAt,
+            ticket.UpdatedAt
+        };
     }
 
     public async Task<IServiceResult> UpsertFaqAsync(FaqItem item)

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../../../app/context/AppContext';
+import { educationText } from '../../../../shared/config/constants';
 import {
   profileService,
   cvService,
@@ -100,11 +101,11 @@ const parseCvDocumentFromBackend = (d: any): UserCvCard => {
     d.parsedExp ||
     (parsedExtract?.graduationYear ? `Năm TN: ${parsedExtract.graduationYear}` : 'Chưa xác định');
 
-  const education =
+  const education = educationText(
     parsedExtract?.university ||
     parsedExtract?.education ||
     d.parsedEducation ||
-    '';
+    '');
 
   const skills =
     Array.isArray(parsedExtract?.skills) && parsedExtract.skills.length > 0

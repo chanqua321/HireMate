@@ -699,19 +699,300 @@
   line-height: 1.45;
 }
 
+/* =====================================================================
+   RESPONSIVE DESIGN (TABLET & MOBILE)
+   ===================================================================== */
+
 @media (max-width: 900px) {
   .career-kpi-banner {
     flex-direction: column;
     text-align: center;
     gap: 1.5rem;
   }
-  .career-submetrics-grid {
-    grid-template-columns: 1fr;
-  }
   .career-overview-grid {
     grid-template-columns: 1fr;
   }
   .memory-deep-dive-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .career-os-container {
+    padding: 1.25rem 1rem 3.5rem;
+  }
+
+  .career-hero {
+    margin-bottom: 1.75rem;
+  }
+
+  .career-hero-badge {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .career-hero-title {
+    font-size: 1.55rem;
+    line-height: 1.32;
+    margin-bottom: 0.65rem;
+  }
+
+  .career-hero-desc {
+    font-size: 0.88rem;
+    line-height: 1.55;
+    margin-bottom: 1.5rem;
+  }
+
+  /* KPI Banner */
+  .career-kpi-banner {
+    padding: 1.5rem 1.25rem;
+    border-radius: 20px;
+    gap: 1.25rem;
+  }
+
+  .career-score-circle-wrap {
+    width: 110px;
+    height: 110px;
+    margin: 0 auto;
+  }
+
+  .career-score-number .score-val {
+    font-size: 1.75rem;
+  }
+
+  .career-kpi-title {
+    font-size: 1.15rem;
+    line-height: 1.35;
+  }
+
+  .career-kpi-sub {
+    font-size: 0.82rem;
+    margin-bottom: 1.2rem;
+    line-height: 1.5;
+  }
+
+  .career-submetrics-grid {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+
+  .submetric-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    row-gap: 5px;
+    column-gap: 8px;
+    text-align: left;
+  }
+
+  .submetric-label {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 0.78rem;
+  }
+
+  .submetric-val {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 0.82rem;
+    text-align: right;
+  }
+
+  .submetric-bar-wrap {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: 7px;
+  }
+
+  .career-kpi-action {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .career-btn-cta,
+  .career-btn-sec {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem 1rem;
+    font-size: 0.88rem;
+    justify-content: center;
+  }
+
+  /* Tabs Bar */
+  .career-tabs-bar {
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .career-tabs-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .career-tab-btn {
+    padding: 0.65rem 0.95rem;
+    font-size: 0.82rem;
+    gap: 0.4rem;
+  }
+
+  /* Glass Cards */
+  .career-card-glass {
+    padding: 1.25rem 1rem;
+    border-radius: 16px;
+  }
+
+  .card-glass-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .card-glass-title {
+    font-size: 1rem;
+    gap: 0.45rem;
+  }
+
+  .badge-pill {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.55rem;
+  }
+
+  .card-glass-desc {
+    font-size: 0.82rem;
+    margin-bottom: 1rem;
+  }
+
+  /* Timeline */
+  .timeline-phase-block {
+    gap: 0.75rem;
+  }
+
+  .phase-marker {
+    width: 28px;
+    height: 28px;
+    font-size: 0.78rem;
+  }
+
+  .phase-title {
+    font-size: 0.9rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .phase-tasks-list {
+    gap: 0.45rem;
+  }
+
+  .task-row {
+    padding: 0.45rem 0.65rem;
+    gap: 0.45rem;
+  }
+
+  .task-text {
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  /* Memory Boxes */
+  .memory-box {
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+  }
+
+  .memory-box-title {
+    font-size: 0.84rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .memory-box ul {
+    font-size: 0.78rem;
+    padding-left: 1.1rem;
+    margin: 0;
+  }
+
+  .memory-box li {
+    margin-bottom: 0.35rem;
+  }
+
+  .career-memory-footer {
+    margin-top: 1rem;
+  }
+
+  .link-inline {
+    font-size: 0.82rem;
+    justify-content: center;
+  }
+
+  /* Roadmap Tab */
+  .roadmap-phase-card {
+    padding: 1.1rem 0.95rem;
+    border-radius: 14px;
+    margin-bottom: 1.25rem;
+  }
+
+  .roadmap-tasks-grid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .roadmap-task-card {
+    padding: 0.75rem;
+  }
+
+  .task-card-content p {
+    font-size: 0.82rem;
+  }
+
+  /* Learning Tab */
+  .learning-recommendations-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .learning-course-card {
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  /* Deep Dive Memory */
+  .memory-events-list {
+    gap: 0.65rem;
+  }
+
+  .memory-event-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    padding: 0.85rem;
+  }
+
+  .event-time {
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .career-hero-title {
+    font-size: 1.35rem;
+  }
+
+  .career-kpi-banner {
+    padding: 1.2rem 0.9rem;
+    border-radius: 16px;
+  }
+
+  .career-kpi-title {
+    font-size: 1.05rem;
+  }
+
+  .career-tab-btn {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.78rem;
   }
 }

@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Claims;
@@ -37,6 +38,7 @@ public class AuthService(
     private readonly IWebHostEnvironment _env = env;
     private readonly IUnitOfWork _unitOfWork = unitOfWork;
     private readonly IAiQuotaService _aiQuota = aiQuota;
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> OtpSendLocks = new(StringComparer.OrdinalIgnoreCase);
 
     private bool ExposeDevTokens =>
         _env.IsDevelopment() &&
@@ -58,20 +60,25 @@ public class AuthService(
             if (!existing.IsDeleted && !existing.EmailConfirmed && RequireEmailConfirmation
                 && !AppRoles.IsSystemAdminEmail(existing.Email))
             {
-                var otpPlainExisting = await IssueAndSendEmailOtpAsync(existing);
+                var retryOtp = await IssueAndSendEmailOtpAsync(existing);
                 var retryData = new Dictionary<string, object?>
                 {
                     ["email"] = existing.Email,
                     ["emailConfirmed"] = false,
                     ["requireEmailConfirmation"] = true,
                     ["verifyOtp"] = true,
-                    ["message"] = "Email đã đăng ký nhưng chưa xác nhận. Đã gửi lại mã OTP."
+                    ["message"] = retryOtp.Sent
+                        ? "Email đã đăng ký nhưng chưa xác nhận. Đã gửi lại mã OTP."
+                        : "Mã OTP vừa được gửi. Vui lòng dùng mã đó, chưa gửi thêm mã mới."
                 };
-                if (ExposeDevTokens)
-                    retryData["otpDev"] = otpPlainExisting;
+                if (ExposeDevTokens && retryOtp.Plain != null)
+                    retryData["otpDev"] = retryOtp.Plain;
 
                 return new ServiceResult(Const.SUCCESS_CREATE_CODE,
-                    "Email chưa xác nhận. Vui lòng nhập mã OTP đã gửi lại.", retryData);
+                    retryOtp.Sent
+                        ? "Email chưa xác nhận. Vui lòng nhập mã OTP đã gửi lại."
+                        : "Email chưa xác nhận. Mã OTP vừa gửi vẫn còn hiệu lực.",
+                    retryData);
             }
 
             return new ServiceResult(Const.FAIL_CREATE_CODE, "Email đã được đăng ký");
@@ -109,7 +116,7 @@ public class AuthService(
             });
         }
 
-        var otpPlain = await IssueAndSendEmailOtpAsync(user);
+        var otpIssue = await IssueAndSendEmailOtpAsync(user);
 
         var data = new Dictionary<string, object?>
         {
@@ -117,13 +124,18 @@ public class AuthService(
             ["emailConfirmed"] = false,
             ["requireEmailConfirmation"] = true,
             ["verifyOtp"] = true,
-            ["message"] = "Vui lòng nhập mã OTP đã gửi tới email để xác nhận tài khoản."
+            ["message"] = otpIssue.Sent
+                ? "Vui lòng nhập mã OTP đã gửi tới email để xác nhận tài khoản."
+                : "Mã OTP vừa được gửi. Vui lòng dùng mã đó, chưa gửi thêm mã mới."
         };
-        if (ExposeDevTokens)
-            data["otpDev"] = otpPlain;
+        if (ExposeDevTokens && otpIssue.Plain != null)
+            data["otpDev"] = otpIssue.Plain;
 
         return new ServiceResult(Const.SUCCESS_CREATE_CODE,
-            "Đăng ký thành công. Vui lòng nhập mã OTP gửi tới email.", data);
+            otpIssue.Sent
+                ? "Đăng ký thành công. Vui lòng nhập mã OTP gửi tới email."
+                : "Đăng ký thành công. Mã OTP vừa gửi vẫn còn hiệu lực.",
+            data);
     }
 
     public async Task<IServiceResult> LoginAsync(LoginDto dto)
@@ -392,12 +404,12 @@ public class AuthService(
         if (user.EmailConfirmed)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Email đã được xác nhận");
 
-        if (user.EmailOtpSentAt != null && user.EmailOtpSentAt > DateTime.UtcNow.AddSeconds(-60))
+        var otpIssue = await IssueAndSendEmailOtpAsync(user);
+        if (!otpIssue.Sent)
             return new ServiceResult(Const.FAIL_UPDATE_CODE, "Vui lòng đợi khoảng 60 giây trước khi gửi lại OTP.");
 
-        var otpPlain = await IssueAndSendEmailOtpAsync(user);
         if (ExposeDevTokens)
-            return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi mã OTP xác nhận.", new { otpDev = otpPlain });
+            return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi mã OTP xác nhận.", new { otpDev = otpIssue.Plain });
         return new ServiceResult(Const.SUCCESS_READ_CODE, "Đã gửi mã OTP xác nhận tới email.");
     }
 
@@ -457,27 +469,46 @@ public class AuthService(
         return new ServiceResult(Const.SUCCESS_UPDATE_CODE, "Đặt lại mật khẩu thành công");
     }
 
-    private async Task<string> IssueAndSendEmailOtpAsync(UserAccount user)
+    private async Task<OtpIssue> IssueAndSendEmailOtpAsync(UserAccount user)
     {
-        var otp = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
-        user.EmailOtpHash = HashOtp(user.Id, otp);
-        user.EmailOtpExpiresAt = DateTime.UtcNow.AddMinutes(10);
-        user.EmailOtpAttempts = 0;
-        user.EmailOtpSentAt = DateTime.UtcNow;
-        user.UpdatedAt = DateTime.UtcNow;
-        await _userManager.UpdateAsync(user);
+        var key = (user.Email ?? user.Id.ToString()).Trim();
+        var gate = OtpSendLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            var fresh = await _userManager.FindByIdAsync(user.Id.ToString());
+            if (fresh != null)
+                user = fresh;
 
-        var html = $"""
-            <p>Xin chào {WebUtility.HtmlEncode(user.FullName)},</p>
-            <p>Mã OTP xác nhận email HireMate của bạn là:</p>
-            <p style="font-size:28px;font-weight:700;letter-spacing:6px;">{otp}</p>
-            <p>Mã có hiệu lực trong <b>10 phút</b>. Không chia sẻ mã này cho任何人.</p>
-            <p>— HireMate</p>
-            """;
+            if (user.EmailOtpSentAt != null && user.EmailOtpSentAt > DateTime.UtcNow.AddSeconds(-60))
+                return new OtpIssue(null, false);
 
-        await _emailService.SendAsync(user.Email!, "HireMate — Mã OTP xác nhận email", html);
-        return otp;
+            var otp = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+            user.EmailOtpHash = HashOtp(user.Id, otp);
+            user.EmailOtpExpiresAt = DateTime.UtcNow.AddMinutes(10);
+            user.EmailOtpAttempts = 0;
+            user.EmailOtpSentAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
+
+            var html = $"""
+                <p>Xin chào {WebUtility.HtmlEncode(user.FullName)},</p>
+                <p>Mã OTP xác nhận email HireMate của bạn là:</p>
+                <p style="font-size:28px;font-weight:700;letter-spacing:6px;">{otp}</p>
+                <p>Mã có hiệu lực trong <b>10 phút</b>. Không chia sẻ mã này với bất kỳ ai.</p>
+                <p>— HireMate</p>
+                """;
+
+            await _emailService.SendAsync(user.Email!, "HireMate — Mã OTP xác nhận email", html);
+            return new OtpIssue(otp, true);
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
+
+    private readonly record struct OtpIssue(string? Plain, bool Sent);
 
     private static string HashOtp(Guid userId, string otp)
     {

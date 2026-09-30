@@ -8,6 +8,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInterviewModule(this IServiceCollection services)
     {
+        services.AddSingleton<InterviewSpeechAudioCache>();
         services.AddScoped<IInterviewService, InterviewService>();
         return services;
     }

@@ -343,3 +343,93 @@
   font-size: 0.82rem;
   font-weight: 700;
 }
+
+/* Responsive for HomeHeroSection */
+@media (max-width: 960px) {
+  .hm-hero-section {
+    min-height: auto;
+    padding: 32px 0 48px 0;
+  }
+
+  .hm-hero-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .hm-hero-left {
+    align-items: flex-start;
+  }
+
+  .hm-hero-title {
+    font-size: clamp(2rem, 5.5vw, 2.75rem);
+  }
+
+  .hm-hero-desc {
+    max-width: 100%;
+  }
+
+  .hm-hero-preview-card {
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 640px) {
+  .hm-hero-section {
+    padding: 24px 0 40px 0;
+  }
+
+  .hm-hero-pill-badge {
+    font-size: 0.76rem;
+    padding: 5px 12px;
+    margin-bottom: 12px;
+  }
+
+  .hm-hero-title {
+    font-size: 1.85rem;
+    line-height: 1.25;
+  }
+
+  .hm-hero-desc {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    margin: 10px 0 20px 0;
+  }
+
+  .hm-hero-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .hm-hero-actions .hm-btn {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .hm-hero-trust {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding-top: 14px;
+  }
+
+  .floating-badge {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+  }
+
+  .floating-badge.top-right {
+    top: -12px;
+    right: 12px;
+  }
+
+  .floating-badge.bottom-left {
+    bottom: -12px;
+    left: 12px;
+  }
+}

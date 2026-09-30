@@ -9,6 +9,7 @@ public sealed class LocalFileStorage : IFileStorageService
     private static readonly Regex NewKey = new(
         @"^users/[0-9a-f]{32}/cv/[0-9a-f]{32}/(?:original\.(?:pdf|docx)|generated\.pdf)$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex BlogKey = new(@"^blogs/[0-9a-f]{32}/[0-9a-f]{32}\.(?:png|jpg)$", RegexOptions.Compiled);
     private readonly string _root;
     private readonly string _legacyPublic;
     private readonly string _legacyPrivate;
@@ -89,7 +90,7 @@ public sealed class LocalFileStorage : IFileStorageService
 
     private string Resolve(string key)
     {
-        if (NewKey.IsMatch(key))
+        if (NewKey.IsMatch(key) || BlogKey.IsMatch(key))
         {
             var full = Path.GetFullPath(Path.Combine(_root, key.Replace('/', Path.DirectorySeparatorChar)));
             if (!IsWithin(full, _root)) throw new InvalidOperationException("Invalid storage key.");

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, CreditCard, FileText, ArrowUpRight, Download, RefreshCw } from 'lucide-react';
-import { adminService, AdminRevenue as AdminRevenueData } from '../../shared/services/admin.service';
-import { billingService } from '../../features/billing/api/billing.service';
-import { InvoiceDto } from '../../features/billing/types';
+import { DollarSign, TrendingUp, CreditCard, FileText, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+import { adminService, AdminInvoiceRow, AdminRevenueSeries, RevenueBucket } from '../../shared/services/admin.service';
 import './admin.css';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 const fmt = (n: number) => `₫${n.toLocaleString('vi-VN')}`;
 const fmtM = (n: number) => {
@@ -13,283 +15,182 @@ const fmtM = (n: number) => {
   return `₫${n.toLocaleString('vi-VN')}`;
 };
 const statusBadge = (s: string) => {
+  const key = s.toLowerCase();
   const map: Record<string, string> = { paid: 'success', pending: 'warning', failed: 'danger', refunded: 'neutral' };
   const label: Record<string, string> = { paid: 'Đã thanh toán', pending: 'Chờ xử lý', failed: 'Thất bại', refunded: 'Hoàn tiền' };
-  return <span className={`admin-badge ${map[s] || 'neutral'}`}>{label[s] || s}</span>;
+  return <span className={`admin-badge ${map[key] || 'neutral'}`}>{label[key] || s}</span>;
 };
-
-export interface MonthlyRevenueItem {
-  month: string;
-  revenue: number;
-  subscriptions: number;
-  newUsers: number;
-}
 
 const AdminRevenue: React.FC = () => {
   const [tab, setTab] = useState<'overview' | 'invoices'>('overview');
   const [loading, setLoading] = useState(true);
-  const [revenueData, setRevenueData] = useState<AdminRevenueData | null>(null);
-  const [invoicesList, setInvoicesList] = useState<any[]>([]);
-  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenueItem[]>([]);
+  const [error, setError] = useState('');
+  const [grain, setGrain] = useState<'day' | 'week' | 'month'>('month');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [series, setSeries] = useState<AdminRevenueSeries | null>(null);
+  const [buckets, setBuckets] = useState<RevenueBucket[]>([]);
+  const [invoices, setInvoices] = useState<AdminInvoiceRow[]>([]);
 
   const fetchData = async () => {
     setLoading(true);
-    try {
-      const [revRes, invRes] = await Promise.allSettled([
-        adminService.getRevenue(),
-        billingService.getInvoices(),
-      ]);
-
-      if (revRes.status === 'fulfilled' && revRes.value?.ok && revRes.value.data) {
-        setRevenueData(revRes.value.data);
-      }
-
-      if (invRes.status === 'fulfilled' && invRes.value?.ok && Array.isArray(invRes.value.data)) {
-        const mapped = invRes.value.data.map((inv: InvoiceDto) => ({
-          id: inv.invoiceNumber || inv.id?.substring(0, 8) || 'INV-000',
-          user: inv.userId || 'Người dùng',
-          email: 'Khách hàng',
-          plan: inv.plan?.name || (inv.amountVnd > 300000 ? 'Premium' : 'Pro'),
-          amount: inv.amountVnd,
-          date: inv.createdAt ? new Date(inv.createdAt).toISOString().split('T')[0] : '—',
-          status: inv.status?.toLowerCase() === 'completed' || inv.status?.toLowerCase() === 'paid' ? 'paid' : (inv.status?.toLowerCase() || 'pending'),
-          method: inv.paymentMethod || 'VNPay',
-        }));
-        setInvoicesList(mapped);
-
-        // Calculate real monthly aggregations from actual invoices
-        if (mapped.length > 0) {
-          const monthMap: Record<string, { revenue: number; subscriptions: number; newUsers: number }> = {};
-          mapped.forEach((inv) => {
-            const m = inv.date !== '—' ? `Tháng ${new Date(inv.date).getMonth() + 1}` : 'Tháng gần nhất';
-            if (!monthMap[m]) monthMap[m] = { revenue: 0, subscriptions: 0, newUsers: 0 };
-            if (inv.status === 'paid') {
-              monthMap[m].revenue += inv.amount;
-              monthMap[m].subscriptions += 1;
-            }
-          });
-          const list: MonthlyRevenueItem[] = Object.entries(monthMap).map(([month, val]) => ({
-            month,
-            revenue: val.revenue,
-            subscriptions: Math.max(val.subscriptions, 1),
-            newUsers: val.subscriptions,
-          }));
-          setMonthlyRevenue(list);
-        } else {
-          setMonthlyRevenue([]);
-        }
-      } else {
-        setInvoicesList([]);
-        setMonthlyRevenue([]);
-      }
-    } catch (err) {
-      console.warn('Real revenue API call had issue:', err);
-      setInvoicesList([]);
-      setMonthlyRevenue([]);
-    } finally {
-      setLoading(false);
+    setError('');
+    const res = await adminService.getRevenueSeries(grain, from || undefined, to || undefined);
+    if (res.ok && res.data) {
+      setSeries(res.data);
+      setBuckets(res.data.buckets ?? []);
+      setInvoices(res.data.invoices ?? []);
+    } else {
+      setSeries(null);
+      setBuckets([]);
+      setInvoices([]);
+      setError(res.message || 'Không tải được doanh thu');
     }
+    setLoading(false);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, [grain, from, to]);
 
-  const totalRev = revenueData?.totalRevenue ?? 0;
-  const mrr = revenueData?.mrr ?? 0;
-  const activeSubs = revenueData?.premiumUsers ?? 0;
-  const convRate = revenueData?.conversionRate !== undefined ? `${revenueData.conversionRate}%` : '0%';
-  const maxRev = Math.max(...monthlyRevenue.map(m => m.revenue), 1);
+  const summary = series?.summary;
+  const change = summary?.changePercent ?? 0;
+  const changeUp = change >= 0;
 
   return (
     <div>
-      <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
-          <h1 className="admin-page-title">💰 Doanh thu & Thanh toán</h1>
-          {/* <p className="admin-page-subtitle">Theo dõi doanh thu, invoices và lịch sử giao dịch từ cơ sở dữ liệu thời gian thực.</p> */}
+          <h1 className="admin-page-title">Doanh thu & Thanh toán</h1>
+          <p className="admin-page-subtitle">Toàn bộ hóa đơn hệ thống, lọc theo ngày, tuần hoặc tháng.</p>
         </div>
-        <button 
-          className="admin-btn admin-btn-secondary admin-btn-sm" 
-          onClick={fetchData} 
-          disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-        >
-          <RefreshCw size={14} className={loading ? 'spin' : ''} />
-          {loading ? 'Đang cập nhật...' : 'Làm mới API'}
+        <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={fetchData} disabled={loading}>
+          <RefreshCw size={14} className={loading ? 'spin' : ''} /> {loading ? 'Đang cập nhật...' : 'Làm mới'}
         </button>
       </div>
 
-      {/* Stats */}
+      <div className="admin-card" style={{ marginBottom: '1.25rem' }}>
+        <div className="admin-card-body" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
+          {(['day', 'week', 'month'] as const).map((value) => (
+            <button key={value} className={`admin-tab${grain === value ? ' active' : ''}`} onClick={() => setGrain(value)}>
+              {value === 'day' ? 'Theo ngày' : value === 'week' ? 'Theo tuần' : 'Theo tháng'}
+            </button>
+          ))}
+          <label className="admin-form-group" style={{ margin: 0 }}>
+            <span className="admin-label">Từ ngày</span>
+            <input className="admin-input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label className="admin-form-group" style={{ margin: 0 }}>
+            <span className="admin-label">Đến ngày</span>
+            <input className="admin-input" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </label>
+          {(from || to) && <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => { setFrom(''); setTo(''); }}>Xóa lọc ngày</button>}
+        </div>
+      </div>
+
+      {error && <div className="admin-card" style={{ marginBottom: '1rem', padding: '0.9rem 1rem', color: '#b91c1c' }}>{error}</div>}
+
       <div className="admin-stats-grid">
         <div className="admin-stat-card">
           <div className="admin-stat-icon green"><DollarSign size={22} /></div>
-          <div className="admin-stat-value">{fmtM(totalRev)}</div>
-          <div className="admin-stat-label">Tổng doanh thu ({revenueData ? 'Real-time' : '6 tháng'})</div>
-          <div className="admin-stat-change up"><ArrowUpRight size={13} style={{ display: 'inline' }} /> +8.2%</div>
+          <div className="admin-stat-value">{fmtM(summary?.totalRevenue ?? 0)}</div>
+          <div className="admin-stat-label">Doanh thu trong kỳ</div>
+          <div className={`admin-stat-change ${changeUp ? 'up' : ''}`}>
+            {changeUp ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />} {change > 0 ? '+' : ''}{change}% so với kỳ trước
+          </div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon blue"><CreditCard size={22} /></div>
-          <div className="admin-stat-value">{activeSubs.toLocaleString()}</div>
-          <div className="admin-stat-label">Subscriptions active</div>
-          <div className="admin-stat-change up"><ArrowUpRight size={13} style={{ display: 'inline' }} /> +5.1%</div>
+          <div className="admin-stat-value">{(summary?.premiumUsers ?? 0).toLocaleString('vi-VN')}</div>
+          <div className="admin-stat-label">User Premium</div>
+          <div className="admin-stat-change">Tổng mọi thời điểm {fmtM(summary?.allTimeRevenue ?? 0)}</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon purple"><TrendingUp size={22} /></div>
-          <div className="admin-stat-value">{convRate}</div>
-          <div className="admin-stat-label">Conversion rate</div>
-          <div className="admin-stat-change up"><ArrowUpRight size={13} style={{ display: 'inline' }} /> +2.1%</div>
+          <div className="admin-stat-value">{summary?.conversionRate ?? 0}%</div>
+          <div className="admin-stat-label">Tỷ lệ chuyển đổi</div>
+          <div className="admin-stat-change">ARPU kỳ này {fmt(summary?.arpu ?? 0)}</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon orange"><FileText size={22} /></div>
-          <div className="admin-stat-value">{invoicesList.length}</div>
-          <div className="admin-stat-label">Invoices ({invoicesList.length} giao dịch)</div>
-          <div className="admin-stat-change up"><ArrowUpRight size={13} style={{ display: 'inline' }} /> Real API</div>
+          <div className="admin-stat-value">{summary?.paidInvoices ?? 0}</div>
+          <div className="admin-stat-label">Hóa đơn đã thanh toán</div>
+          <div className="admin-stat-change">{invoices.length} giao dịch trong kỳ</div>
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="admin-tabs">
-        <button className={`admin-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>
-          📊 Thống kê tháng
-        </button>
-        <button className={`admin-tab${tab === 'invoices' ? ' active' : ''}`} onClick={() => setTab('invoices')}>
-          🧾 Invoices
-        </button>
+        <button className={`admin-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Biểu đồ</button>
+        <button className={`admin-tab${tab === 'invoices' ? ' active' : ''}`} onClick={() => setTab('invoices')}>Hóa đơn</button>
       </div>
 
       {tab === 'overview' && (
-        <div>
-          {/* Monthly Revenue Chart */}
+        <>
           <div className="admin-card" style={{ marginBottom: '1.5rem' }}>
-            <div className="admin-card-header">
-              <h3 className="admin-card-title">📈 Doanh thu theo tháng</h3>
-            </div>
+            <div className="admin-card-header"><h3 className="admin-card-title">Doanh thu {grain === 'day' ? 'theo ngày' : grain === 'week' ? 'theo tuần' : 'theo tháng'}</h3></div>
             <div className="admin-card-body">
-              {monthlyRevenue.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--admin-text-muted)' }}>
-                  <CreditCard size={36} style={{ margin: '0 auto 10px', opacity: 0.5 }} />
-                  <p style={{ fontWeight: 600, margin: 0 }}>Chưa có phát sinh giao dịch doanh thu theo tháng trên hệ thống.</p>
-                  <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Dữ liệu thời gian thực được đồng bộ tự động khi người dùng thanh toán qua cổng VNPay/PayOS.</span>
-                </div>
+              {buckets.length === 0 ? (
+                <p style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--admin-text-muted)' }}>Chưa có hóa đơn đã thanh toán trong khoảng đã chọn.</p>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem', height: 200, marginBottom: '0.5rem' }}>
-                  {monthlyRevenue.map((m, i) => (
-                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--admin-text)', fontWeight: 600 }}>
-                        {fmtM(m.revenue)}
-                      </span>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: `${(m.revenue / maxRev) * 160}px`,
-                          background: i === monthlyRevenue.length - 1
-                            ? 'linear-gradient(180deg, #03bffd, #0284c7)'
-                            : 'linear-gradient(180deg, rgba(3, 191, 255, 0.45), rgba(3, 191, 255, 0.15))',
-                          borderRadius: '10px 10px 4px 4px',
-                          minHeight: 20,
-                          transition: 'height 0.6s ease',
-                          position: 'relative',
-                          boxShadow: i === monthlyRevenue.length - 1 ? '0 4px 12px rgba(3, 191, 255, 0.35)' : 'none'
-                        }}
-                      />
-                      <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>{m.month}</span>
-                    </div>
-                  ))}
+                <div style={{ height: 280 }}>
+                  <Bar
+                    data={{
+                      labels: buckets.map((b) => b.label),
+                      datasets: [{ label: 'Doanh thu', data: buckets.map((b) => b.revenue), backgroundColor: 'rgba(3, 191, 255, 0.75)', borderRadius: 8, maxBarThickness: 48 }],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (item) => fmt(Number(item.raw)) } } },
+                      scales: { y: { ticks: { callback: (value) => fmtM(Number(value)) } } },
+                    }}
+                  />
                 </div>
               )}
             </div>
           </div>
-
-          {/* Monthly table */}
           <div className="admin-card">
             <div className="admin-card-body" style={{ padding: 0 }}>
-              <div className="admin-table-container">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Tháng</th>
-                      <th>Doanh thu</th>
-                      <th>Subscriptions</th>
-                      <th>Users mới</th>
-                      <th>ARPU</th>
+              <table className="admin-table">
+                <thead><tr><th>Kỳ</th><th>Doanh thu</th><th>Hóa đơn</th><th>User mới</th><th>ARPU</th></tr></thead>
+                <tbody>
+                  {buckets.length === 0 ? (
+                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>Chưa có dữ liệu trong khoảng này.</td></tr>
+                  ) : buckets.map((m) => (
+                    <tr key={m.start}>
+                      <td style={{ fontWeight: 600 }}>{m.label}</td>
+                      <td style={{ fontWeight: 700, color: '#059669' }}>{fmtM(m.revenue)}</td>
+                      <td>{m.invoices}</td>
+                      <td>{m.newUsers}</td>
+                      <td>{fmt(m.invoices > 0 ? Math.round(m.revenue / m.invoices) : 0)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {monthlyRevenue.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--admin-text-muted)' }}>
-                          Chưa có lịch sử doanh thu theo tháng trên hệ thống.
-                        </td>
-                      </tr>
-                    ) : (
-                      monthlyRevenue.map((m, i) => (
-                        <tr key={i}>
-                          <td style={{ fontWeight: 600 }}>{m.month}</td>
-                          <td style={{ fontWeight: 700, color: '#059669' }}>{fmtM(m.revenue)}</td>
-                          <td style={{ color: '#0284c7', fontWeight: 600 }}>{m.subscriptions.toLocaleString()}</td>
-                          <td style={{ color: '#7c3aed', fontWeight: 600 }}>{m.newUsers}</td>
-                          <td style={{ color: '#d97706', fontWeight: 600 }}>{fmt(Math.round(m.revenue / m.subscriptions))}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {tab === 'invoices' && (
         <div className="admin-card">
-          <div className="admin-card-header">
-            <h3 className="admin-card-title">🧾 Lịch sử Invoices</h3>
-            <button className="admin-btn admin-btn-secondary admin-btn-sm"><Download size={14} /> Export CSV</button>
-          </div>
           <div className="admin-card-body" style={{ padding: 0 }}>
-            <div className="admin-table-container">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Invoice ID</th>
-                    <th>Người dùng</th>
-                    <th>Gói</th>
-                    <th>Số tiền</th>
-                    <th>Phương thức</th>
-                    <th>Ngày</th>
-                    <th>Trạng thái</th>
+            <table className="admin-table">
+              <thead><tr><th>Mã</th><th>Người dùng</th><th>Gói</th><th>Số tiền</th><th>Phương thức</th><th>Ngày</th><th>Trạng thái</th></tr></thead>
+              <tbody>
+                {invoices.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem' }}>Không có hóa đơn trong khoảng đã chọn.</td></tr>
+                ) : invoices.map((inv) => (
+                  <tr key={inv.id}>
+                    <td style={{ fontFamily: 'monospace' }}>{inv.invoiceNumber || inv.id.slice(0, 8)}</td>
+                    <td><div style={{ fontWeight: 600 }}>{inv.fullName || 'Người dùng'}</div><div style={{ fontSize: '0.75rem' }}>{inv.email}</div></td>
+                    <td>{inv.planName || '—'}</td>
+                    <td style={{ fontWeight: 700, color: '#059669' }}>{fmt(inv.amountVnd)}</td>
+                    <td>{inv.paymentMethod}</td>
+                    <td>{(inv.paidAt || inv.createdAt || '').slice(0, 10)}</td>
+                    <td>{statusBadge(inv.status)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {invoicesList.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--admin-text-muted)' }}>
-                        Chưa có lịch sử hóa đơn thanh toán nào trong cơ sở dữ liệu.
-                      </td>
-                    </tr>
-                  ) : (
-                    invoicesList.map(inv => (
-                      <tr key={inv.id}>
-                        <td style={{ fontFamily: 'monospace', color: 'var(--admin-accent, #00F2FE)', fontWeight: 600 }}>{inv.id}</td>
-                        <td>
-                          <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--admin-text)' }}>{inv.user}</div>
-                          <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem' }}>{inv.email}</div>
-                        </td>
-                        <td><span className={`admin-badge ${inv.plan === 'Premium' ? 'purple' : 'info'}`}>{inv.plan}</span></td>
-                        <td style={{ fontWeight: 700, color: '#059669' }}>{fmt(inv.amount)}</td>
-                        <td>
-                          <span className="admin-badge neutral">
-                            {inv.method === 'VNPay' ? '🏦' : '💳'} {inv.method}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{inv.date}</td>
-                        <td>{statusBadge(inv.status)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

@@ -278,6 +278,14 @@ public class AnswerHighlightsDto
     public List<AnswerHighlightItemDto> NeedsImprovement { get; set; } = [];
 }
 
+public class InterviewSpeechRequestDto
+{
+    [Range(0, 50)]
+    public int OrderIndex { get; set; }
+
+    public Guid? QuestionId { get; set; }
+}
+
 public class AnswerHighlightItemDto
 {
     public Guid AnswerId { get; set; }

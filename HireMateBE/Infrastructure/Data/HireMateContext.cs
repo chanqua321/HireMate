@@ -90,7 +90,12 @@ public class HireMateContext : IdentityDbContext<UserAccount, Role, Guid>
         });
         builder.Entity<WaitlistEntry>(e => e.HasIndex(x => x.Email));
         builder.Entity<ContentPage>(e => e.HasIndex(x => x.Slug).IsUnique());
-        builder.Entity<BlogPost>(e => e.HasIndex(x => x.Slug).IsUnique());
+        builder.Entity<BlogPost>(e =>
+        {
+            e.HasIndex(x => x.Slug).IsUnique();
+            e.HasOne<UserAccount>().WithMany().HasForeignKey(x => x.AuthorId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
         builder.Entity<CvDocument>(e =>
         {
             e.Property(x => x.Source).HasMaxLength(20).HasDefaultValue("Upload");

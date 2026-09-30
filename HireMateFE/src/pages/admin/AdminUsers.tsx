@@ -25,44 +25,55 @@ const AdminUsers: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPlan, setFilterPlan] = useState('all');
+  const [filterRole, setFilterRole] = useState('all');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [detail, setDetail] = useState<any>(null);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
-    const res = await adminService.getUsers(search || undefined);
-    if (!res.ok) {
+    const res = await adminService.getUsers({
+      q: search || undefined,
+      role: filterRole === 'all' ? undefined : filterRole,
+      plan: filterPlan === 'all' ? undefined : filterPlan.toLowerCase(),
+      status: filterStatus === 'all' ? undefined : (filterStatus === 'banned' ? 'locked' : 'active'),
+      page,
+      pageSize: 20,
+    });
+    if (!res.ok || !res.data) {
       setError(res.message || 'Không tải users');
+      setUsers([]);
       return;
     }
-    const mapped: User[] = (res.data || []).map((u: any) => ({
+    const mapped: User[] = (res.data.items || []).map((u: any) => ({
       id: String(u.id),
       name: u.fullName || u.name || '—',
       email: u.email || '',
       role: (u.roles && u.roles[0]) || u.role || 'User',
-      plan: u.isPremium ? 'Premium' : 'Free',
+      plan: u.currentPlanCode || (u.isPremium ? 'premium' : 'free'),
       interviews: u.interviewCount ?? 0,
       joinDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : '—',
-      status: u.isDeleted || u.lockoutEnd ? 'banned' : 'active',
+      status: u.lockoutEnd && new Date(u.lockoutEnd) > new Date() ? 'banned' : 'active',
       emailConfirmed: !!u.emailConfirmed,
       avatarUrl: u.avatarUrl || null,
     }));
     setUsers(mapped);
+    setTotal(res.data.total || 0);
     setError(null);
   };
 
   useEffect(() => {
     load().catch((e) => setError(e?.message || 'Lỗi API'));
-  }, []);
+  }, [search, filterStatus, filterPlan, filterRole, page]);
 
-  const filtered = users.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'all' || u.status === filterStatus;
-    const matchPlan = filterPlan === 'all' || u.plan === filterPlan;
-    return matchSearch && matchStatus && matchPlan;
-  });
+  const filtered = users;
+  const openDetail = async (id: string) => {
+    const res = await adminService.getUser(id);
+    setDetail(res.ok ? res.data : { error: res.message || 'Không tải được hồ sơ' });
+  };
 
   const toggleBan = async (id: string) => {
     const target = users.find((u) => u.id === id);
@@ -196,15 +207,40 @@ const AdminUsers: React.FC = () => {
               <option value="active">Active</option>
               <option value="banned">Banned</option>
             </select>
-            <select className="admin-select" value={filterPlan} onChange={e => setFilterPlan(e.target.value)}>
+            <select className="admin-select" value={filterPlan} onChange={e => { setPage(1); setFilterPlan(e.target.value); }}>
               <option value="all">Tất cả gói</option>
-              <option value="Free">Free</option>
-              <option value="Pro">Pro</option>
-              <option value="Premium">Premium</option>
+              <option value="free">free</option>
+              <option value="premium">premium</option>
+              <option value="combo">combo</option>
+            </select>
+            <select className="admin-select" value={filterRole} onChange={e => { setPage(1); setFilterRole(e.target.value); }}>
+              <option value="all">Tất cả vai trò</option>
+              <option value="User">User</option>
+              <option value="Admin">Admin</option>
             </select>
           </div>
         </div>
       </div>
+
+      {detail && (
+        <div className="admin-card" style={{ marginBottom: '1rem' }}>
+          <div className="admin-card-body">
+            {detail.error ? <p>{detail.error}</p> : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                <div><strong>{detail.fullName}</strong><div>{detail.email}</div></div>
+                <div>Vai trò: {(detail.roles || []).join(', ') || '—'}</div>
+                <div>Gói: {detail.currentPlanCode}</div>
+                <div>Tạo: {detail.createdAt ? new Date(detail.createdAt).toLocaleString('vi-VN') : '—'}</div>
+                <div>Đăng nhập gần nhất: {detail.lastLogin ? new Date(detail.lastLogin).toLocaleString('vi-VN') : 'Chưa ghi nhận'}</div>
+                <div>CV: {detail.cvCount}</div>
+                <div>Phỏng vấn: {detail.interviewCount} / hoàn thành {detail.completedInterviews}</div>
+                <div>JD match: {detail.jdCount}</div>
+                <div>Đã thanh toán: {Number(detail.paidAmountVnd || 0).toLocaleString('vi-VN')} ₫ ({detail.paidInvoices} hóa đơn)</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="admin-card">
@@ -274,6 +310,7 @@ const AdminUsers: React.FC = () => {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => openDetail(u.id)}>Chi tiết</button>
                         <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => openEdit(u)} title="Chỉnh sửa">
                           <Edit2 size={13} />
                         </button>
@@ -303,6 +340,14 @@ const AdminUsers: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem' }}>
+        <span>{total} người dùng</span>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="admin-btn admin-btn-secondary admin-btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trước</button>
+          <span>Trang {page}</span>
+          <button className="admin-btn admin-btn-secondary admin-btn-sm" disabled={page * 20 >= total} onClick={() => setPage(p => p + 1)}>Sau</button>
         </div>
       </div>
 

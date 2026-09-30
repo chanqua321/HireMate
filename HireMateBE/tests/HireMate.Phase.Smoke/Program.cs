@@ -11,6 +11,22 @@ using Common.DTOs.PublicDto;
 using HireMate.Modules.Interview.Services;
 using Infrastructure.Models;
 
+if (args.Length == 2 && args[0] == "--tts-live")
+{
+    await InterviewTtsLive.RunAsync(args[1]);
+    return;
+}
+if (args.Length == 1 && args[0] == "--admin")
+{
+    await AdminAnalyticsSmoke.RunAsync(Check);
+    return;
+}
+if (args.Length == 1 && args[0] == "--blog")
+{
+    await BlogSmoke.RunAsync(Check);
+    await FileStorageSmoke.RunAsync(Check);
+    return;
+}
 if (args.Length == 2 && args[0] == "--live-cv")
 {
     using var settings = JsonDocument.Parse(File.ReadAllText(args[1]),
@@ -377,6 +393,7 @@ geminiOutputHandler.Json = "{\"candidates\":[{\"finishReason\":\"STOP\",\"conten
 Check((await geminiOutputClient.CompleteAsync("system", "user", maxOutputChars: 5,
     responseSchema: InterviewEvaluationPolicy.ResponseSchema("Technical"))).Content == "",
     "Gemini over-limit output is rejected rather than sliced");
+await InterviewTtsSmoke.RunAsync(Check);
 Console.WriteLine("All deterministic smoke checks passed.");
 
 sealed class CaptureHandler : HttpMessageHandler

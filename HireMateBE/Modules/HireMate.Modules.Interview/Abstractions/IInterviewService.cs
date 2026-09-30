@@ -4,12 +4,20 @@ using Common.DTOs.PublicDto;
 
 namespace HireMate.Modules.Interview.Abstractions;
 
+public sealed class InterviewSpeechFile
+{
+    public byte[]? Audio { get; init; }
+    public string ContentType { get; init; } = "audio/mpeg";
+    public IServiceResult? Error { get; init; }
+}
+
 public interface IInterviewService
 {
     Task<IServiceResult> BuildContextAsync(Guid userId, BuildInterviewContextDto dto);
     Task<IServiceResult> CreateSessionAsync(Guid userId, CreateInterviewSessionDto dto);
     Task<IServiceResult> GetQuestionsAsync(Guid userId, Guid sessionId);
     Task<IServiceResult> GetLanguageAsync(Guid userId, Guid sessionId);
+    Task<InterviewSpeechFile> SpeakQuestionAsync(Guid userId, Guid sessionId, int orderIndex, Guid? questionId);
     Task<IServiceResult> SubmitAnswerAsync(Guid userId, Guid sessionId, SubmitAnswerDto dto);
     Task<IServiceResult> CompleteAsync(Guid userId, Guid sessionId);
     Task<IServiceResult> GetFeedbackAsync(Guid userId, Guid sessionId);

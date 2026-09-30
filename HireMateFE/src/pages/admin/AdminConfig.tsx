@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Sliders, Check, Server, Shield, AlertTriangle, Save, Clock, Info
 } from 'lucide-react';
+import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
 interface SystemConfigState {
@@ -54,12 +55,44 @@ const AdminConfig: React.FC = () => {
     }
   });
 
-  const [sysSaveNotice, setSysSaveNotice] = useState(false);
+  const [sysSaveNotice, setSysSaveNotice] = useState('');
 
-  const handleSaveSystemConfig = () => {
-    localStorage.setItem('hm_system_config', JSON.stringify(systemConfig));
-    setSysSaveNotice(true);
-    setTimeout(() => setSysSaveNotice(false), 2500);
+  useEffect(() => {
+    adminService.getSettings().then((res) => {
+      if (!res.ok || !Array.isArray(res.data)) return;
+      const map = Object.fromEntries(res.data.map((row) => [row.key, row.value]));
+      const bool = (key: keyof SystemConfigState, fallback: boolean) =>
+        map[key] == null ? fallback : map[key] === 'true';
+      const num = (key: keyof SystemConfigState, fallback: number) =>
+        map[key] == null || Number.isNaN(Number(map[key])) ? fallback : Number(map[key]);
+      setSystemConfig((prev) => ({
+        ...prev,
+        platformName: map.platformName ?? prev.platformName,
+        version: map.version ?? prev.version,
+        supportEmail: map.supportEmail ?? prev.supportEmail,
+        hotline: map.hotline ?? prev.hotline,
+        maintenanceMessage: map.maintenanceMessage ?? prev.maintenanceMessage,
+        freeMonthlyInterviews: num('freeMonthlyInterviews', prev.freeMonthlyInterviews),
+        maxInterviewDurationMinutes: num('maxInterviewDurationMinutes', prev.maxInterviewDurationMinutes),
+        starThreshold: num('starThreshold', prev.starThreshold),
+        maxQuestionsPerSession: num('maxQuestionsPerSession', prev.maxQuestionsPerSession),
+        jwtExpiryDays: num('jwtExpiryDays', prev.jwtExpiryDays),
+        requireEmailConfirmation: bool('requireEmailConfirmation', prev.requireEmailConfirmation),
+        enableGoogleAuth: bool('enableGoogleAuth', prev.enableGoogleAuth),
+        maintenanceMode: bool('maintenanceMode', prev.maintenanceMode),
+        autoBackupDaily: bool('autoBackupDaily', prev.autoBackupDaily),
+      }));
+    });
+  }, []);
+
+  const handleSaveSystemConfig = async () => {
+    const items = (Object.keys(systemConfig) as (keyof SystemConfigState)[]).map((key) => ({
+      key,
+      value: String(systemConfig[key]),
+    }));
+    const res = await adminService.saveSettings(items);
+    setSysSaveNotice(res.ok ? 'Đã lưu cấu hình lên máy chủ.' : (res.message || 'Không lưu được cấu hình.'));
+    setTimeout(() => setSysSaveNotice(''), 2500);
   };
 
   return (
@@ -101,7 +134,7 @@ const AdminConfig: React.FC = () => {
           fontSize: '0.9rem',
           animation: 'fadeInUp 0.3s ease'
         }}>
-          <Check size={18} /> Đã lưu thông số cấu hình hệ thống thành công!
+          <Check size={18} /> {sysSaveNotice}
         </div>
       )}
 

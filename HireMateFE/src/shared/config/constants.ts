@@ -66,16 +66,29 @@ const DUMMY_ROLES = new Set([
   'lập trình viên backend',
 ]);
 
-const norm = (value?: string | null) => (value || '').trim().toLowerCase();
+const norm = (value: unknown) => typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+/** CV extraction may return structured education rather than the profile's text field. */
+export const educationText = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(educationText).filter(Boolean).join('; ');
+  if (value && typeof value === 'object') {
+    const item = value as Record<string, unknown>;
+    return [item.institution || item.university || item.school, item.major || item.degree]
+      .filter((part): part is string => typeof part === 'string' && part.length > 0)
+      .join(' - ');
+  }
+  return '';
+};
 
 const isDummySkillList = (skills?: string[]) => {
-  if (!skills || skills.length === 0) return false;
+  if (!Array.isArray(skills) || skills.length === 0) return false;
   return skills.every((skill) => DUMMY_SKILLS.has(norm(skill)));
 };
 
 /** Bỏ giá trị mẫu từng bị ghi cứng — giữ tên thật (Google/đăng ký). */
 export const sanitizeAutoFilledProfile = (profile: Profile): Profile => {
-  const next = { ...profile };
+  const next = { ...profile, education: educationText(profile.education) };
   const dummyRole = DUMMY_ROLES.has(norm(next.role));
   const dummyField = DUMMY_FIELDS.has(norm(next.field));
   const dummyExp = DUMMY_EXP.has(norm(next.exp));

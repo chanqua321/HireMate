@@ -27,6 +27,7 @@ import AdminDashboard from '../../pages/admin/AdminDashboard';
 import AdminUsers from '../../pages/admin/AdminUsers';
 import AdminInterviews from '../../pages/admin/AdminInterviews';
 import AdminRevenue from '../../pages/admin/AdminRevenue';
+import AdminPayments from '../../pages/admin/AdminPayments';
 import AdminPlans from '../../pages/admin/AdminPlans';
 import AdminPromos from '../../pages/admin/AdminPromos';
 import AdminTickets from '../../pages/admin/AdminTickets';
@@ -117,6 +118,7 @@ export const AppRouter: React.FC = () => {
         <Route path="interviews" element={<AdminInterviews />} />
         <Route path="questions" element={<AdminQuestions />} />
         <Route path="revenue" element={<AdminRevenue />} />
+        <Route path="payments" element={<AdminPayments />} />
         <Route path="plans" element={<AdminPlans />} />
         <Route path="promos" element={<AdminPromos />} />
         <Route path="tickets" element={<AdminTickets />} />

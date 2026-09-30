@@ -39,6 +39,17 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(Math.Max(60, opts.TimeoutSeconds));
         });
+        services.AddHttpClient<OpenAiTextToSpeechService>((sp, client) =>
+        {
+            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+            var baseUrl = string.IsNullOrWhiteSpace(opts.BaseUrl) ? "https://api.openai.com/v1" : opts.BaseUrl;
+            if (!baseUrl.Contains("api.openai.com", StringComparison.OrdinalIgnoreCase)
+                && opts.Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+                baseUrl = "https://api.openai.com/v1";
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+        services.AddScoped<ITextToSpeechService>(sp => sp.GetRequiredService<OpenAiTextToSpeechService>());
         services.AddHttpClient<GeminiSpeechToTextService>((sp, client) =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;

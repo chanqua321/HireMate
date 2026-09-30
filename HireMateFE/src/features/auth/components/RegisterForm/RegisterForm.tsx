@@ -30,9 +30,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!form.name.trim() || !form.email.trim() || !form.password.trim() || !form.confirm.trim()) {
       setError('Vui lòng nhập đầy đủ thông tin yêu cầu.');
       return;
@@ -46,6 +48,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
       return;
     }
     setError('');
+    setSubmitting(true);
 
     try {
       const res = await authService.register({
@@ -79,6 +82,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
         setError(err.message);
         return;
       }
+    } finally {
+      setSubmitting(false);
     }
 
     setError('Đăng ký thất bại. Vui lòng thử lại.');
@@ -233,8 +238,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchMode, onSucc
           </button>
         </div>
 
-        <button type="submit" className="auth-submit-btn">
-          Tạo tài khoản <ArrowRight size={18} />
+        <button type="submit" className="auth-submit-btn" disabled={submitting}>
+          {submitting ? 'Đang gửi mã xác nhận...' : 'Tạo tài khoản'} {!submitting && <ArrowRight size={18} />}
         </button>
       </form>
 

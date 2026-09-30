@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X, Check, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { publicService } from '../../shared/services/public.service';
 import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
@@ -26,15 +25,15 @@ const AdminFaq: React.FC = () => {
   const fetchFaqs = async () => {
     setLoading(true);
     try {
-      const res = await publicService.getFaqs();
+      const res = await adminService.getFaqs();
       if (res.ok && Array.isArray(res.data)) {
         const mapped: FaqItem[] = res.data.map((f: any, idx: number) => ({
-          id: String(f.id || idx + 1),
+          id: String(f.id),
           question: f.question || 'Câu hỏi',
           answer: f.answer || 'Câu trả lời',
           category: f.category || 'Sản phẩm',
-          order: f.order ?? (idx + 1),
-          active: f.active !== false,
+          order: f.sortOrder ?? f.order ?? (idx + 1),
+          active: f.isPublished ?? f.active !== false,
         }));
         setFaqs(mapped);
       } else {
@@ -71,39 +70,36 @@ const AdminFaq: React.FC = () => {
       question: form.question,
       answer: form.answer,
       category: form.category,
-      order: form.order,
-      active: form.active,
+      sortOrder: form.order,
+      isPublished: form.active,
     };
-
-    if (editing) {
-      setFaqs(prev => prev.map(f => f.id === editing.id ? { ...f, ...form } : f));
-    } else {
-      setFaqs(prev => [...prev, { id: String(Date.now()), ...form }]);
-    }
     setShowModal(false);
-
     try {
       await adminService.upsertFaq(payload);
+      await fetchFaqs();
     } catch (err) {
       console.warn('Failed to upsert FAQ on BE:', err);
     }
   };
 
-  const deleteFaq = (id: string) => {
-    if (window.confirm('Xóa FAQ này?')) setFaqs(prev => prev.filter(f => f.id !== id));
+  const deleteFaq = async (id: string) => {
+    if (!window.confirm('Xóa FAQ này?')) return;
+    await adminService.deleteFaq(id);
+    await fetchFaqs();
   };
 
   const toggleActive = async (id: string) => {
-    const updated = faqs.map(f => f.id === id ? { ...f, active: !f.active } : f);
-    setFaqs(updated);
-    const target = updated.find(f => f.id === id);
-    if (target) {
-      try {
-        await adminService.upsertFaq({ id: target.id, question: target.question, answer: target.answer, active: target.active });
-      } catch (err) {
-        console.warn('Toggle FAQ active failed:', err);
-      }
-    }
+    const target = faqs.find(f => f.id === id);
+    if (!target) return;
+    await adminService.upsertFaq({
+      id: target.id,
+      question: target.question,
+      answer: target.answer,
+      category: target.category,
+      sortOrder: target.order,
+      isPublished: !target.active,
+    });
+    await fetchFaqs();
   };
 
   const sorted = [...faqs].sort((a, b) => a.order - b.order);

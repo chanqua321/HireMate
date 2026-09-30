@@ -246,7 +246,7 @@ const AdminGamification: React.FC = () => {
             <div className="admin-card-body" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <AlertCircle size={20} color="#38bdf8" style={{ flexShrink: 0 }} />
               <div style={{ fontSize: '0.85rem', color: 'var(--admin-text-muted)', lineHeight: 1.5 }}>
-                <strong style={{ color: '#E2E8F0' }}>Lưu ý quản trị:</strong> Danh mục huy hiệu hiện được đồng bộ tự động từ bảng CSDL <code style={{ color: '#00F2FE' }}>Badges</code>. Tính năng tạo và tùy chỉnh tiêu chí huy hiệu mới qua giao diện Admin đang chờ Backend cung cấp API <code style={{ color: '#00F2FE' }}>POST /api/Admin/badges</code> (chi tiết đã ghi trong báo cáo API gap).
+                Danh mục lấy từ <code style={{ color: '#00F2FE' }}>GET /Admin/badges</code>. Sửa tên hoặc mô tả sẽ ghi qua <code style={{ color: '#00F2FE' }}>POST /Admin/badges</code>. Điều kiện tự trao huy hiệu vẫn do hệ thống quyết định.
               </div>
             </div>
           </div>
@@ -288,9 +288,16 @@ const AdminGamification: React.FC = () => {
                         Hệ thống
                       </span>
                     </div>
-                    <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>
+                    <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: '0 0 0.75rem' }}>
                       {b.description || 'Huy hiệu thành tích phỏng vấn.'}
                     </p>
+                    <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={async () => {
+                      const name = window.prompt('Tên huy hiệu', b.name);
+                      if (!name?.trim()) return;
+                      const description = window.prompt('Mô tả', b.description) ?? b.description;
+                      await adminService.upsertBadge({ code: b.code, name: name.trim(), description: description || '' });
+                      fetchData();
+                    }}>Sửa</button>
                   </div>
                 </div>
               ))

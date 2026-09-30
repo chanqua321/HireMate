@@ -16,8 +16,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { interviewService } from '../../api/interview.service';
 import type { AnswerAnalysis, SubmitAnswerResult } from '../../types';
-import { playInterviewSpeech, stopInterviewSpeech, resolveInterviewVoice,
-  InterviewLanguage } from '../../../../shared/utils/interviewSpeech';
+import { playInterviewSpeech, playQuestionAudio, stopInterviewSpeech, resolveInterviewVoice,
+  InterviewLanguage, speechAudioKey, speechIssueMessage, SpeechIssue } from '../../../../shared/utils/interviewSpeech';
 import { InterviewStepper } from '../InterviewStepper/InterviewStepper';
 import { RoomEntranceOverlay, RoomHeader, RoomSidebar } from './components';
 import './css/InterviewRoom.css';
@@ -28,6 +28,7 @@ interface ChatMessage {
   timestamp?: string;
   analysis?: AnswerAnalysis | null;
   speechText?: string;
+  speechOrderIndex?: number;
 }
 
 // Match the backend's STAR-applicable categories; unknown and technical questions stay neutral.
@@ -142,6 +143,10 @@ export const InterviewRoom: React.FC = () => {
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordLimitRef = useRef<number | undefined>(undefined);
+  const discardRecordingRef = useRef(false);
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordStartedAtRef = useRef<number>(0);
@@ -181,7 +186,7 @@ export const InterviewRoom: React.FC = () => {
           .trim();
         setActiveVoiceName(cleanName || (interviewLanguage === 'en' ? 'English' : 'Tiếng Việt'));
       } else {
-        setActiveVoiceName(interviewLanguage === 'en' ? 'English voice unavailable' : 'Tiếng Việt Neural');
+        setActiveVoiceName(interviewLanguage === 'en' ? 'English voice unavailable' : 'Chưa có giọng tiếng Việt');
       }
     };
 
@@ -196,13 +201,36 @@ export const InterviewRoom: React.FC = () => {
   }, [interviewLanguage]);
 
   // 100% Guaranteed Robust Vietnamese Speech Engine
-  const speakVietnamese = useCallback((text: string, onEnd?: () => void) => {
+  const speakVietnamese = useCallback((text: string, onEnd?: () => void, orderIndex = currentIndex) => {
     setSpeechError(null);
     try {
       playChimeTone();
     } catch (e) {}
 
     if (!interviewLanguage) { setSpeechError('Chưa xác định ngôn ngữ phiên phỏng vấn.'); if (onEnd) onEnd(); return; }
+    const question = questions[orderIndex]?.q?.trim();
+    if (sessionId && (question || text.trim())) {
+      playQuestionAudio({
+        cacheKey: speechAudioKey(sessionId, orderIndex, interviewLanguage, question || `order-${orderIndex}`),
+        load: () => interviewService.fetchQuestionSpeech(sessionId, orderIndex),
+        language: interviewLanguage,
+        fallbackText: question || text,
+      }, {
+        onStart: () => { setIsAiSpeaking(true); setSpeakingText(text); },
+        onEnd: () => {
+          setIsAiSpeaking(false);
+          setSpeakingText(null);
+          if (onEnd) onEnd();
+        },
+        onError: (issue: SpeechIssue) => {
+          setIsAiSpeaking(false);
+          setSpeakingText(null);
+          if (issue !== 'CANCELLED') setSpeechError(speechIssueMessage(issue, interviewLanguage));
+          if (onEnd) onEnd();
+        },
+      });
+      return;
+    }
     playInterviewSpeech(text, interviewLanguage, {
       onStart: () => { setIsAiSpeaking(true); setSpeakingText(text); },
       onEnd: () => {
@@ -210,16 +238,14 @@ export const InterviewRoom: React.FC = () => {
         setSpeakingText(null);
         if (onEnd) onEnd();
       },
-      onError: () => {
+      onError: (issue: SpeechIssue) => {
         setIsAiSpeaking(false);
         setSpeakingText(null);
-        setSpeechError(interviewLanguage === 'en'
-          ? 'Voice playback is unavailable. You can still read the question.'
-          : 'Không phát được giọng đọc. Bạn vẫn có thể đọc câu hỏi.');
+        if (issue !== 'CANCELLED') setSpeechError(speechIssueMessage(issue, interviewLanguage));
         if (onEnd) onEnd();
       },
     });
-  }, [interviewLanguage]);
+  }, [interviewLanguage, currentIndex, questions, sessionId]);
 
   // Stop speech
   const stopSpeech = useCallback(() => {
@@ -337,6 +363,7 @@ export const InterviewRoom: React.FC = () => {
         {
           sender: 'ai',
           text: greetingText,
+          speechOrderIndex: loadedQuestions.findIndex(question => question.q),
           timestamp: new Date().toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
@@ -404,10 +431,16 @@ export const InterviewRoom: React.FC = () => {
     return () => clearInterval(timer);
   }, [currentIndex, isEntering, isCompleted, isVoiceSession, voiceExpiresAt]);
 
-  // Cleanup mic on unmount
+  // Cleanup mic and any in-flight recording on unmount
   useEffect(() => {
     return () => {
+      discardRecordingRef.current = true;
+      window.clearTimeout(recordLimitRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
       mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+      stopInterviewSpeech();
     };
   }, []);
 
@@ -425,8 +458,21 @@ export const InterviewRoom: React.FC = () => {
     scrollToBottom();
   }, [messages, isSubmitting, scrollToBottom]);
 
+  const discardActiveRecording = () => {
+    window.clearTimeout(recordLimitRef.current);
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      discardRecordingRef.current = true;
+      recorder.stop();
+    }
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    setRecording(false);
+  };
+
   const proceedWithAnswer = async (userAnswer: string, isSkipped = false) => {
     if (isCompleted || isSubmitting) return;
+    stopSpeech();
+    discardActiveRecording();
 
     setIsSubmitting(true);
     setInputError(null);
@@ -615,6 +661,7 @@ export const InterviewRoom: React.FC = () => {
         sender: 'ai',
         text: aiFeedback,
         analysis: submitResult?.analysis,
+        speechOrderIndex: nextIdx,
         timestamp: new Date().toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
@@ -627,7 +674,7 @@ export const InterviewRoom: React.FC = () => {
     setIsSubmitting(false);
 
     // Speak next question
-    speakVietnamese(aiFeedback);
+    speakVietnamese(aiFeedback, undefined, nextIdx);
   };
 
   const handleNextQuestion = async () => {
@@ -642,6 +689,7 @@ export const InterviewRoom: React.FC = () => {
 
   const handleSkipQuestion = async () => {
     if (isCompleted || isSubmitting || isTranscribing || recording) return;
+    stopSpeech();
     setInputError(null);
     await proceedWithAnswer('(Ứng viên đã bỏ qua câu hỏi này)', true);
   };
@@ -655,8 +703,13 @@ export const InterviewRoom: React.FC = () => {
 
     if (!recording) {
       try {
+        stopSpeech();
         setVoiceAnswerReceived(false);
         setInputError(null);
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+          setInputError('Trình duyệt không hỗ trợ ghi âm. Bạn vẫn có thể trả lời bằng văn bản.');
+          return;
+        }
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
         const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -671,10 +724,15 @@ export const InterviewRoom: React.FC = () => {
           if (e.data.size > 0) audioChunksRef.current.push(e.data);
         };
 
+        const recordedFor = currentIndex;
         mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          window.clearTimeout(recordLimitRef.current);
+          const discarded = discardRecordingRef.current;
+          discardRecordingRef.current = false;
+          const audioBlob = new Blob(audioChunksRef.current, { type: mime });
           stream.getTracks().forEach((track) => track.stop());
           mediaStreamRef.current = null;
+          if (discarded || recordedFor !== currentIndexRef.current) return;
 
           if (!sessionId || !localStorage.getItem('hm_access_token')) {
             setInputError('Cần đăng nhập để gửi câu trả lời Voice.');
@@ -690,9 +748,9 @@ export const InterviewRoom: React.FC = () => {
           const durationSec = Math.max(1, Math.round((Date.now() - recordStartedAtRef.current) / 1000));
           try {
             const res = await interviewService.uploadVoice(sessionId, audioBlob, {
-              orderIndex: currentIndex,
-              questionId: questionIds[currentIndex] || undefined,
-              questionText: questions[currentIndex]?.q,
+              orderIndex: recordedFor,
+              questionId: questionIds[recordedFor] || undefined,
+              questionText: questions[recordedFor]?.q,
               durationSec,
             });
 
@@ -710,8 +768,8 @@ export const InterviewRoom: React.FC = () => {
               typeof (res.data as any)?.answerText === 'string'
                 ? String((res.data as any).answerText).trim()
                 : '';
-          if (!transcript) {
-            setInputError('VOICE_EMPTY_TRANSCRIPT: Không nhận được nội dung. Thử ghi lại.');
+          if (!transcript || recordedFor !== currentIndexRef.current) {
+            if (recordedFor === currentIndexRef.current) setInputError('VOICE_EMPTY_TRANSCRIPT: Không nhận được nội dung. Thử ghi lại.');
             return;
           }
           setVoiceAnswerReceived(true);
@@ -726,9 +784,20 @@ export const InterviewRoom: React.FC = () => {
 
         mediaRecorder.start();
         setRecording(true);
-        setInputVal('');
-      } catch {
-        setInputError('MICROPHONE_PERMISSION_DENIED: Không có quyền micro. Bật quyền rồi thử lại.');
+        recordLimitRef.current = window.setTimeout(() => {
+          if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+          setRecording(false);
+          setInputError('Bản ghi đã đạt giới hạn 3 phút. Nội dung đã ghi sẽ được gửi.');
+        }, 180_000);
+      } catch (err) {
+        const name = err instanceof DOMException ? err.name : '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setInputError('MICROPHONE_PERMISSION_DENIED: Trình duyệt chưa cho dùng micro. Bạn vẫn có thể trả lời bằng văn bản.');
+        } else if (name === 'NotFoundError') {
+          setInputError('Không tìm thấy micro. Bạn vẫn có thể trả lời bằng văn bản.');
+        } else {
+          setInputError('Không bắt đầu được ghi âm. Bạn vẫn có thể trả lời bằng văn bản.');
+        }
         setRecording(false);
       }
     } else {
@@ -825,6 +894,7 @@ export const InterviewRoom: React.FC = () => {
         sender: 'ai',
         text: aiFeedback,
         analysis: submitResult?.analysis,
+        speechOrderIndex: nextIdx,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -832,7 +902,7 @@ export const InterviewRoom: React.FC = () => {
     setInputVal('');
     setRecording(false);
     setIsSubmitting(false);
-    speakVietnamese(aiFeedback);
+    speakVietnamese(aiFeedback, undefined, nextIdx);
   };
 
   const finishSessionWithMessages = async (
@@ -977,7 +1047,7 @@ export const InterviewRoom: React.FC = () => {
                         <button
                           type="button"
                           className={`tts-speaker-btn ${isAiSpeaking && speakingText === (msg.speechText ?? msg.text) ? 'active' : ''}`}
-                          onClick={() => speakVietnamese(msg.speechText ?? msg.text)}
+                          onClick={() => speakVietnamese(msg.speechText ?? msg.text, undefined, msg.speechOrderIndex ?? currentIndex)}
                           disabled={msg.speechText === ''}
                           title={isEnglish ? 'Listen to this message again' : 'Nghe lại nội dung này'}
                           aria-label={isEnglish ? 'Listen to this message again' : 'Nghe lại nội dung này'}

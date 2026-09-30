@@ -55,6 +55,7 @@ const menuStructure: MenuEntry[] = [
     icon: <TrendingUp size={18} />,
     items: [
       { type: 'item', name: 'Doanh thu', path: '/admin/revenue', icon: <TrendingUp size={16} /> },
+      { type: 'item', name: 'Thanh toán', path: '/admin/payments', icon: <CreditCard size={16} /> },
       { type: 'item', name: 'Gói dịch vụ', path: '/admin/plans', icon: <CreditCard size={16} /> },
       { type: 'item', name: 'Mã khuyến mãi', path: '/admin/promos', icon: <Tag size={16} /> },
     ],

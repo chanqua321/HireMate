@@ -5,6 +5,7 @@ import './admin.css';
 
 export interface TicketUI {
   id: string;
+  code: string;
   subject: string;
   user: string;
   category?: string;
@@ -12,6 +13,7 @@ export interface TicketUI {
   status: string;
   created: string;
   message: string;
+  reply: string;
 }
 
 const priorityBadge = (p: string) => {
@@ -41,7 +43,8 @@ const AdminTickets: React.FC = () => {
       const res = await adminService.getTickets();
       if (res.ok && Array.isArray(res.data)) {
         const mapped: TicketUI[] = res.data.map((t: AdminTicketItem) => ({
-          id: t.id ? t.id.substring(0, 8).toUpperCase() : 'TKT-NEW',
+          id: t.id,
+          code: t.id ? t.id.substring(0, 8).toUpperCase() : 'TKT',
           subject: t.subject || 'Yêu cầu hỗ trợ từ người dùng',
           user: t.email || 'Người dùng',
           category: 'Chung',
@@ -49,6 +52,7 @@ const AdminTickets: React.FC = () => {
           status: t.status?.toLowerCase() === 'resolved' ? 'resolved' : (t.status?.toLowerCase() === 'in_progress' ? 'in_progress' : 'open'),
           created: t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : '—',
           message: t.body || '',
+          reply: t.reply || '',
         }));
         setTickets(mapped);
       } else {
@@ -72,14 +76,11 @@ const AdminTickets: React.FC = () => {
     (t.subject.toLowerCase().includes(search.toLowerCase()) || t.user.toLowerCase().includes(search.toLowerCase()) || t.message.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const updateStatus = async (id: string, status: string) => {
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, status } : t));
-    if (selected?.id === id) setSelected(prev => prev ? { ...prev, status } : null);
-    try {
-      await adminService.patchTicket(id, { status });
-    } catch (err) {
-      console.warn('Could not patch ticket on BE:', err);
-    }
+  const updateStatus = async (id: string, status: string, reply?: string) => {
+    const res = await adminService.patchTicket(id, { status, reply });
+    if (!res.ok) return;
+    await fetchTickets();
+    setSelected(prev => prev && prev.id === id ? { ...prev, status, reply: reply ?? prev.reply } : prev);
   };
 
   const [replySuccessMsg, setReplySuccessMsg] = useState<string | null>(null);
@@ -88,8 +89,9 @@ const AdminTickets: React.FC = () => {
     if (!replyText.trim() || !selected) return;
     const targetId = selected.id;
     const recipient = selected.user;
+    const reply = replyText.trim();
     setReplyText('');
-    await updateStatus(targetId, 'resolved');
+    await updateStatus(targetId, 'resolved', reply);
     setSelected(null);
     setReplySuccessMsg(`Đã gửi phản hồi thành công cho ${recipient}`);
     setTimeout(() => setReplySuccessMsg(null), 4000);
@@ -196,7 +198,7 @@ const AdminTickets: React.FC = () => {
                 ) : (
                   filtered.map(t => (
                     <tr key={t.id}>
-                      <td style={{ fontFamily: 'monospace', color: '#0284c7', fontWeight: 600 }}>{t.id}</td>
+                      <td style={{ fontFamily: 'monospace', color: '#0284c7', fontWeight: 600 }}>{t.code}</td>
                       <td>
                         <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--admin-text)' }}>{t.subject}</div>
                         <div style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem' }}>{t.user}</div>
@@ -238,7 +240,7 @@ const AdminTickets: React.FC = () => {
               <div>
                 <h3 className="admin-modal-title">{selected.subject}</h3>
                 <div style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', marginTop: '0.25rem' }}>
-                  {selected.id} · {selected.user} · {selected.created}
+                  {selected.code} · {selected.user} · {selected.created}
                 </div>
               </div>
               <button className="admin-modal-close" onClick={() => setSelected(null)}><X size={18} /></button>
@@ -253,6 +255,12 @@ const AdminTickets: React.FC = () => {
                 <p style={{ color: 'var(--admin-text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Nội dung</p>
                 <p style={{ color: 'var(--admin-text)', fontSize: '0.9rem', margin: 0, lineHeight: 1.6 }}>{selected.message}</p>
               </div>
+              {selected.reply && (
+                <div style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 12, padding: '1rem', marginBottom: '1.25rem' }}>
+                  <p style={{ fontSize: '0.75rem', marginBottom: '0.5rem', fontWeight: 600 }}>Phản hồi đã lưu</p>
+                  <p style={{ margin: 0, lineHeight: 1.6 }}>{selected.reply}</p>
+                </div>
+              )}
 
               <div className="admin-form-group">
                 <label className="admin-label">Phản hồi của admin</label>

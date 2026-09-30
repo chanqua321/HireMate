@@ -82,7 +82,21 @@
 
 @media (max-width: 640px) {
   .hm-floating-mascot-widget {
-    bottom: 16px;
-    right: 16px;
+    bottom: 14px;
+    right: 14px;
+    gap: 6px;
+  }
+  .mascot-avatar-btn {
+    width: 48px;
+    height: 48px;
+  }
+  .mascot-speech-bubble {
+    max-width: 220px;
+    padding: 8px 28px 8px 12px;
+    border-radius: 12px;
+  }
+  .mascot-speech-bubble p {
+    font-size: 0.78rem;
+    line-height: 1.35;
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, X, Check, Tag, Calendar, Percent } from 'lucide-react';
 import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
@@ -35,6 +35,29 @@ const AdminPromos: React.FC = () => {
     validFrom: '', validTo: '', plan: 'all', active: true
   });
 
+  const fetchPromos = async () => {
+    const res = await adminService.getPromos();
+    if (!res.ok || !Array.isArray(res.data)) {
+      setPromos([]);
+      return;
+    }
+    setPromos(res.data.map((p: any) => ({
+      id: p.id,
+      code: p.code,
+      discount: Number(p.discountPercent ?? 0),
+      type: 'percent',
+      minAmount: 0,
+      maxUses: 0,
+      usedCount: 0,
+      validFrom: '',
+      validTo: p.expiresAt ? String(p.expiresAt).slice(0, 10) : '',
+      plan: 'all',
+      active: p.isActive !== false,
+    })));
+  };
+
+  useEffect(() => { fetchPromos(); }, []);
+
   const openCreate = () => {
     setEditing(null);
     const today = new Date().toISOString().split('T')[0];
@@ -51,35 +74,37 @@ const AdminPromos: React.FC = () => {
 
   const handleSave = async () => {
     if (!form.code.trim()) return;
-    if (editing) {
-      setPromos(prev => prev.map(p => p.id === editing.id ? { ...p, ...form } : p));
-    } else {
-      setPromos(prev => [...prev, { id: String(Date.now()), ...form, usedCount: 0 }]);
-    }
     setShowModal(false);
-
     try {
       await adminService.upsertPromo({
         id: editing?.id,
-        code: form.code,
-        discountPercent: form.type === 'percent' ? form.discount : 0,
-        discountAmountVnd: form.type === 'fixed' ? form.discount : 0,
-        maxUses: form.maxUses,
-        validFrom: form.validFrom,
-        validTo: form.validTo,
+        code: form.code.trim(),
+        discountPercent: form.discount,
         isActive: form.active,
+        expiresAt: form.validTo ? new Date(form.validTo).toISOString() : null,
       });
+      await fetchPromos();
     } catch (err) {
       console.warn('Failed to upsert promo on BE:', err);
     }
   };
 
-  const deletePromo = (id: string) => {
-    if (window.confirm('Xóa mã này?')) setPromos(prev => prev.filter(p => p.id !== id));
+  const deletePromo = async (id: string) => {
+    if (!window.confirm('Xóa mã này?')) return;
+    await adminService.deletePromo(id);
+    await fetchPromos();
   };
 
-  const toggleActive = (id: string) => {
-    setPromos(prev => prev.map(p => p.id === id ? { ...p, active: !p.active } : p));
+  const toggleActive = async (id: string) => {
+    const target = promos.find(p => p.id === id);
+    if (!target) return;
+    await adminService.upsertPromo({
+      code: target.code,
+      discountPercent: target.discount,
+      isActive: !target.active,
+      expiresAt: target.validTo ? new Date(target.validTo).toISOString() : null,
+    });
+    await fetchPromos();
   };
 
   return (
@@ -156,9 +181,11 @@ const AdminPromos: React.FC = () => {
                         <span style={{ fontWeight: 700, color: '#0284c7' }}>{p.usedCount}</span>
                         <span style={{ color: 'var(--admin-text-muted)' }}> / {p.maxUses}</span>
                       </div>
-                      <div className="admin-progress" style={{ marginTop: '0.3rem', height: 5 }}>
+                        {p.maxUses > 0 && (
+                        <div className="admin-progress" style={{ marginTop: '0.3rem', height: 5 }}>
                         <div className="admin-progress-bar" style={{ width: `${Math.min((p.usedCount / p.maxUses) * 100, 100)}%` }} />
                       </div>
+                        )}
                     </td>
                     <td>
                       <div style={{ fontSize: '0.78rem', color: 'var(--admin-text-muted)' }}>

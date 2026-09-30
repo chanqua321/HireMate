@@ -10,6 +10,10 @@ public class BlogPost
     [MaxLength(500)] public string Summary { get; set; } = string.Empty;
     public string Body { get; set; } = string.Empty;
     [MaxLength(100)] public string? Tag { get; set; }
-    public DateTime PublishedAt { get; set; } = DateTime.UtcNow;
-    public bool IsPublished { get; set; } = true;
+    public DateTime? PublishedAt { get; set; }
+    public bool IsPublished { get; set; }
+    [MaxLength(240)] public string? CoverImageKey { get; set; }
+    public Guid? AuthorId { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }

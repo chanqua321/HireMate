@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace APIs.Controllers.Content;
 
 [Route("api/[controller]")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class BlogController(IPublicContentService svc) : ControllerBase
 {
     [HttpGet]

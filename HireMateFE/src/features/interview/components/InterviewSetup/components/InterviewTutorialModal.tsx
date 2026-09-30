@@ -50,7 +50,7 @@ export const InterviewTutorialModal: React.FC<InterviewTutorialModalProps> = ({
                 <div>
                   <h3>Video mô phỏng: Cách AI phỏng vấn chuẩn STAR</h3>
                   <span className="modal-header-sub">
-                    Thời lượng: 01:15 • Hướng dẫn trải nghiệm phòng phỏng vấn
+                    Thời lượng: 00:52 • Hướng dẫn nhanh bằng ảnh thật trên web
                   </span>
                 </div>
               </div>

@@ -2,7 +2,9 @@ using HireMate.Modules.Interview.Abstractions;
 using APIs;
 
 using Common;
+using Microsoft.AspNetCore.RateLimiting;
 using Common.DTOs.InterviewDto;
+using HireMate.BuildingBlocks;
 using Common.DTOs.PublicDto;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -52,6 +54,18 @@ public class InterviewController(IInterviewService interviewService) : HireMateC
     [HttpPost("suggested-answer")]
     public async Task<IActionResult> Suggested([FromBody] SuggestedAnswerDto dto)
         => this.FromService(await interviewService.SuggestedAnswerAsync(UserId, dto));
+
+    /// <summary>Read the stored question aloud. Does not consume interview quota. Audio is not stored.</summary>
+    [HttpPost("sessions/{id:guid}/speech")]
+    [EnableRateLimiting("api")]
+    public async Task<IActionResult> Speech(Guid id, [FromBody] InterviewSpeechRequestDto dto)
+    {
+        var spoken = await interviewService.SpeakQuestionAsync(UserId, id, dto.OrderIndex, dto.QuestionId);
+        if (spoken.Audio is { Length: > 0 })
+            return File(spoken.Audio, spoken.ContentType);
+        return this.FromService(spoken.Error ?? new ServiceResult(Const.FAIL_READ_CODE,
+            "Không thể phát giọng đọc. Bạn vẫn có thể đọc câu hỏi và tiếp tục phỏng vấn."));
+    }
 
     /// <summary>Start Voice session — consumes 1 Interview quota. Idempotent.</summary>
     [HttpPost("sessions/{id:guid}/voice/start")]

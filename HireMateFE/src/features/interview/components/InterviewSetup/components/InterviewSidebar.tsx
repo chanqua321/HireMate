@@ -31,7 +31,7 @@ export const InterviewSidebar: React.FC<InterviewSidebarProps> = ({
       >
         <div className="tutorial-badge-row">
           <span className="video-duration-pill">
-            <PlayCircle size={14} /> Video Hướng Dẫn • 01:15
+            <PlayCircle size={14} /> Video Hướng Dẫn • 00:52
           </span>
           <span className="candidate-level-pill">Người mới</span>
         </div>

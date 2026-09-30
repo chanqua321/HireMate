@@ -1,3 +1,4 @@
+using Infrastructure.Queries;
 using HireMate.BuildingBlocks;
 using Common;
 using Common.DTOs.PublicDto;
@@ -57,14 +58,16 @@ public class PublicContentService(IUnitOfWork uow) : IPublicContentService
     public async Task<IServiceResult> GetBlogListAsync()
     {
         var list = await uow.BlogPostRepository.GetQueryable().AsNoTracking()
-            .Where(b => b.IsPublished).OrderByDescending(b => b.PublishedAt).ToListAsync();
+            .Where(b => b.IsPublished).OrderByDescending(b => b.PublishedAt)
+            .ReadBlogs(uow.UserAccountRepository.GetQueryable()).ToListAsync();
         return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
     }
 
     public async Task<IServiceResult> GetBlogAsync(string slug)
     {
         var post = await uow.BlogPostRepository.GetQueryable().AsNoTracking()
-            .FirstOrDefaultAsync(b => b.Slug == slug && b.IsPublished);
+            .Where(b => b.Slug == slug && b.IsPublished)
+            .ReadBlogs(uow.UserAccountRepository.GetQueryable()).FirstOrDefaultAsync();
         return post == null
             ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy bài viết")
             : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, post);

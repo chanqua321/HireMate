@@ -10,6 +10,15 @@ public class AiOptions
     public string Model { get; set; } = "gemini-2.0-flash";
     public string? ApiKey { get; set; }
     public int TimeoutSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Official OpenAI speech model, separate from the chat Model.
+    /// tts-1 accepts Vietnamese and English as input text.
+    /// </summary>
+    public string TtsModel { get; set; } = "tts-1";
+
+    /// <summary>Built-in tts-1 voice. alloy is in the official voice list.</summary>
+    public string TtsVoice { get; set; } = "alloy";
 }
 
 public class AiCompletionResult

@@ -10,4 +10,10 @@ public static class VietnamTime
 
     public static DateTime FromUtc(DateTime value) => TimeZoneInfo.ConvertTimeFromUtc(
         DateTime.SpecifyKind(value, DateTimeKind.Utc), Zone);
+
+    public static DateTime ToUtc(DateTime vietnamLocal)
+    {
+        var unspecified = DateTime.SpecifyKind(vietnamLocal, DateTimeKind.Unspecified);
+        return TimeZoneInfo.ConvertTimeToUtc(unspecified, Zone);
+    }
 }

@@ -190,7 +190,7 @@ public class CareerOsService(IUnitOfWork uow, UserManager<UserAccount> users, IA
         if (!string.IsNullOrWhiteSpace(category))
             q = q.Where(r => r.Category == category);
         var list = await q.OrderByDescending(r => r.CreatedAt).ToListAsync();
-        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list);
+        return new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, list.Select(ResourceContent.ToView));
     }
 
     public async Task<IServiceResult> GetResourceAsync(Guid id)
@@ -199,7 +199,7 @@ public class CareerOsService(IUnitOfWork uow, UserManager<UserAccount> users, IA
             .FirstOrDefaultAsync(r => r.Id == id && r.IsPublished);
         return item == null
             ? new ServiceResult(Const.WARNING_NO_DATA_CODE, "Không tìm thấy")
-            : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, item);
+            : new ServiceResult(Const.SUCCESS_READ_CODE, Const.SUCCESS_READ_MSG, ResourceContent.ToView(item));
     }
 
     private static object BuildMilestones(int count) => new[]

@@ -1,561 +1,167 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  Users,
-  Briefcase,
-  TrendingUp,
-  CreditCard,
-  MessageSquare,
-  RefreshCw,
-  Search,
-  Lock,
-  Unlock,
-  Sparkles,
-  ShieldCheck,
-  CheckCircle,
-  AlertCircle,
-  Clock,
-  ArrowUpRight,
-  UserCheck
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { adminService, AdminDashboardData } from '../../shared/services/admin.service';
 import './admin.css';
-import { isSoleAdminEmail } from '../../shared/config/constants';
-import {
-  adminService,
-  AdminAnalytics,
-  AdminInterviewStats,
-  AdminRevenue,
-  AdminUserItem,
-  AdminTicketItem
-} from '../../shared/services';
 
-const statusBadge = (s: string) => {
-  const norm = (s || '').toLowerCase().replace(/\s+/g, '_');
-  const map: Record<string, string> = {
-    active: 'success',
-    banned: 'danger',
-    locked: 'danger',
-    open: 'danger',
-    in_progress: 'warning',
-    resolved: 'success',
-    closed: 'neutral',
-  };
-  const label: Record<string, string> = {
-    active: 'Hoạt động',
-    banned: 'Đã khóa',
-    locked: 'Đã khóa',
-    open: 'Chưa xử lý',
-    in_progress: 'Đang xử lý',
-    resolved: 'Đã giải quyết',
-    closed: 'Đã đóng',
-  };
-  return <span className={`admin-badge ${map[norm] || 'neutral'}`}>{label[norm] || s}</span>;
-};
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler);
 
-const formatVND = (num?: number) => {
-  if (num === undefined || num === null) return '0 ₫';
-  return `${num.toLocaleString('vi-VN')} ₫`;
+const RANGES = [
+  ['today', 'Hôm nay'],
+  ['last7days', '7 ngày'],
+  ['last30days', '30 ngày'],
+  ['thisweek', 'Tuần này'],
+  ['thismonth', 'Tháng này'],
+  ['thisyear', 'Năm nay'],
+  ['custom', 'Tùy chọn'],
+] as const;
+
+const vnd = (n: number) => `${Number(n || 0).toLocaleString('vi-VN')} ₫`;
+const dayLabel = (iso: string) => {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
 };
+const changeText = (value: number | null | undefined) =>
+  value == null ? 'Chưa có kỳ trước để so sánh' : `${value > 0 ? '+' : ''}${value}% so với kỳ trước`;
 
 const AdminDashboard: React.FC = () => {
-  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
-  const [interviews, setInterviews] = useState<AdminInterviewStats | null>(null);
-  const [revenue, setRevenue] = useState<AdminRevenue | null>(null);
-  const [users, setUsers] = useState<AdminUserItem[]>([]);
-  const [tickets, setTickets] = useState<AdminTicketItem[]>([]);
-  
+  const [range, setRange] = useState<(typeof RANGES)[number][0]>('last7days');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [grain, setGrain] = useState('');
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [data, setData] = useState<AdminDashboardData | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
-  };
-
-  const loadData = useCallback(async (isRefresh = false, q = '') => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-
-    try {
-      const [aRes, iRes, rRes, uRes, tRes] = await Promise.all([
-        adminService.getAnalytics(),
-        adminService.getInterviews(),
-        adminService.getRevenue(),
-        adminService.getUsers(q || undefined),
-        adminService.getTickets(),
-      ]);
-
-      if (aRes.ok && aRes.data) setAnalytics(aRes.data);
-      else if (!aRes.ok && (aRes.status === 401 || aRes.status === 403)) {
-        setError('Tài khoản không có quyền truy cập API Admin.');
-      }
-
-      if (iRes.ok && iRes.data) setInterviews(iRes.data);
-      if (rRes.ok && rRes.data) setRevenue(rRes.data);
-      if (uRes.ok && Array.isArray(uRes.data)) setUsers(uRes.data);
-      if (tRes.ok && Array.isArray(tRes.data)) setTickets(tRes.data);
-    } catch (err: any) {
-      setError(err?.message || 'Lỗi khi đồng bộ dữ liệu từ Backend .NET');
-    } finally {
+  const load = async () => {
+    if (range === 'custom' && (!from || !to)) {
       setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData(false, '');
-  }, [loadData]);
-
-  // Debounced user search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      adminService.getUsers(searchQuery || undefined).then((res) => {
-        if (res.ok && Array.isArray(res.data)) {
-          setUsers(res.data);
-        }
-      }).catch(() => {});
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Toggle Lock User Account (Chặn tự khóa tài khoản Admin hiện tại)
-  const handleToggleLock = async (user: AdminUserItem) => {
-    const isSelf = isSoleAdminEmail(user.email);
-
-    if (isSelf) {
-      showToast('Không thể tự khóa tài khoản Quản trị viên hiện tại!');
+      setError('Chọn đủ từ ngày và đến ngày.');
+      setData(null);
       return;
     }
-
-    const isLocked = Boolean(user.lockoutEnd);
-    const targetLock = !isLocked;
-    setActionLoading((prev) => ({ ...prev, [user.id]: true }));
-
-    try {
-      const res = await adminService.patchUser(user.id, { lock: targetLock });
-      if (res.ok) {
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === user.id
-              ? { ...u, lockoutEnd: targetLock ? new Date(Date.now() + 100 * 365 * 86400000).toISOString() : null }
-              : u
-          )
-        );
-        showToast(targetLock ? `Đã khóa tài khoản ${user.email}` : `Đã mở khóa tài khoản ${user.email}`);
-      } else {
-        showToast(`Lỗi: ${res.message || 'Không thể cập nhật khóa'}`);
-      }
-    } catch (e: any) {
-      showToast('Lỗi kết nối máy chủ');
-    } finally {
-      setActionLoading((prev) => ({ ...prev, [user.id]: false }));
+    if (range === 'custom' && from > to) {
+      setLoading(false);
+      setError('Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.');
+      setData(null);
+      return;
     }
+    setLoading(true);
+    setError('');
+    const res = await adminService.getDashboard({
+      range,
+      from: range === 'custom' ? from : undefined,
+      to: range === 'custom' ? to : undefined,
+      granularity: grain || undefined,
+    });
+    if (!res.ok || !res.data) {
+      setData(null);
+      setError(res.message || 'Không thể tải dữ liệu thống kê.');
+    } else {
+      setData(res.data);
+    }
+    setLoading(false);
   };
 
-  // Update Ticket Status
-  const handleTicketStatusChange = async (ticketId: string, newStatus: string) => {
-    try {
-      const res = await adminService.patchTicket(ticketId, { status: newStatus });
-      if (res.ok) {
-        setTickets((prev) =>
-          prev.map((t) => (t.id === ticketId ? { ...t, status: newStatus } : t))
-        );
-        showToast(`Đã chuyển ticket sang "${newStatus}"`);
-      } else {
-        showToast(`Lỗi: ${res.message || 'Không thể đổi trạng thái'}`);
-      }
-    } catch (e: any) {
-      showToast('Lỗi kết nối');
-    }
-  };
+  useEffect(() => { load().catch((e) => { setError(e?.message || 'Không thể tải dữ liệu thống kê.'); setLoading(false); }); }, [range, from, to, grain]);
 
-  const openTicketsCount = tickets.filter((t) => (t.status || '').toLowerCase() === 'open').length;
+  const labels = (data?.series || []).map((p) => dayLabel(p.date));
+  const chartBase = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+  const cards = data ? [
+    ['Tổng người dùng', data.users.total.toLocaleString('vi-VN'), 'Tài khoản chưa xóa, không lọc theo kỳ'],
+    ['Người dùng mới', data.users.new.toLocaleString('vi-VN'), changeText(data.users.percentageChange)],
+    ['Phiên phỏng vấn', data.interviews.total.toLocaleString('vi-VN'), changeText(data.interviews.percentageChange)],
+    ['Hoàn thành', data.interviews.completed.toLocaleString('vi-VN'), data.interviews.completionRate == null ? 'Chưa có phiên trong kỳ' : `Tỷ lệ ${data.interviews.completionRate}%`],
+    ['CV tạo mới', data.cvs.created.toLocaleString('vi-VN'), changeText(data.cvs.percentageChange)],
+    ['CV đã phân tích', data.cvs.analyzed.toLocaleString('vi-VN'), 'Có AnalyzedAt trong kỳ'],
+    ['JD match', data.jdMatches.total.toLocaleString('vi-VN'), changeText(data.jdMatches.percentageChange)],
+    ['Thanh toán thành công', data.revenue.successfulPayments.toLocaleString('vi-VN'), 'Hóa đơn Paid'],
+    ['Doanh thu', vnd(data.revenue.totalVnd), changeText(data.revenue.percentageChange)],
+    ['User trả phí hiện tại', data.activePaidUsers.toLocaleString('vi-VN'), 'IsPremium, không theo kỳ'],
+  ] : [];
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-      {/* Toast Feedback */}
-      {toastMsg && (
-        <div style={{
-          position: 'fixed',
-          top: 24,
-          right: 24,
-          zIndex: 9999,
-          background: '#FFFFFF',
-          color: '#0077CC',
-          border: '1px solid rgba(3, 191, 255, 0.3)',
-          padding: '12px 20px',
-          borderRadius: 12,
-          boxShadow: '0 10px 30px rgba(3, 191, 255, 0.18)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          fontSize: '0.875rem',
-          fontWeight: 700,
-          animation: 'fadeInUp 0.3s ease'
-        }}>
-          <CheckCircle size={18} color="#10B981" />
-          {toastMsg}
+    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+        <div>
+          <h1 className="admin-page-title">Tổng quan</h1>
+          <p className="admin-page-subtitle">
+            {data ? `${dayLabel(data.range.from)} – ${dayLabel(data.range.to)} · ${data.range.timezone}` : 'Thống kê theo ngày Việt Nam'}
+          </p>
         </div>
-      )}
-
-      {/* Header */}
-      <div className="admin-page-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <h1 className="admin-page-title">Trung Tâm Điều Hành Quản Trị</h1>
-            {/* <p className="admin-page-subtitle">
-              Báo cáo hiệu suất hệ thống thời gian thực từ HireMate API (.NET 8)
-            </p> */}
-          </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'end' }}>
+          <select className="admin-select" value={range} onChange={(e) => setRange(e.target.value as typeof range)}>
+            {RANGES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <select className="admin-select" value={grain} onChange={(e) => setGrain(e.target.value)}>
+            <option value="">Nhóm mặc định</option>
+            <option value="day">Theo ngày</option>
+            <option value="week">Theo tuần</option>
+            <option value="month">Theo tháng</option>
+          </select>
+          {range === 'custom' && (
+            <>
+              <input className="admin-input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <input className="admin-input" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </>
+          )}
         </div>
       </div>
 
-      {/* Cockpit Status Bar */}
-      <div className="admin-cockpit-bar">
-        <div className="admin-cockpit-info">
-          <div className="admin-live-chip">
-            <div className="admin-live-dot" />
-            <span>Hệ thống: Trực tuyến</span>
-          </div>
-          <div style={{ color: '#64748B', fontSize: '0.813rem' }}>|</div>
-          <div style={{ color: '#94A3B8', fontSize: '0.813rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <ShieldCheck size={16} color="#38BDF8" />
-            Phiên làm việc: <b>Administrator</b>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            className="admin-refresh-btn"
-            disabled={loading || refreshing}
-            onClick={() => loadData(true, searchQuery)}
-          >
-            <RefreshCw size={14} className={refreshing ? 'admin-spin' : ''} />
-            <span>{refreshing ? 'Đang làm mới...' : 'Làm mới dữ liệu'}</span>
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div style={{
-          background: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid rgba(239, 68, 68, 0.3)',
-          borderRadius: 12,
-          padding: '14px 18px',
-          color: '#F87171',
-          marginBottom: 24,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          fontSize: '0.9rem'
-        }}>
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* 4 Primary KPI Cards */}
-      <div className="admin-stats-grid">
-        {/* Metric 1: Users & Conversion */}
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon blue">
-            <Users size={24} />
-          </div>
-          <div className="admin-stat-value">
-            {loading ? '...' : (analytics?.registrations ?? users.length).toLocaleString()}
-          </div>
-          <div className="admin-stat-label">Tổng Người Dùng Đăng Ký</div>
-          <div className="admin-stat-change up" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Sparkles size={12} />
-            <span>{revenue?.premiumUsers ?? 0} tài khoản Premium ({revenue?.conversionRate ?? 0}%)</span>
-          </div>
-        </div>
-
-        {/* Metric 2: AI Interviews & Completion Rate */}
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon purple">
-            <Briefcase size={24} />
-          </div>
-          <div className="admin-stat-value">
-            {loading ? '...' : (interviews?.total ?? 0).toLocaleString()}
-          </div>
-          <div className="admin-stat-label">Phiên Phỏng Vấn AI Hoàn Thành</div>
-          <div className="admin-stat-change up" style={{ color: '#38BDF8' }}>
-            <span>Tỷ lệ hoàn thành: {analytics?.interviewCompletionRate ?? 0}% • Điểm TB: {analytics?.avgSessionScore ?? interviews?.avgStar ?? 0}/10</span>
-          </div>
-        </div>
-
-        {/* Metric 3: Revenue & Invoices */}
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon green">
-            <TrendingUp size={24} />
-          </div>
-          <div className="admin-stat-value">
-            {loading ? '...' : formatVND(revenue?.mrr)}
-          </div>
-          <div className="admin-stat-label">Doanh Thu Tháng (MRR 30 ngày)</div>
-          <div className="admin-stat-change up" style={{ color: '#34D399' }}>
-            <span>Tổng tích lũy: {formatVND(revenue?.totalRevenue)} ({analytics?.paidInvoices ?? 0} Hóa đơn)</span>
-          </div>
-        </div>
-
-        {/* Metric 4: Support Tickets */}
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon orange">
-            <MessageSquare size={24} />
-          </div>
-          <div className="admin-stat-value">
-            {loading ? '...' : openTicketsCount}
-          </div>
-          <div className="admin-stat-label">Phiếu Hỗ Trợ Đang Chờ Xử Lý</div>
-          <div className="admin-stat-change" style={{ color: openTicketsCount > 0 ? '#F87171' : '#34D399' }}>
-            <span>{openTicketsCount > 0 ? `Cần xem xét (${tickets.length} tổng số)` : 'Đã giải quyết tất cả'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Middle Grid: Analytical Deep Dive */}
-      <div className="admin-grid-2" style={{ marginBottom: 24 }}>
-        {/* Visual Analytics 1: Thống Kê Vận Hành Toàn Sàn */}
-        {/* <div className="admin-card">
-          <div className="admin-card-header">
-            <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <TrendingUp size={18} color="#0085FF" /> Thống Kê Vận Hành Toàn Sàn
-            </h3>
-            <span style={{ fontSize: '0.813rem', color: '#94A3B8' }}>
-              Thời gian thực
-            </span>
-          </div>
-          <div className="admin-card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-              <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid rgba(3, 191, 255, 0.15)' }}>
-                <span style={{ fontSize: '0.78rem', color: '#64748B', display: 'block' }}>Tỷ lệ hoàn thành phỏng vấn</span>
-                <b style={{ fontSize: '1.25rem', color: '#001B3F' }}>{analytics?.interviewCompletionRate ?? 0}%</b>
+      {loading && <div className="admin-card" style={{ padding: '1.5rem' }}>Đang tải thống kê...</div>}
+      {!loading && error && <div className="admin-card" style={{ padding: '1.5rem', color: '#b91c1c' }}>{error}</div>}
+      {!loading && data && (
+        <>
+          <div className="admin-stats-grid">
+            {cards.map(([label, value, note]) => (
+              <div key={label} className="admin-stat-card" style={{ minWidth: 0 }}>
+                <div className="admin-stat-value" style={{ fontSize: '1.35rem' }}>{value}</div>
+                <div className="admin-stat-label">{label}</div>
+                <div className="admin-stat-change">{note}</div>
               </div>
-              <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid rgba(3, 191, 255, 0.15)' }}>
-                <span style={{ fontSize: '0.78rem', color: '#64748B', display: 'block' }}>Điểm phỏng vấn trung bình</span>
-                <b style={{ fontSize: '1.25rem', color: '#0284C7' }}>
-                  {interviews?.avgStar ? (interviews.avgStar > 10 ? (interviews.avgStar / 10).toFixed(1) : interviews.avgStar.toFixed(1)) : (analytics?.avgSessionScore ? analytics.avgSessionScore.toFixed(1) : '0.0')} / 10
-                </b>
-              </div>
-            </div>
-
-            <div style={{
-              padding: '12px 14px',
-              borderRadius: 10,
-              background: 'rgba(3, 191, 255, 0.05)',
-              border: '1px solid rgba(3, 191, 255, 0.16)',
-              fontSize: '0.813rem',
-              color: '#475569',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <span>Tài khoản kích hoạt Premium:</span>
-              <b style={{ color: '#001B3F', fontSize: '0.938rem' }}>{revenue?.premiumUsers ?? 0} tài khoản</b>
-            </div>
+            ))}
           </div>
-        </div> */}
-
-        {/* Visual Analytics 2: Top Positions */}
-        <div className="admin-card">
-          <div className="admin-card-header">
-            <h3 className="admin-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Briefcase size={18} color="#10B981" /> Top Vị Trí Ứng Tuyển Phổ Biến
-            </h3>
-            <span style={{ fontSize: '0.813rem', color: '#64748B', fontWeight: 600 }}>
-              Số lượt & Điểm TB
-            </span>
-          </div>
-          <div className="admin-card-body">
-            <div className="admin-rank-list">
-              {interviews?.popularPositions && interviews.popularPositions.length > 0 ? (
-                interviews.popularPositions.slice(0, 5).map((p, idx) => (
-                  <div key={idx} className="admin-rank-item">
-                    <div className="admin-rank-name">
-                      <div className="admin-rank-pos">{idx + 1}</div>
-                      <span>{p.position || 'Chung / Đang định hướng'}</span>
-                    </div>
-                    <div className="admin-rank-stats">
-                      <span className="admin-rank-count">{p.count} lượt</span>
-                      <span className="admin-rank-score">{p.avg.toFixed(1)} ⭐</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ textAlign: 'center', padding: '36px 0', color: '#64748B', fontSize: '0.875rem' }}>
-                  Chưa có đủ dữ liệu thống kê vị trí phỏng vấn
-                </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            <ChartCard title="Người dùng mới">
+              <Line data={{ labels, datasets: [{ label: 'Người dùng mới', data: data.series.map(p => p.newUsers), borderColor: '#0284c7', backgroundColor: 'rgba(2,132,199,0.15)', fill: true, tension: 0.3 }] }} options={chartBase} />
+            </ChartCard>
+            <ChartCard title="Phiên phỏng vấn">
+              <Bar data={{ labels, datasets: [{ label: 'Phiên', data: data.series.map(p => p.interviews), backgroundColor: 'rgba(3,191,255,0.75)', borderRadius: 6 }] }} options={chartBase} />
+            </ChartCard>
+            <ChartCard title="Doanh thu đã thanh toán">
+              <Bar data={{ labels, datasets: [{ label: 'VND', data: data.series.map(p => p.revenueVnd), backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 6 }] }} options={{ ...chartBase, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (item) => vnd(Number(item.raw)) } } } }} />
+            </ChartCard>
+            <ChartCard title="Phân bổ gói">
+              {data.plans.length === 0 ? <Empty /> : (
+                <Doughnut data={{ labels: data.plans.map(p => p.code), datasets: [{ data: data.plans.map(p => p.count), backgroundColor: ['#cbd5e1', '#0284c7', '#7c3aed', '#10b981'] }] }} options={{ responsive: true, maintainAspectRatio: false }} />
               )}
-            </div>
-
-            <div style={{
-              marginTop: 18,
-              padding: '12px 14px',
-              borderRadius: 10,
-              background: 'rgba(3, 191, 255, 0.08)',
-              border: '1px solid rgba(3, 191, 255, 0.22)',
-              fontSize: '0.813rem',
-              color: '#0284C7',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontWeight: 600
-            }}>
-              <Sparkles size={16} />
-              <span>AI tự động tinh chỉnh câu hỏi theo tỷ lệ hoàn thành của từng ngành nghề.</span>
+            </ChartCard>
+            <ChartCard title="CV tạo và phân tích">
+              <Line data={{ labels, datasets: [
+                { label: 'Tạo', data: data.series.map(p => p.cvsCreated), borderColor: '#0369a1', tension: 0.3 },
+                { label: 'Đã phân tích', data: data.series.map(p => p.cvsAnalyzed), borderColor: '#059669', tension: 0.3 },
+              ] }} options={{ ...chartBase, plugins: { legend: { display: true } } }} />
+            </ChartCard>
+          </div>
+          <div className="admin-card" style={{ marginTop: '1rem' }}>
+            <div className="admin-card-body">
+              <p>Điểm trung bình chỉ tính phiên Completed có OverallScore: {data.interviews.averageScore == null ? 'chưa có' : data.interviews.averageScore}.</p>
+              <p>Ngôn ngữ phỏng vấn và ngôn ngữ CV không có cột riêng, nên không đưa vào thống kê. Bộ đếm UserFeatureUsage là theo tháng, không phải từng lần dùng, nên không vẽ thành biểu đồ ngày.</p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Bottom Grid: Operational Control */}
-      <div className="admin-grid-2">
-        {/* Operational 1: Users Control Table */}
-        <div className="admin-card">
-          <div className="admin-card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
-            <h3 className="admin-card-title">Quản Lý Người Dùng Gần Đây</h3>
-            <div style={{ position: 'relative', width: 240 }}>
-              <Search size={15} style={{ position: 'absolute', left: 10, top: 10, color: '#0284C7' }} />
-              <input
-                type="text"
-                placeholder="Tìm email, họ tên..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '7px 12px 7px 32px',
-                  borderRadius: 8,
-                  background: '#F8FAFC',
-                  border: '1px solid rgba(3, 191, 255, 0.25)',
-                  color: '#001B3F',
-                  fontSize: '0.813rem',
-                  fontWeight: 500,
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="admin-table-container">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Tài khoản</th>
-                  <th>Gói</th>
-                  <th>Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.slice(0, 6).map((u) => {
-                  const isLocked = Boolean(u.lockoutEnd);
-                  const isBusy = actionLoading[u.id];
-                  const isSelf = isSoleAdminEmail(u.email);
-
-                  return (
-                    <tr key={u.id}>
-                      <td>
-                        <div style={{ fontWeight: 700, color: '#001B3F' }}>{u.fullName || '—'}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{u.email}</div>
-                      </td>
-                      <td>
-                        <span className={`admin-badge ${u.isPremium ? 'purple' : 'neutral'}`} style={{ fontWeight: 650 }}>
-                          {u.isPremium ? '⭐ Premium' : 'Free'}
-                        </span>
-                      </td>
-                      <td>
-                        {statusBadge(isLocked ? 'locked' : 'active')}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {!users.length && (
-                  <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', color: '#64748B', padding: '24px 0' }}>
-                      {loading ? 'Đang tải danh sách...' : 'Không tìm thấy người dùng'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Operational 2: Support Tickets Queue */}
-        <div className="admin-card">
-          <div className="admin-card-header">
-            <h3 className="admin-card-title">Hàng Đợi Hỗ Trợ Khách Hàng</h3>
-            <span style={{ fontSize: '0.813rem', color: '#64748B', fontWeight: 600 }}>
-              {tickets.length} Phiếu
-            </span>
-          </div>
-
-          <div className="admin-table-container">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Vấn đề</th>
-                  <th>Người gửi</th>
-                  <th style={{ textAlign: 'right' }}>Cập nhật trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.slice(0, 6).map((t) => (
-                  <tr key={t.id}>
-                    <td>
-                      <div style={{ fontWeight: 700, color: '#001B3F', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {t.subject || 'Không tiêu đề'}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                        {t.createdAt ? new Date(t.createdAt).toLocaleDateString('vi-VN') : '—'}
-                      </div>
-                    </td>
-                    <td style={{ fontSize: '0.813rem', color: '#475569' }}>
-                      {t.email || '—'}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <select
-                        value={t.status || 'Open'}
-                        onChange={(e) => handleTicketStatusChange(t.id, e.target.value)}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: 6,
-                          background: '#F8FAFC',
-                          border: '1px solid rgba(3, 191, 255, 0.25)',
-                          color: '#001B3F',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          outline: 'none'
-                        }}
-                      >
-                        <option value="Open" style={{ background: '#FFF', color: '#DC2626' }}>Mở (Open)</option>
-                        <option value="InProgress" style={{ background: '#FFF', color: '#D97706' }}>Đang xử lý</option>
-                        <option value="Resolved" style={{ background: '#FFF', color: '#059669' }}>Đã xử lý</option>
-                        <option value="Closed" style={{ background: '#FFF', color: '#64748B' }}>Đóng</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-                {!tickets.length && (
-                  <tr>
-                    <td colSpan={3} style={{ textAlign: 'center', color: '#64748B', padding: '24px 0' }}>
-                      {loading ? 'Đang tải...' : 'Không có phiếu hỗ trợ'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 };
+
+const ChartCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div className="admin-card" style={{ minWidth: 0 }}>
+    <div className="admin-card-header"><h3 className="admin-card-title">{title}</h3></div>
+    <div className="admin-card-body" style={{ height: 260, minWidth: 0 }}>{children}</div>
+  </div>
+);
+
+const Empty = () => <p style={{ textAlign: 'center', color: 'var(--admin-text-muted)' }}>Chưa có dữ liệu.</p>;
 
 export default AdminDashboard;

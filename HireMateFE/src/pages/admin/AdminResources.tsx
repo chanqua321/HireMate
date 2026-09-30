@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X, Check, BookOpen, ExternalLink, RefreshCw } from 'lucide-react';
-import { publicService } from '../../shared/services/public.service';
 import { adminService } from '../../shared/services/admin.service';
 import './admin.css';
 
@@ -30,7 +29,7 @@ const AdminResources: React.FC = () => {
   const fetchResources = async () => {
     setLoading(true);
     try {
-      const res = await publicService.getResources();
+      const res = await adminService.getResources();
       if (res.ok && Array.isArray(res.data)) {
         const mapped: ResourceItem[] = res.data.map((r: any) => ({
           id: r.id || String(Date.now()),
@@ -85,22 +84,19 @@ const AdminResources: React.FC = () => {
       featured: form.featured,
     };
 
-    if (editing) {
-      setResources(prev => prev.map(r => r.id === editing.id ? { ...r, ...form } : r));
-    } else {
-      setResources(prev => [...prev, { id: String(Date.now()), ...form }]);
-    }
     setShowModal(false);
-
     try {
-      await adminService.upsertResource(payload);
+      await adminService.upsertResource({ ...payload, isPublished: true });
+      await fetchResources();
     } catch (err) {
       console.warn('Failed to upsert resource on BE:', err);
     }
   };
 
-  const deleteResource = (id: string) => {
-    if (window.confirm('Xóa tài nguyên này?')) setResources(prev => prev.filter(r => r.id !== id));
+  const deleteResource = async (id: string) => {
+    if (!window.confirm('Xóa tài nguyên này?')) return;
+    await adminService.deleteResource(id);
+    await fetchResources();
   };
 
   return (

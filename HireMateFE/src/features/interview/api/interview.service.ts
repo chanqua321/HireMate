@@ -1,4 +1,4 @@
-import { apiClient, ApiResponse } from '../../../shared/api/apiClient';
+import { apiClient, ApiResponse, getBaseUrl } from '../../../shared/api/apiClient';
 import {
   CreateSessionDto,
   SubmitAnswerDto,
@@ -93,6 +93,36 @@ export const interviewService = {
     if (meta.questionText) formData.append('questionText', meta.questionText);
     formData.append('durationSec', String(meta.durationSec ?? 0));
     return apiClient.upload(`/Interview/sessions/${sessionId}/voice`, formData);
+  },
+
+  async fetchQuestionSpeech(
+    sessionId: string,
+    orderIndex: number,
+    questionId?: string,
+  ): Promise<Blob> {
+    const token = localStorage.getItem('hm_access_token');
+    const response = await fetch(`${getBaseUrl()}/Interview/sessions/${sessionId}/speech`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'audio/mpeg',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        orderIndex,
+        questionId: questionId || null,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error('TTS_FAILED');
+    }
+    const type = response.headers.get('content-type') || '';
+    if (!type.includes('audio')) {
+      throw new Error('TTS_FAILED');
+    }
+    const bytes = await response.blob();
+    if (bytes.size < 64) throw new Error('TTS_FAILED');
+    return bytes.type.includes('audio') ? bytes : new Blob([bytes], { type: 'audio/mpeg' });
   },
 
   async getSuggestedAnswer(dto: SuggestedAnswerDto): Promise<ApiResponse<string>> {
